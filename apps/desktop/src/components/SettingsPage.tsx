@@ -1,0 +1,164 @@
+import type { ThemeId } from "../lib/theme";
+import { themes } from "../lib/theme";
+import {
+  clampFontSize,
+  connectScreenOptions,
+  type ConnectScreenMode,
+  type TerminalSettings,
+} from "../lib/settings";
+import { SettingToggle } from "./ui/SettingToggle";
+import { Slider } from "./ui/Slider";
+
+interface SettingsPageProps {
+  theme: ThemeId;
+  onThemeChange: (id: ThemeId) => void;
+  connectScreen: ConnectScreenMode;
+  onConnectScreenChange: (mode: ConnectScreenMode) => void;
+  terminalSettings: TerminalSettings;
+  onTerminalSettingsChange: (patch: Partial<TerminalSettings>) => void;
+}
+
+export function SettingsPage({
+  theme,
+  onThemeChange,
+  connectScreen,
+  onConnectScreenChange,
+  terminalSettings,
+  onTerminalSettingsChange,
+}: SettingsPageProps) {
+  return (
+    <div
+      className="flex h-full flex-col overflow-y-auto p-6"
+      style={{ background: "var(--bg-base)" }}
+    >
+      <h2 className="mb-1 text-lg font-semibold" style={{ color: "var(--text)" }}>
+        Settings
+      </h2>
+      <p className="mb-8 text-sm" style={{ color: "var(--text-muted)" }}>
+        Appearance, connection behavior, and app info
+      </p>
+
+      <section className="mb-10">
+        <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>
+          Connect experience
+        </h3>
+        <p className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
+          How the app behaves when you open an SSH session
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {connectScreenOptions.map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => onConnectScreenChange(opt.id)}
+              className="hover-subtle transition-ui rounded-xl border p-4 text-left"
+              style={{
+                background:
+                  connectScreen === opt.id ? "var(--accent-muted)" : "var(--bg-card)",
+                borderColor:
+                  connectScreen === opt.id ? "var(--accent)" : "var(--border-subtle)",
+              }}
+            >
+              <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                {opt.label}
+              </div>
+              <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                {opt.description}
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="mb-10">
+        <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>
+          Terminal
+        </h3>
+        <p className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
+          Copy, paste, and display preferences
+        </p>
+        <div
+          className="space-y-2 rounded-xl border p-2"
+          style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+        >
+          <SettingToggle
+            label="Select to copy"
+            description="Copy selected text to clipboard automatically"
+            checked={terminalSettings.selectToCopy}
+            onChange={(v) => onTerminalSettingsChange({ selectToCopy: v })}
+          />
+          <SettingToggle
+            label="Right-click to paste"
+            description="Paste from clipboard on right click"
+            checked={terminalSettings.rightClickToPaste}
+            onChange={(v) => onTerminalSettingsChange({ rightClickToPaste: v })}
+          />
+          <SettingToggle
+            label="Middle-click to paste"
+            description="Paste from clipboard with mouse wheel click"
+            checked={terminalSettings.middleClickToPaste}
+            onChange={(v) => onTerminalSettingsChange({ middleClickToPaste: v })}
+          />
+        </div>
+
+        <div className="mt-4">
+          <Slider
+            label="Font size"
+            min={11}
+            max={22}
+            step={1}
+            value={terminalSettings.fontSize}
+            formatValue={(v) => `${v}px`}
+            onChange={(fontSize) => onTerminalSettingsChange({ fontSize: clampFontSize(fontSize) })}
+          />
+        </div>
+      </section>
+
+      <section className="mb-10">
+        <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>
+          Theme
+        </h3>
+        <p className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
+          Pick a look for the app
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {themes.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onThemeChange(t.id)}
+              className="hover-subtle transition-ui rounded-xl border p-4 text-left"
+              style={{
+                background: theme === t.id ? "var(--accent-muted)" : "var(--bg-card)",
+                borderColor: theme === t.id ? "var(--accent)" : "var(--border-subtle)",
+              }}
+            >
+              <div className="mb-3 h-8 w-8 rounded-lg" style={{ background: t.preview }} />
+              <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                {t.name}
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>
+          About
+        </h3>
+        <div
+          className="rounded-xl border px-4 py-3"
+          style={{
+            background: "var(--bg-card)",
+            borderColor: "var(--border-subtle)",
+          }}
+        >
+          <div className="font-medium" style={{ color: "var(--text)" }}>
+            Azalea
+          </div>
+          <div className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
+            Version 0.1.0
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

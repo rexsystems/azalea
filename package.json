@@ -1,0 +1,14 @@
+{
+  "name": "azalea",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run tauri dev --workspace @azalea/desktop",
+    "build": "npm run tauri build --workspace @azalea/desktop",
+    "lint": "npm run build --workspace @azalea/desktop"
+  }
+}

@@ -1,0 +1,199 @@
+@import "tailwindcss";
+
+@theme {
+  --color-lilac-500: #a855f7;
+  --color-lilac-600: #9333ea;
+  --color-lilac-700: #7c3aed;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+  --font-sans: "Segoe UI", system-ui, sans-serif;
+}
+
+/* ── Theme: Midnight (Termius-like) ── */
+[data-theme="midnight"] {
+  --bg-base: #171a21;
+  --bg-panel: #1e222a;
+  --bg-card: #262a33;
+  --bg-card-hover: #2e333d;
+  --bg-input: #1e222a;
+  --border: #333842;
+  --border-subtle: #2a2e38;
+  --text: #eceef1;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --accent: #5b9bf5;
+  --accent-hover: #7ab0ff;
+  --accent-muted: rgba(91, 155, 245, 0.12);
+  --nav-active: #262a33;
+  --terminal-bg: #14171d;
+  --shadow: none;
+}
+
+/* ── Theme: Lilac ── */
+[data-theme="lilac"] {
+  --bg-base: #0f0a14;
+  --bg-panel: #16101f;
+  --bg-card: #1e1629;
+  --bg-card-hover: #2a2038;
+  --bg-input: #16101f;
+  --border: #3b2f4f;
+  --border-subtle: #2a2038;
+  --text: #f5f3ff;
+  --text-secondary: #c4b5fd;
+  --text-muted: #8b7fad;
+  --accent: #9333ea;
+  --accent-hover: #a855f7;
+  --accent-muted: rgba(147, 51, 234, 0.12);
+  --nav-active: #1e1629;
+  --terminal-bg: #0f0a14;
+  --shadow: none;
+}
+
+/* ── Theme: Graphite ── */
+[data-theme="graphite"] {
+  --bg-base: #18181b;
+  --bg-panel: #1f1f23;
+  --bg-card: #27272a;
+  --bg-card-hover: #323238;
+  --bg-input: #1f1f23;
+  --border: #3f3f46;
+  --border-subtle: #2e2e33;
+  --text: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --accent: #a1a1aa;
+  --accent-hover: #d4d4d8;
+  --accent-muted: rgba(161, 161, 170, 0.1);
+  --nav-active: #27272a;
+  --terminal-bg: #141416;
+  --shadow: none;
+}
+
+/* ── Theme: Ocean ── */
+[data-theme="ocean"] {
+  --bg-base: #0c1220;
+  --bg-panel: #111827;
+  --bg-card: #1a2332;
+  --bg-card-hover: #243044;
+  --bg-input: #111827;
+  --border: #2d3a4f;
+  --border-subtle: #1f2937;
+  --text: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent: #0891b2;
+  --accent-hover: #06b6d4;
+  --accent-muted: rgba(8, 145, 178, 0.12);
+  --nav-active: #1a2332;
+  --terminal-bg: #0a0f18;
+  --shadow: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-base);
+  color: var(--text);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+.select-text,
+.xterm,
+.xterm * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+.xterm {
+  width: 100%;
+  padding: 0;
+}
+
+.xterm .xterm-viewport {
+  background-color: var(--terminal-bg) !important;
+}
+
+/* Fast, subtle transitions only */
+.transition-ui {
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-menu-in {
+  animation: menu-in 100ms ease-out both;
+}
+
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-drawer-in {
+  animation: drawer-in 150ms cubic-bezier(0.2, 0, 0, 1) both;
+}
+
+.hover-subtle:hover {
+  background: var(--bg-card-hover) !important;
+}
+
+.hover-subtle-active:hover {
+  filter: brightness(1.06);
+}
+
+@keyframes connect-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.connect-spin {
+  animation: connect-spin 0.8s linear infinite;
+}
+
+.connect-ring {
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  animation: connect-spin 1s linear infinite;
+  pointer-events: none;
+}
