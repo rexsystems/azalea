@@ -2,7 +2,7 @@
 
 A modern, open-source SSH terminal client for Windows (and cross-platform). Local-first host and key management.
 
-![License](https://img.shields.io/badge/license-MIT-purple)
+![License](https://img.shields.io/badge/license-AGPL--3.0-purple)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 
 ## Features (v0.1)
@@ -89,4 +89,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+AGPL-3.0 - see [LICENSE](LICENSE).
