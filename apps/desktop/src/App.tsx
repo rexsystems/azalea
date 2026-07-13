@@ -8,7 +8,7 @@ import type {
 } from "@azalea/shared";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { ArrowLeftRight, Columns2, ExternalLink, FolderTree, Zap } from "lucide-react";
+import { ArrowLeftRight, Columns2, ExternalLink, FolderTree, SquareTerminal, Zap } from "lucide-react";
 import * as api from "./lib/api";
 import type { HostFormValues } from "./lib/utils";
 import { parseQuickConnect } from "./lib/utils";
@@ -208,6 +208,31 @@ function App() {
     }
   }, [hostNeedsKey, pickKeyForHost, updateHost]);
 
+  const openLocalTerminal = useCallback(async () => {
+    try {
+      const sessionId = await api.startLocalTerminal(DEFAULT_COLS, DEFAULT_ROWS);
+      setTabs((prev) => [
+        ...prev,
+        {
+          id: sessionId,
+          hostId: "local",
+          title: "PowerShell",
+          hostname: "localhost",
+          port: 0,
+          username: "",
+          status: "connected",
+          logs: [],
+          hadConnected: true,
+        },
+      ]);
+      setActiveTabId(sessionId);
+      setViewingTerminal(true);
+      setStatusMessage("Local terminal opened");
+    } catch (err) {
+      setStatusMessage(`Local terminal failed: ${String(err)}`);
+    }
+  }, []);
+
   const popOutActiveTab = useCallback(() => {
     const tab = tabs.find((t) => t.id === activeTabId);
     if (!tab || tab.poppedOut) return;
@@ -368,7 +393,11 @@ function App() {
     async (tabId: string) => {
       closingTabsRef.current.add(tabId);
       clearReconnectTimer(tabId);
-      await api.disconnectSsh(tabId).catch(() => undefined);
+      if (api.isLocalSession(tabId)) {
+        await api.closeLocalTerminal(tabId).catch(() => undefined);
+      } else {
+        await api.disconnectSsh(tabId).catch(() => undefined);
+      }
       removeTab(tabId);
       closingTabsRef.current.delete(tabId);
     },
@@ -382,8 +411,15 @@ function App() {
       (event) => {
         const { session_id, status, error } = event.payload;
 
+        // Local shell ended (exit / process killed): just close the tab.
+        if (status === "exited") {
+          removeTab(session_id);
+          return;
+        }
+
         if (status === "disconnected") {
           if (closingTabsRef.current.has(session_id)) return;
+          if (api.isLocalSession(session_id)) return;
           setTabs((prev) =>
             prev.map((tab) =>
               tab.id === session_id ? { ...tab, status: "disconnected" as const } : tab,
@@ -472,7 +508,7 @@ function App() {
       void unlistenLog.then((unlisten) => unlisten());
       void unlistenMismatch.then((unlisten) => unlisten());
     };
-  }, [scheduleReconnect, clearReconnectTimer]);
+  }, [scheduleReconnect, clearReconnectTimer, removeTab]);
 
   const openAddDrawer = (groupId?: string | null, initial?: Partial<HostFormValues>) => {
     setEditingHost(null);
@@ -502,9 +538,12 @@ function App() {
   const requestCloseTab = (tabId: string) => {
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab) return;
+    const isLocal = api.isLocalSession(tabId);
     setPendingConfirm({
-      title: "Close connection?",
-      message: `Disconnect from "${tab.title}"?`,
+      title: isLocal ? "Close terminal?" : "Close connection?",
+      message: isLocal
+        ? `Close "${tab.title}"? Anything running in it will be stopped.`
+        : `Disconnect from "${tab.title}"?`,
       confirmLabel: "Close",
       danger: true,
       onConfirm: () => void closeTab(tabId),
@@ -642,6 +681,10 @@ function App() {
         if (!viewingTerminal || !activeTabId) return;
         e.preventDefault();
         const tab = tabs.find((t) => t.id === activeTabId);
+        if (tab && api.isLocalSession(tab.id)) {
+          void openLocalTerminal();
+          return;
+        }
         const host = tab ? hosts.find((h) => h.id === tab.hostId) : undefined;
         if (host) void connectToHost(host);
       }
@@ -795,6 +838,7 @@ function App() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onQuickConnect={handleQuickConnect}
+            onOpenLocalTerminal={() => void openLocalTerminal()}
           />
         );
       case "groups":
@@ -839,6 +883,11 @@ function App() {
             onImportBackupReplace={handleImportBackupReplace}
             onImportTermius={handleImportTermius}
             onImportTermiusReplace={handleImportTermiusReplace}
+            syncGetSettings={collectAppSettings}
+            onSyncVaultApplied={(settings) => {
+              void Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
+              applyImportedSettings((settings ?? undefined) as Record<string, unknown> | undefined);
+            }}
           />
         );
       default:
@@ -988,15 +1037,34 @@ function App() {
             activeTabId={viewingTerminal ? activeTabId : null}
             onSelectTab={handleSelectTab}
             onCloseTab={requestCloseTab}
-            actions={
-              viewingTerminal && activeTab
+            actions={[
+              {
+                icon: SquareTerminal,
+                title: "New local terminal",
+                active: false,
+                onClick: () => void openLocalTerminal(),
+              },
+              ...(viewingTerminal && activeTab
                 ? [
-                    {
-                      icon: FolderTree,
-                      title: "File browser",
-                      active: filesPanelOpen,
-                      onClick: () => setFilesPanelOpen((v) => !v),
-                    },
+                    ...(!api.isLocalSession(activeTab.id)
+                      ? [
+                          {
+                            icon: FolderTree,
+                            title: "File browser",
+                            active: filesPanelOpen,
+                            onClick: () => setFilesPanelOpen((v) => !v),
+                          },
+                          {
+                            icon: ArrowLeftRight,
+                            title: "Port forwarding",
+                            active: forwardsOpen,
+                            onClick: () => {
+                              setSnippetsOpen(false);
+                              setForwardsOpen((v) => !v);
+                            },
+                          },
+                        ]
+                      : []),
                     {
                       icon: Zap,
                       title: "Snippets",
@@ -1004,15 +1072,6 @@ function App() {
                       onClick: () => {
                         setForwardsOpen(false);
                         setSnippetsOpen((v) => !v);
-                      },
-                    },
-                    {
-                      icon: ArrowLeftRight,
-                      title: "Port forwarding",
-                      active: forwardsOpen,
-                      onClick: () => {
-                        setSnippetsOpen(false);
-                        setForwardsOpen((v) => !v);
                       },
                     },
                     {
@@ -1027,19 +1086,19 @@ function App() {
                       active: false,
                       onClick: () => popOutActiveTab(),
                     },
-                  ].map(({ icon: Icon, title, active, onClick }) => (
-                    <button
-                      key={title}
-                      onClick={onClick}
-                      className="hover-subtle transition-ui rounded-lg p-2"
-                      style={{ color: active ? "var(--accent)" : "var(--text-muted)" }}
-                      title={title}
-                    >
-                      <Icon size={15} />
-                    </button>
-                  ))
-                : undefined
-            }
+                  ]
+                : []),
+            ].map(({ icon: Icon, title, active, onClick }) => (
+              <button
+                key={title}
+                onClick={onClick}
+                className="hover-subtle transition-ui rounded-lg p-2"
+                style={{ color: active ? "var(--accent)" : "var(--text-muted)" }}
+                title={title}
+              >
+                <Icon size={15} />
+              </button>
+            ))}
           />
         }
         sidePanel={

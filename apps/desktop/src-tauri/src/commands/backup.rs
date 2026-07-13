@@ -86,6 +86,11 @@ pub fn export_backup(
     db: tauri::State<'_, SharedDatabase>,
     settings: Option<Value>,
 ) -> Result<String, String> {
+    let backup = build_backup(&db, settings)?;
+    serde_json::to_string_pretty(&backup).map_err(|err| err.to_string())
+}
+
+pub fn build_backup(db: &SharedDatabase, settings: Option<Value>) -> Result<AzaleaBackup, String> {
     let db = db.lock();
     let groups = db.list_groups().map_err(|err| err.to_string())?;
     let hosts = db.list_hosts().map_err(|err| err.to_string())?;
@@ -127,7 +132,7 @@ pub fn export_backup(
         })
         .collect();
 
-    let backup = AzaleaBackup {
+    Ok(AzaleaBackup {
         format: BACKUP_FORMAT.to_string(),
         version: BACKUP_VERSION,
         exported_at: chrono::Utc::now().timestamp(),
@@ -135,9 +140,7 @@ pub fn export_backup(
         groups,
         hosts: backup_hosts,
         keys: backup_keys,
-    };
-
-    serde_json::to_string_pretty(&backup).map_err(|err| err.to_string())
+    })
 }
 
 #[tauri::command]
@@ -152,7 +155,7 @@ pub fn import_backup(
         return Err("Invalid backup format.".to_string());
     }
 
-    import_azalea_backup(&db, backup, input.replace, None)
+    import_azalea_backup_db(&db, backup, input.replace, None)
 }
 
 #[tauri::command]
@@ -163,7 +166,7 @@ pub fn import_data_file(
 ) -> Result<ImportResult, String> {
     if let Ok(backup) = serde_json::from_str::<AzaleaBackup>(&data) {
         if backup.format == BACKUP_FORMAT {
-            let result = import_azalea_backup(&db, backup, replace, None)?;
+            let result = import_azalea_backup_db(&db, backup, replace, None)?;
             return Ok(ImportResult {
                 hosts_imported: result.hosts_imported,
                 keys_imported: result.keys_imported,
@@ -192,8 +195,8 @@ pub fn import_data_file(
     })
 }
 
-fn import_azalea_backup(
-    db: &tauri::State<'_, SharedDatabase>,
+pub fn import_azalea_backup_db(
+    db: &SharedDatabase,
     backup: AzaleaBackup,
     replace: bool,
     settings: Option<Value>,

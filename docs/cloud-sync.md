@@ -91,13 +91,13 @@ create policy "own vault" on vaults for all
 
 ## Pași concreți pentru mâine (ordine)
 
-1. [ ] Proiect Supabase + tabelul `vaults` + RLS (SQL-ul de mai sus)
-2. [ ] `sync/crypto.rs`: derive + encrypt/decrypt + verifier + teste unitare
-3. [ ] `sync/mod.rs`: auth (signup/login/refresh) + pull/push REST
-4. [ ] Comenzi Tauri + wire în `lib.rs`
-5. [ ] UI Settings: login → setup passphrase → sync now (happy path)
-6. [ ] Device-nou flow (unlock cu passphrase pe cont existent)
-7. [ ] Conflict dialog + recovery key dialog
+1. [ ] Proiect Supabase + tabelul `vaults` + RLS (rulează `supabase/schema.sql` în SQL editor)
+2. [x] `sync/crypto.rs`: derive + encrypt/decrypt + verifier + teste unitare
+3. [x] `sync/mod.rs`: auth (signup/login/refresh) + pull/push REST
+4. [x] Comenzi Tauri + wire în `lib.rs`
+5. [x] UI Settings: login → setup passphrase → sync now (happy path)
+6. [x] Device-nou flow (unlock cu passphrase pe cont existent)
+7. [x] Conflict dialog + recovery key dialog
 8. [ ] Test end-to-end cu 2 instanțe (dev + build)
 
 Estimare: 1–2 (pct. 1–5 într-o zi; 6–8 a doua zi).

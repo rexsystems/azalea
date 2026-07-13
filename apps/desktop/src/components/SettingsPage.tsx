@@ -9,6 +9,7 @@ import {
 import { Button } from "./ui/Button";
 import { SettingToggle } from "./ui/SettingToggle";
 import { Slider } from "./ui/Slider";
+import { SyncSection } from "./SyncSection";
 import { Download, Upload } from "lucide-react";
 
 interface SettingsPageProps {
@@ -24,6 +25,8 @@ interface SettingsPageProps {
   onImportBackupReplace: () => void;
   onImportTermius: () => void;
   onImportTermiusReplace: () => void;
+  syncGetSettings: () => unknown;
+  onSyncVaultApplied: (settings: unknown) => void;
 }
 
 export function SettingsPage({
@@ -39,6 +42,8 @@ export function SettingsPage({
   onImportBackupReplace,
   onImportTermius,
   onImportTermiusReplace,
+  syncGetSettings,
+  onSyncVaultApplied,
 }: SettingsPageProps) {
   return (
     <div
@@ -120,6 +125,8 @@ export function SettingsPage({
           />
         </div>
       </section>
+
+      <SyncSection getSettings={syncGetSettings} onVaultApplied={onSyncVaultApplied} />
 
       <section className="mb-10">
         <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>

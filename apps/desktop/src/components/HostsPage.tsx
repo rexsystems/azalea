@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { Host, HostGroup } from "@azalea/shared";
-import { ChevronRight, FolderPlus, Plus, Search } from "lucide-react";
+import { ChevronRight, FolderPlus, Plus, Search, SquareTerminal } from "lucide-react";
 import { groupHostsByGroup } from "../lib/utils";
 import { EmptyHostsState, GroupSection } from "./HostTile";
 import { useContextMenu } from "./ui/ContextMenu";
@@ -20,6 +20,7 @@ interface HostsPageProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onQuickConnect: () => void;
+  onOpenLocalTerminal: () => void;
 }
 
 export function HostsPage({
@@ -37,6 +38,7 @@ export function HostsPage({
   searchQuery,
   onSearchChange,
   onQuickConnect,
+  onOpenLocalTerminal,
 }: HostsPageProps) {
   const { openMenu, menuElement } = useContextMenu();
 
@@ -157,8 +159,18 @@ export function HostsPage({
         </div>
 
         <button
+          onClick={onOpenLocalTerminal}
+          className="hover-subtle transition-ui inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium"
+          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+          title="Open a local PowerShell terminal"
+        >
+          <SquareTerminal size={14} />
+          Terminal
+        </button>
+
+        <button
           onClick={() => onAddServer()}
-          className="transition-ui shrink-0 rounded-lg px-3 py-2 text-sm font-medium text-white"
+          className="transition-ui inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-white"
           style={{ background: "var(--accent)" }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = "var(--accent-hover)";
@@ -167,7 +179,7 @@ export function HostsPage({
             e.currentTarget.style.background = "var(--accent)";
           }}
         >
-          <Plus size={14} className="mr-1 inline" />
+          <Plus size={14} />
           New Host
         </button>
       </div>

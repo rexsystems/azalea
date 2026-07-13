@@ -3,17 +3,22 @@ mod keys;
 mod models;
 mod sessions;
 mod store;
+mod sync;
 
 use commands::{
-    backup, files, forwards, groups, hosts, keys as key_commands, known_hosts, sftp,
-    snippets, ssh as ssh_commands,
+    backup, files, forwards, groups, hosts, keys as key_commands, known_hosts,
+    local_terminal, sftp, snippets, ssh as ssh_commands, sync as sync_commands,
 };
-use sessions::init_session_manager;
+use sessions::{init_local_terminal_manager, init_session_manager};
 use store::init_database;
+use sync::init_sync_state;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Loads SUPABASE_URL / SUPABASE_ANON_KEY in dev; silently ignored if absent.
+    let _ = dotenvy::dotenv();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -21,6 +26,8 @@ pub fn run() {
             let db = init_database(&app.handle())?;
             app.manage(db);
             app.manage(init_session_manager());
+            app.manage(init_local_terminal_manager());
+            app.manage(init_sync_state());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -63,6 +70,17 @@ pub fn run() {
             forwards::stop_forward,
             forwards::list_active_forwards,
             known_hosts::trust_host_key,
+            sync_commands::sync_status,
+            sync_commands::sync_signup,
+            sync_commands::sync_login,
+            sync_commands::sync_logout,
+            sync_commands::sync_setup_passphrase,
+            sync_commands::sync_unlock,
+            sync_commands::sync_now,
+            local_terminal::start_local_terminal,
+            local_terminal::write_local_terminal,
+            local_terminal::resize_local_terminal,
+            local_terminal::close_local_terminal,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

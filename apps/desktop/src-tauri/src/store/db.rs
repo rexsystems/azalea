@@ -64,6 +64,11 @@ CREATE TABLE IF NOT EXISTS port_forwards (
     remote_port INTEGER NOT NULL,
     created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS sync_meta (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 ";
 
 pub struct Database {
@@ -482,6 +487,30 @@ impl Database {
 
     pub fn delete_port_forward(&self, id: &str) -> anyhow::Result<()> {
         self.conn.execute("DELETE FROM port_forwards WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn get_sync_meta(&self, key: &str) -> anyhow::Result<Option<String>> {
+        let mut stmt = self.conn.prepare("SELECT value FROM sync_meta WHERE key = ?1")?;
+        let mut rows = stmt.query(params![key])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(row.get(0)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub fn set_sync_meta(&self, key: &str, value: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "INSERT INTO sync_meta (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_sync_meta(&self, key: &str) -> anyhow::Result<()> {
+        self.conn.execute("DELETE FROM sync_meta WHERE key = ?1", params![key])?;
         Ok(())
     }
 }

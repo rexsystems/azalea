@@ -5,6 +5,8 @@ pub mod groups;
 pub mod hosts;
 pub mod keys;
 pub mod known_hosts;
+pub mod local_terminal;
 pub mod sftp;
 pub mod snippets;
 pub mod ssh;
+pub mod sync;

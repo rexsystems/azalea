@@ -95,6 +95,9 @@ export function reconnectSsh(
 }
 
 export function writeTerminal(sessionId: string, data: string): Promise<void> {
+  if (isLocalSession(sessionId)) {
+    return invoke("write_local_terminal", { sessionId, data });
+  }
   return invoke("write_terminal", {
     input: { session_id: sessionId, data },
   });
@@ -105,9 +108,26 @@ export function resizeTerminal(
   cols: number,
   rows: number,
 ): Promise<void> {
+  if (isLocalSession(sessionId)) {
+    return invoke("resize_local_terminal", { sessionId, cols, rows });
+  }
   return invoke("resize_terminal", {
     input: { session_id: sessionId, cols, rows },
   });
+}
+
+// ---------- Local terminal ----------
+
+export function isLocalSession(sessionId: string): boolean {
+  return sessionId.startsWith("local-");
+}
+
+export function startLocalTerminal(cols: number, rows: number): Promise<string> {
+  return invoke("start_local_terminal", { cols, rows });
+}
+
+export function closeLocalTerminal(sessionId: string): Promise<void> {
+  return invoke("close_local_terminal", { sessionId });
 }
 
 export function readTextFile(path: string): Promise<string> {
@@ -196,4 +216,71 @@ export function trustHostKey(input: {
   fingerprint: string;
 }): Promise<void> {
   return invoke("trust_host_key", { input });
+}
+
+// ---------- Cloud sync ----------
+
+export interface SyncStatus {
+  configured: boolean;
+  logged_in: boolean;
+  email: string | null;
+  unlocked: boolean;
+  vault_exists: boolean | null;
+  remote_version: number | null;
+  last_synced_version: number;
+}
+
+export type SyncOutcome =
+  | { status: "needs_setup" }
+  | { status: "locked" }
+  | { status: "in_sync"; version: number }
+  | { status: "pushed"; version: number }
+  | { status: "pulled"; version: number; settings: unknown }
+  | { status: "conflict"; remote_version: number };
+
+export interface SyncUnlockResult {
+  version: number;
+  settings: unknown;
+}
+
+export function syncStatus(): Promise<SyncStatus> {
+  return invoke("sync_status");
+}
+
+export function syncSignup(email: string, password: string): Promise<void> {
+  return invoke("sync_signup", { input: { email, password } });
+}
+
+export function syncLogin(email: string, password: string): Promise<void> {
+  return invoke("sync_login", { input: { email, password } });
+}
+
+export function syncLogout(): Promise<void> {
+  return invoke("sync_logout");
+}
+
+export function syncSetupPassphrase(
+  passphrase: string,
+  settings: unknown,
+): Promise<string> {
+  return invoke("sync_setup_passphrase", { passphrase, settings });
+}
+
+export function syncUnlock(input: {
+  passphrase?: string;
+  recoveryKey?: string;
+}): Promise<SyncUnlockResult> {
+  return invoke("sync_unlock", {
+    input: {
+      passphrase: input.passphrase ?? null,
+      recovery_key: input.recoveryKey ?? null,
+    },
+  });
+}
+
+export function syncNow(
+  settings: unknown,
+  resolution?: "keep_local" | "keep_cloud",
+): Promise<SyncOutcome> {
+  return invoke("sync_now", { settings, resolution: resolution ?? null });
 }
