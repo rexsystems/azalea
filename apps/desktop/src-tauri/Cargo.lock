@@ -274,6 +274,7 @@ dependencies = [
  "rusqlite",
  "russh",
  "russh-keys",
+ "russh-sftp",
  "serde",
  "serde_json",
  "ssh-key",

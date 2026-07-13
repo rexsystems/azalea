@@ -1,14 +1,12 @@
 export interface TerminalSettings {
   selectToCopy: boolean;
   rightClickToPaste: boolean;
-  middleClickToPaste: boolean;
   fontSize: number;
 }
 
 export const defaultTerminalSettings: TerminalSettings = {
   selectToCopy: true,
   rightClickToPaste: true,
-  middleClickToPaste: true,
   fontSize: 14,
 };
 
@@ -22,7 +20,6 @@ export function getStoredTerminalSettings(): TerminalSettings {
     return {
       selectToCopy: parsed.selectToCopy ?? defaultTerminalSettings.selectToCopy,
       rightClickToPaste: parsed.rightClickToPaste ?? defaultTerminalSettings.rightClickToPaste,
-      middleClickToPaste: parsed.middleClickToPaste ?? defaultTerminalSettings.middleClickToPaste,
       fontSize: clampFontSize(parsed.fontSize ?? defaultTerminalSettings.fontSize),
     };
   } catch {

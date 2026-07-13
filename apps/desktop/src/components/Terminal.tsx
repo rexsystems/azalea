@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
 import { Terminal as XTerm } from "@xterm/xterm";
+import { ChevronDown, ChevronUp, X } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalSettings } from "../lib/settings";
 import * as api from "../lib/api";
@@ -69,14 +71,20 @@ export function TerminalView({
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const settingsRef = useRef(settings);
   const onResizeRef = useRef(onResize);
   const onStatusChangeRef = useRef(onStatusChange);
+  const activeRef = useRef(active);
   const sizedRef = useRef(false);
 
   settingsRef.current = settings;
   onResizeRef.current = onResize;
   onStatusChangeRef.current = onStatusChange;
+  activeRef.current = active;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -84,6 +92,7 @@ export function TerminalView({
 
     const term = new XTerm({
       cursorBlink: true,
+      scrollback: 8000,
       fontFamily: "JetBrains Mono, Fira Code, monospace",
       fontSize: settingsRef.current.fontSize,
       theme: {
@@ -112,6 +121,22 @@ export function TerminalView({
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
+    const searchAddon = new SearchAddon();
+    term.loadAddon(searchAddon);
+    searchRef.current = searchAddon;
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown") return true;
+      const key = event.key.toLowerCase();
+      if (event.ctrlKey && !event.shiftKey && key === "f") {
+        setSearchOpen(true);
+        requestAnimationFrame(() => searchInputRef.current?.focus());
+        return false;
+      }
+      // App-level shortcuts: let them bubble instead of going to the shell.
+      if (event.ctrlKey && key === "tab") return false;
+      if (event.ctrlKey && event.shiftKey && (key === "w" || key === "t")) return false;
+      return true;
+    });
     term.open(container);
     syncTerminalFit(term, fitAddon);
     requestAnimationFrame(() => syncTerminalFit(term, fitAddon));
@@ -136,18 +161,12 @@ export function TerminalView({
       e.preventDefault();
       void pasteFromClipboard(term);
     };
-    const onMouseDown = (e: MouseEvent) => {
-      if (e.button !== 1 || !settingsRef.current.middleClickToPaste) return;
-      e.preventDefault();
-      void pasteFromClipboard(term);
-    };
 
     container.addEventListener("mouseup", onMouseUp);
     container.addEventListener("contextmenu", onContextMenu);
-    container.addEventListener("mousedown", onMouseDown);
 
     const resizeObserver = new ResizeObserver(() => {
-      if (!active) return;
+      if (!activeRef.current) return;
       syncTerminalFit(term, fitAddon);
       const { cols, rows } = term;
       void api.resizeTerminal(sessionId, cols, rows);
@@ -174,7 +193,11 @@ export function TerminalView({
         if (event.payload.session_id !== sessionId) return;
         onStatusChangeRef.current?.(event.payload.status, event.payload.error);
         if (event.payload.status === "disconnected" || event.payload.status === "error") {
-          term.write(`\r\n\x1b[38;5;141m[Azalea]\x1b[0m ${event.payload.error ?? "Session ended"}\r\n`);
+          const label =
+            event.payload.status === "error"
+              ? event.payload.error ?? "Connection failed"
+              : "Connection lost — reconnecting...";
+          term.write(`\r\n\x1b[38;5;141m[Azalea]\x1b[0m ${label}\r\n`);
         }
       },
     ).then((fn) => {
@@ -187,11 +210,11 @@ export function TerminalView({
       unlistenStatus?.();
       container.removeEventListener("mouseup", onMouseUp);
       container.removeEventListener("contextmenu", onContextMenu);
-      container.removeEventListener("mousedown", onMouseDown);
       resizeObserver.disconnect();
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
+      searchRef.current = null;
       sizedRef.current = false;
     };
   }, [sessionId]);
@@ -219,11 +242,84 @@ export function TerminalView({
     }
   }, [active, sessionId]);
 
+  const runSearch = (query: string, direction: "next" | "previous") => {
+    const search = searchRef.current;
+    if (!search || !query) return;
+    const options = {
+      decorations: {
+        matchOverviewRuler: "#a855f7",
+        activeMatchColorOverviewRuler: "#facc15",
+        matchBackground: "#a855f755",
+        activeMatchBackground: "#facc1580",
+      },
+    };
+    if (direction === "next") search.findNext(query, options);
+    else search.findPrevious(query, options);
+  };
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    searchRef.current?.clearDecorations();
+    termRef.current?.focus();
+  };
+
   return (
-    <div
-      ref={containerRef}
-      className={`h-full w-full overflow-hidden ${active ? "flex items-start" : "hidden"}`}
-      style={{ background: "var(--terminal-bg)" }}
-    />
+    <div className={`relative h-full w-full ${active ? "" : "hidden"}`}>
+      {searchOpen && (
+        <div
+          className="absolute right-3 top-2 z-10 flex items-center gap-1 rounded-lg border px-2 py-1.5 shadow-lg"
+          style={{
+            background: "var(--bg-panel)",
+            borderColor: "var(--border-subtle)",
+          }}
+        >
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              runSearch(e.target.value, "next");
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") runSearch(searchQuery, e.shiftKey ? "previous" : "next");
+              if (e.key === "Escape") closeSearch();
+            }}
+            placeholder="Search..."
+            className="w-44 bg-transparent text-sm outline-none"
+            style={{ color: "var(--text)" }}
+          />
+          <button
+            onClick={() => runSearch(searchQuery, "previous")}
+            className="hover-subtle rounded p-1"
+            style={{ color: "var(--text-muted)" }}
+            title="Previous (Shift+Enter)"
+          >
+            <ChevronUp size={14} />
+          </button>
+          <button
+            onClick={() => runSearch(searchQuery, "next")}
+            className="hover-subtle rounded p-1"
+            style={{ color: "var(--text-muted)" }}
+            title="Next (Enter)"
+          >
+            <ChevronDown size={14} />
+          </button>
+          <button
+            onClick={closeSearch}
+            className="hover-subtle rounded p-1"
+            style={{ color: "var(--text-muted)" }}
+            title="Close (Esc)"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        className="flex h-full w-full items-start overflow-hidden"
+        style={{ background: "var(--terminal-bg)" }}
+      />
+    </div>
   );
 }

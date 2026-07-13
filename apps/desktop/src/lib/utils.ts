@@ -3,7 +3,7 @@ export interface HostFormValues {
   hostname: string;
   port: number;
   username: string;
-  auth_type: "password" | "key";
+  auth_type: "password" | "key" | "none";
   key_id: string | null;
   group_id: string | null;
   password: string;

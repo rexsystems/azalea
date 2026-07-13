@@ -10,7 +10,7 @@ interface DrawerProps {
   footer?: ReactNode;
 }
 
-/** Right panel overlay — slides in without shrinking main content. */
+/** Right panel overlay — does not shrink or reflow main content. */
 export function Drawer({ open, title, subtitle, onClose, children, footer }: DrawerProps) {
   if (!open) return null;
 

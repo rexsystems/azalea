@@ -10,7 +10,7 @@ import { Input } from "./ui/Input";
 interface KeysPageProps {
   keys: SshKey[];
   onGenerate: (name: string) => Promise<void>;
-  onImport: (name: string, pem: string) => Promise<void>;
+  onImport: (name: string, pem: string, passphrase?: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
@@ -18,6 +18,8 @@ export function KeysPage({ keys, onGenerate, onImport, onDelete }: KeysPageProps
   const [newKeyName, setNewKeyName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<{ name: string; pem: string } | null>(null);
+  const [passphrase, setPassphrase] = useState("");
 
   const handleGenerate = async () => {
     const name = newKeyName.trim() || "My Key";
@@ -28,6 +30,27 @@ export function KeysPage({ keys, onGenerate, onImport, onDelete }: KeysPageProps
       setNewKeyName("");
     } catch (err) {
       setError(String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finishImport = async (name: string, pem: string, phrase?: string) => {
+    try {
+      setBusy(true);
+      setError(null);
+      await onImport(name, pem, phrase);
+      setNewKeyName("");
+      setPendingImport(null);
+      setPassphrase("");
+    } catch (err) {
+      const msg = String(err);
+      if (msg.includes("KEY_NEEDS_PASSPHRASE")) {
+        setPendingImport({ name, pem });
+        setError(null);
+      } else {
+        setError(msg);
+      }
     } finally {
       setBusy(false);
     }
@@ -44,11 +67,10 @@ export function KeysPage({ keys, onGenerate, onImport, onDelete }: KeysPageProps
       setBusy(true);
       setError(null);
       const pem = await api.readTextFile(selected);
-      await onImport(name, pem);
-      setNewKeyName("");
+      setBusy(false);
+      await finishImport(name, pem);
     } catch (err) {
       setError(String(err));
-    } finally {
       setBusy(false);
     }
   };
@@ -90,8 +112,53 @@ export function KeysPage({ keys, onGenerate, onImport, onDelete }: KeysPageProps
           </div>
 
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Works with any private key file — including extensionless keys like id_rsa or id_ed25519.
+            OpenSSH, RSA (id_rsa), and PKCS#8 keys. Passphrase-protected keys are supported.
           </p>
+
+          {pendingImport && (
+            <div
+              className="space-y-2 rounded-xl border p-4"
+              style={{ background: "var(--bg-card)", borderColor: "var(--border-subtle)" }}
+            >
+              <p className="text-sm" style={{ color: "var(--text)" }}>
+                <span className="font-medium">{pendingImport.name}</span> is protected by a
+                passphrase.
+              </p>
+              <Input
+                type="password"
+                placeholder="Passphrase"
+                value={passphrase}
+                onChange={(e) => setPassphrase(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && passphrase) {
+                    void finishImport(pendingImport.name, pendingImport.pem, passphrase);
+                  }
+                }}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  disabled={busy || !passphrase}
+                  onClick={() =>
+                    void finishImport(pendingImport.name, pendingImport.pem, passphrase)
+                  }
+                >
+                  Unlock & import
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    setPendingImport(null);
+                    setPassphrase("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             {keys.length === 0 ? (

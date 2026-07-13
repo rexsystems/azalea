@@ -8,4 +8,5 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+azalea-backup-*.json
 apps/desktop/src-tauri/gen/

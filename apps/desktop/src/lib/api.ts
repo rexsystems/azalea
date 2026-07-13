@@ -2,9 +2,14 @@ import type {
   CreateGroupInput,
   CreateHostInput,
   CreateKeyInput,
+  CreatePortForwardInput,
+  CreateSnippetInput,
   Host,
   HostGroup,
   ImportKeyInput,
+  PortForward,
+  SftpListResult,
+  Snippet,
   SshKey,
   UpdateGroupInput,
   UpdateHostInput,
@@ -79,6 +84,16 @@ export function startSsh(
   });
 }
 
+export function reconnectSsh(
+  sessionId: string,
+  cols: number,
+  rows: number,
+): Promise<void> {
+  return invoke("reconnect_ssh", {
+    input: { session_id: sessionId, cols, rows },
+  });
+}
+
 export function writeTerminal(sessionId: string, data: string): Promise<void> {
   return invoke("write_terminal", {
     input: { session_id: sessionId, data },
@@ -99,6 +114,86 @@ export function readTextFile(path: string): Promise<string> {
   return invoke("read_text_file", { path });
 }
 
+export function writeTextFile(path: string, contents: string): Promise<void> {
+  return invoke("write_text_file", { path, contents });
+}
+
+export function hostHasPassword(id: string): Promise<boolean> {
+  return invoke("host_has_password", { id });
+}
+
 export function disconnectSsh(sessionId: string): Promise<void> {
   return invoke("disconnect_ssh", { sessionId });
+}
+
+export function sftpList(sessionId: string, path?: string): Promise<SftpListResult> {
+  return invoke("sftp_list", {
+    input: { session_id: sessionId, path: path ?? null },
+  });
+}
+
+export function sftpDownload(
+  sessionId: string,
+  remotePath: string,
+  localPath: string,
+): Promise<number> {
+  return invoke("sftp_download", { sessionId, remotePath, localPath });
+}
+
+export function sftpUpload(
+  sessionId: string,
+  localPath: string,
+  remotePath: string,
+): Promise<number> {
+  return invoke("sftp_upload", { sessionId, localPath, remotePath });
+}
+
+export function listSnippets(): Promise<Snippet[]> {
+  return invoke("list_snippets");
+}
+
+export function createSnippet(input: CreateSnippetInput): Promise<Snippet> {
+  return invoke("create_snippet", { input });
+}
+
+export function updateSnippet(id: string, input: CreateSnippetInput): Promise<void> {
+  return invoke("update_snippet", { id, input });
+}
+
+export function deleteSnippet(id: string): Promise<void> {
+  return invoke("delete_snippet", { id });
+}
+
+export function listPortForwards(hostId?: string): Promise<PortForward[]> {
+  return invoke("list_port_forwards", { hostId: hostId ?? null });
+}
+
+export function createPortForward(input: CreatePortForwardInput): Promise<PortForward> {
+  return invoke("create_port_forward", { input });
+}
+
+export function deletePortForward(id: string): Promise<void> {
+  return invoke("delete_port_forward", { id });
+}
+
+export function startForward(sessionId: string, forwardId: string): Promise<void> {
+  return invoke("start_forward", { sessionId, forwardId });
+}
+
+export function stopForward(sessionId: string, forwardId: string): Promise<void> {
+  return invoke("stop_forward", { sessionId, forwardId });
+}
+
+export function listActiveForwards(sessionId: string): Promise<string[]> {
+  return invoke("list_active_forwards", { sessionId });
+}
+
+export function trustHostKey(input: {
+  hostname: string;
+  port: number;
+  key_type: string;
+  public_key: string;
+  fingerprint: string;
+}): Promise<void> {
+  return invoke("trust_host_key", { input });
 }

@@ -1,6 +1,6 @@
 use base64::Engine;
 
-use crate::models::{ConnectInput, TerminalResizeInput, TerminalWriteInput};
+use crate::models::{ConnectInput, ReconnectInput, TerminalResizeInput, TerminalWriteInput};
 use crate::sessions::SharedSshSessionManager;
 use crate::store::SharedDatabase;
 
@@ -20,13 +20,31 @@ pub async fn prepare_ssh(
 #[tauri::command]
 pub async fn start_ssh(
     app: tauri::AppHandle,
+    db: tauri::State<'_, SharedDatabase>,
     sessions: tauri::State<'_, SharedSshSessionManager>,
     input: ConnectInput,
 ) -> Result<(), String> {
+    let manager = sessions.inner().clone();
     sessions
         .lock()
         .await
-        .start(app, input.host_id, input.cols, input.rows)
+        .start(app, db.inner().clone(), manager, input.host_id, input.cols, input.rows)
+        .await
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub async fn reconnect_ssh(
+    app: tauri::AppHandle,
+    db: tauri::State<'_, SharedDatabase>,
+    sessions: tauri::State<'_, SharedSshSessionManager>,
+    input: ReconnectInput,
+) -> Result<(), String> {
+    let manager = sessions.inner().clone();
+    sessions
+        .lock()
+        .await
+        .reconnect(app, db.inner().clone(), manager, input.session_id, input.cols, input.rows)
         .await
         .map_err(|err| err.to_string())
 }

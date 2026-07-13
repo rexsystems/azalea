@@ -85,17 +85,19 @@ export function AddServerDrawer({
       setError("Address and username are required.");
       return;
     }
-    if (values.auth_type === "password" && !host && !values.password) {
-      setError("Password is required.");
-      return;
-    }
-    if (values.auth_type === "key" && !values.key_id) {
-      setError("Select an SSH key.");
-      return;
+
+    let authType: HostFormValues["auth_type"] = "none";
+    if (values.auth_type === "password" && values.password) {
+      authType = "password";
+    } else if (values.auth_type === "key" && values.key_id) {
+      authType = "key";
+    } else if (isEdit && host) {
+      authType = host.auth_type;
     }
 
-    const finalValues = {
+    const finalValues: HostFormValues = {
       ...values,
+      auth_type: authType,
       name: values.name || values.hostname.split(".")[0] || values.hostname,
     };
 
@@ -250,28 +252,35 @@ export function AddServerDrawer({
           <Input
             label="Password"
             type="password"
-            placeholder={isEdit ? "Leave blank to keep current" : "Password"}
+            placeholder={isEdit ? "Leave blank to keep current" : "Optional — add later"}
             value={values.password}
             onChange={(e) =>
               setValues((prev) => ({ ...prev, password: e.target.value }))
             }
           />
         ) : keys.length === 0 ? (
-          <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 px-4 py-3 text-sm text-amber-200">
-            No SSH keys yet. Add one from the Keys menu.
+          <div
+            className="rounded-xl border px-4 py-3 text-sm"
+            style={{
+              borderColor: "var(--border-subtle)",
+              color: "var(--text-muted)",
+              background: "var(--bg-card)",
+            }}
+          >
+            No SSH keys yet. You can save this host and pick a key when connecting.
           </div>
         ) : (
           <Select
             label="SSH Key"
             value={values.key_id ?? ""}
-            placeholder="Choose a key..."
+            placeholder="Optional — choose when connecting"
             onChange={(keyId) =>
               setValues((prev) => ({
                 ...prev,
                 key_id: keyId || null,
               }))
             }
-            options={keys.map((key) => ({ value: key.id, label: key.name }))}
+            options={[{ value: "", label: "None — choose when connecting" }, ...keys.map((key) => ({ value: key.id, label: key.name }))]}
           />
         )}
 

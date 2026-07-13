@@ -76,6 +76,7 @@ pub struct CreateKeyInput {
 pub struct ImportKeyInput {
     pub name: String,
     pub private_key_pem: String,
+    pub passphrase: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +94,13 @@ pub struct TerminalWriteInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalResizeInput {
+    pub session_id: String,
+    pub cols: u32,
+    pub rows: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReconnectInput {
     pub session_id: String,
     pub cols: u32,
     pub rows: u32,
@@ -121,4 +129,88 @@ pub struct ConnectionLogEvent {
 pub struct MoveHostInput {
     pub host_id: String,
     pub group_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnownHostRecord {
+    pub hostname: String,
+    pub port: i64,
+    pub key_type: String,
+    pub public_key: String,
+    pub fingerprint: String,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HostKeyMismatchEvent {
+    pub session_id: String,
+    pub hostname: String,
+    pub port: i64,
+    pub key_type: String,
+    pub old_fingerprint: String,
+    pub new_fingerprint: String,
+    pub public_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrustHostKeyInput {
+    pub hostname: String,
+    pub port: i64,
+    pub key_type: String,
+    pub public_key: String,
+    pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Snippet {
+    pub id: String,
+    pub name: String,
+    pub command: String,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateSnippetInput {
+    pub name: String,
+    pub command: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortForward {
+    pub id: String,
+    pub host_id: String,
+    pub label: String,
+    pub local_port: i64,
+    pub remote_host: String,
+    pub remote_port: i64,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreatePortForwardInput {
+    pub host_id: String,
+    pub label: String,
+    pub local_port: i64,
+    pub remote_host: String,
+    pub remote_port: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileEntry {
+    pub name: String,
+    pub is_dir: bool,
+    pub size: u64,
+    pub mtime: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftpListResult {
+    pub path: String,
+    pub entries: Vec<FileEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftpListInput {
+    pub session_id: String,
+    pub path: Option<String>,
 }

@@ -70,7 +70,7 @@ pub fn update_host(
         host.username = username;
     }
     if let Some(auth_type) = input.auth_type {
-        if auth_type == "password" {
+        if auth_type == "password" || auth_type == "none" {
             host.key_id = None;
         }
         host.auth_type = auth_type;
@@ -92,6 +92,13 @@ pub fn update_host(
         .map_err(|err| err.to_string())?;
 
     Ok(host)
+}
+
+#[tauri::command]
+pub fn host_has_password(id: String) -> Result<bool, String> {
+    crate::keys::get_host_password(&id)
+        .map(|p| p.is_some())
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]

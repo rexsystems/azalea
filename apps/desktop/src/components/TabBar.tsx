@@ -1,14 +1,15 @@
-import { LayoutGrid, X } from "lucide-react";
+import type { ReactNode } from "react";
+import { X } from "lucide-react";
 
 interface TabBarProps {
   tabs: { id: string; title: string; status: string }[];
   activeTabId: string | null;
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
-  onBrowse: () => void;
+  actions?: ReactNode;
 }
 
-export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onBrowse }: TabBarProps) {
+export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, actions }: TabBarProps) {
   return (
     <div
       className="flex shrink-0 items-center gap-1 overflow-x-auto border-b px-3 py-2"
@@ -18,27 +19,12 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onBrowse }:
         minHeight: "44px",
       }}
     >
-      <button
-        onClick={onBrowse}
-        className="hover-subtle transition-ui mr-1 flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm"
-        style={{ color: "var(--text-muted)" }}
-        title="Browse hosts"
-      >
-        <LayoutGrid size={15} />
-        Hosts
-      </button>
-
-      <div
-        className="mx-1 h-5 w-px shrink-0"
-        style={{ background: "var(--border-subtle)" }}
-      />
-
       {tabs.map((tab) => {
         const active = tab.id === activeTabId;
         const dotColor =
           tab.status === "connected"
             ? "#4ade80"
-            : tab.status === "connecting"
+            : tab.status === "connecting" || tab.status === "reconnecting"
               ? "#fbbf24"
               : tab.status === "error"
                 ? "#f87171"
@@ -70,15 +56,17 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onBrowse }:
                 e.stopPropagation();
                 onCloseTab(tab.id);
               }}
-              className="hover-subtle mr-1 shrink-0 rounded-md p-1.5 opacity-50 group-hover:opacity-80"
+              className="hover-subtle mr-1.5 shrink-0 rounded p-0.5 opacity-50 group-hover:opacity-80"
               style={{ color: "var(--text-muted)" }}
               aria-label={`Close ${tab.title}`}
             >
-              <X size={14} />
+              <X size={12} />
             </button>
           </div>
         );
       })}
+
+      {actions && <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2">{actions}</div>}
     </div>
   );
 }

@@ -41,7 +41,7 @@ export function ConfirmDialog({
         <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>
           {title}
         </h3>
-        <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+        <p className="mt-2 whitespace-pre-line break-words text-sm" style={{ color: "var(--text-secondary)" }}>
           {message}
         </p>
         <div className="mt-5 flex justify-end gap-2">

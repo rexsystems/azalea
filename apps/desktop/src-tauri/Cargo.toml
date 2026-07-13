@@ -27,6 +27,7 @@ thiserror = "2"
 async-trait = "0.1"
 russh = "0.48"
 russh-keys = "0.48"
+russh-sftp = "2"
 ssh-key = { version = "0.6", features = ["ed25519", "rsa"] }
 base64 = "0.22"
 parking_lot = "0.12"

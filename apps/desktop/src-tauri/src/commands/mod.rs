@@ -1,5 +1,10 @@
+pub mod backup;
 pub mod files;
+pub mod forwards;
 pub mod groups;
 pub mod hosts;
 pub mod keys;
+pub mod known_hosts;
+pub mod sftp;
+pub mod snippets;
 pub mod ssh;

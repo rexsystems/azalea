@@ -24,7 +24,7 @@ pub fn import_key(
     db: tauri::State<'_, SharedDatabase>,
     input: ImportKeyInput,
 ) -> Result<SshKeyRecord, String> {
-    let key = import_private_key(&input.name, &input.private_key_pem)
+    let key = import_private_key(&input.name, &input.private_key_pem, input.passphrase.as_deref())
         .map_err(|err| err.to_string())?;
     db.lock()
         .insert_key(&key)

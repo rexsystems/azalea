@@ -6,8 +6,10 @@ import {
   type ConnectScreenMode,
   type TerminalSettings,
 } from "../lib/settings";
+import { Button } from "./ui/Button";
 import { SettingToggle } from "./ui/SettingToggle";
 import { Slider } from "./ui/Slider";
+import { Download, Upload } from "lucide-react";
 
 interface SettingsPageProps {
   theme: ThemeId;
@@ -16,6 +18,12 @@ interface SettingsPageProps {
   onConnectScreenChange: (mode: ConnectScreenMode) => void;
   terminalSettings: TerminalSettings;
   onTerminalSettingsChange: (patch: Partial<TerminalSettings>) => void;
+  backupBusy?: boolean;
+  onExportBackup: () => void;
+  onImportBackup: () => void;
+  onImportBackupReplace: () => void;
+  onImportTermius: () => void;
+  onImportTermiusReplace: () => void;
 }
 
 export function SettingsPage({
@@ -25,6 +33,12 @@ export function SettingsPage({
   onConnectScreenChange,
   terminalSettings,
   onTerminalSettingsChange,
+  backupBusy = false,
+  onExportBackup,
+  onImportBackup,
+  onImportBackupReplace,
+  onImportTermius,
+  onImportTermiusReplace,
 }: SettingsPageProps) {
   return (
     <div
@@ -92,12 +106,6 @@ export function SettingsPage({
             checked={terminalSettings.rightClickToPaste}
             onChange={(v) => onTerminalSettingsChange({ rightClickToPaste: v })}
           />
-          <SettingToggle
-            label="Middle-click to paste"
-            description="Paste from clipboard with mouse wheel click"
-            checked={terminalSettings.middleClickToPaste}
-            onChange={(v) => onTerminalSettingsChange({ middleClickToPaste: v })}
-          />
         </div>
 
         <div className="mt-4">
@@ -110,6 +118,49 @@ export function SettingsPage({
             formatValue={(v) => `${v}px`}
             onChange={(fontSize) => onTerminalSettingsChange({ fontSize: clampFontSize(fontSize) })}
           />
+        </div>
+      </section>
+
+      <section className="mb-10">
+        <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>
+          Backup &amp; restore
+        </h3>
+        <p className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
+          Export everything before reinstalling Windows — hosts, keys, passwords, groups, and settings.
+        </p>
+        <div
+          className="space-y-3 rounded-xl border p-4"
+          style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+        >
+          <Button className="w-full" disabled={backupBusy} onClick={onExportBackup}>
+            <Download size={16} />
+            Export Azalea backup
+          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" disabled={backupBusy} onClick={onImportBackup}>
+              <Upload size={16} />
+              Import backup
+            </Button>
+            <Button variant="danger" disabled={backupBusy} onClick={onImportBackupReplace}>
+              Replace &amp; import
+            </Button>
+          </div>
+          <div
+            className="border-t pt-3"
+            style={{ borderColor: "var(--border-subtle)" }}
+          >
+            <p className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
+              Termius: import JSON export or OpenSSH config. Full .tbk backups are not supported yet.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" disabled={backupBusy} onClick={onImportTermius}>
+                Import Termius / SSH
+              </Button>
+              <Button variant="danger" disabled={backupBusy} onClick={onImportTermiusReplace}>
+                Replace &amp; import
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
 

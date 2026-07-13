@@ -177,6 +177,28 @@ textarea,
   background: var(--bg-card-hover) !important;
 }
 
+.titlebar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  color: var(--text-muted);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.titlebar-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.titlebar-btn-close:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
 .hover-subtle-active:hover {
   filter: brightness(1.06);
 }
