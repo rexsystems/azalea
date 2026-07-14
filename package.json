@@ -1,0 +1,17 @@
+{
+  "name": "azalea",
+  "private": true,
+  "version": "0.1.0",
+  "license": "AGPL-3.0-or-later",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run tauri dev --workspace @azalea/desktop",
+    "build": "npm run tauri build --workspace @azalea/desktop",
+    "lint": "npm run build --workspace @azalea/desktop",
+    "link:web": "powershell -ExecutionPolicy Bypass -File scripts/link-web.ps1",
+    "dev:web": "npm run dev --prefix apps/azalea-web"
+  }
+}

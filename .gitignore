@@ -1,0 +1,19 @@
+node_modules/
+dist/
+target/
+.next/
+out/
+*.tsbuildinfo
+*.local
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+!.env.example
+azalea-backup-*.json
+apps/desktop/src-tauri/gen/
+
+# Web app is a separate repo (rexsystems/azalea-web). Local junction: npm run link:web
+apps/web/
+apps/azalea-web/
