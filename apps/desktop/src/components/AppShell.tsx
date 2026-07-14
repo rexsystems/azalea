@@ -31,7 +31,7 @@ export function AppShell({
   sidePanel,
 }: AppShellProps) {
   return (
-    <div className="flex h-full select-none flex-col" style={{ background: "var(--bg-base)" }}>
+    <div className="app-shell-root flex h-full select-none flex-col" style={{ background: "var(--bg-base)" }}>
       <TitleBar />
 
       <div className="flex min-h-0 flex-1">

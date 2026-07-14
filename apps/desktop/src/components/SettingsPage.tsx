@@ -10,6 +10,7 @@ import { Button } from "./ui/Button";
 import { SettingToggle } from "./ui/SettingToggle";
 import { Slider } from "./ui/Slider";
 import { SyncSection } from "./SyncSection";
+import { UpdateSection } from "./UpdateSection";
 import { Download, Upload } from "lucide-react";
 
 interface SettingsPageProps {
@@ -23,8 +24,6 @@ interface SettingsPageProps {
   onExportBackup: () => void;
   onImportBackup: () => void;
   onImportBackupReplace: () => void;
-  onImportTermius: () => void;
-  onImportTermiusReplace: () => void;
   syncGetSettings: () => unknown;
   onSyncVaultApplied: (settings: unknown) => void;
 }
@@ -40,8 +39,6 @@ export function SettingsPage({
   onExportBackup,
   onImportBackup,
   onImportBackupReplace,
-  onImportTermius,
-  onImportTermiusReplace,
   syncGetSettings,
   onSyncVaultApplied,
 }: SettingsPageProps) {
@@ -152,22 +149,6 @@ export function SettingsPage({
               Replace &amp; import
             </Button>
           </div>
-          <div
-            className="border-t pt-3"
-            style={{ borderColor: "var(--border-subtle)" }}
-          >
-            <p className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
-              Termius: import JSON export or OpenSSH config. Full .tbk backups are not supported yet.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="secondary" disabled={backupBusy} onClick={onImportTermius}>
-                Import Termius / SSH
-              </Button>
-              <Button variant="danger" disabled={backupBusy} onClick={onImportTermiusReplace}>
-                Replace &amp; import
-              </Button>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -178,7 +159,7 @@ export function SettingsPage({
         <p className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
           Pick a look for the app
         </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {themes.map((t) => (
             <button
               key={t.id}
@@ -193,7 +174,7 @@ export function SettingsPage({
                 className="mb-3 h-8 w-8 rounded-lg border"
                 style={{
                   background: t.preview,
-                  borderColor: t.id === "noir" ? "var(--border)" : "transparent",
+                  borderColor: t.id === "noir" || t.id === "glossy" ? "var(--border)" : "transparent",
                 }}
               />
               <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
@@ -203,6 +184,8 @@ export function SettingsPage({
           ))}
         </div>
       </section>
+
+      <UpdateSection />
 
       <section>
         <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>
@@ -219,7 +202,7 @@ export function SettingsPage({
             Azalea
           </div>
           <div className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
-            Version 0.1.0
+            Rexsystems
           </div>
         </div>
       </section>

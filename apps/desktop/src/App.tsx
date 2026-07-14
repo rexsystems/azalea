@@ -38,9 +38,9 @@ import {
   collectAppSettings,
   exportBackupToFile,
   importBackupFromFile,
-  importTermiusFromFile,
   type AppSettingsExport,
 } from "./lib/backup";
+import { checkForUpdateSilent } from "./lib/updater";
 
 interface TabSession {
   id: string;
@@ -125,6 +125,16 @@ function App() {
   const [splitPickerOpen, setSplitPickerOpen] = useState(false);
 
   const hasTabs = tabs.some((t) => !t.poppedOut);
+
+  useEffect(() => {
+    void checkForUpdateSilent().then((result) => {
+      if (result) {
+        setStatusMessage(
+          `Update available: Azalea ${result.version} — open Settings → Updates to install`,
+        );
+      }
+    });
+  }, []);
 
   const DEFAULT_COLS = 120;
   const DEFAULT_ROWS = 30;
@@ -241,6 +251,7 @@ function App() {
       minWidth: 480,
       minHeight: 320,
       decorations: false,
+      transparent: true,
     });
 
     void popout.once("tauri://created", () => {
@@ -735,12 +746,10 @@ function App() {
     );
   };
 
-  const runImport = async (replace: boolean, termius = false) => {
+  const runImport = async (replace: boolean) => {
     setBackupBusy(true);
     try {
-      const result = termius
-        ? await importTermiusFromFile(replace)
-        : await importBackupFromFile(replace);
+      const result = await importBackupFromFile(replace);
       if (!result) return;
       await finishImport(result);
     } catch (err) {
@@ -773,20 +782,6 @@ function App() {
       confirmLabel: "Replace all",
       danger: true,
       onConfirm: () => void runImport(true),
-    });
-  };
-
-  const handleImportTermius = () => {
-    void runImport(false, true);
-  };
-
-  const handleImportTermiusReplace = () => {
-    setPendingConfirm({
-      title: "Replace all hosts?",
-      message: "This removes every host before importing from Termius/SSH config.",
-      confirmLabel: "Replace hosts",
-      danger: true,
-      onConfirm: () => void runImport(true, true),
     });
   };
 
@@ -877,8 +872,6 @@ function App() {
             onExportBackup={() => void handleExportBackup()}
             onImportBackup={handleImportBackup}
             onImportBackupReplace={handleImportBackupReplace}
-            onImportTermius={handleImportTermius}
-            onImportTermiusReplace={handleImportTermiusReplace}
             syncGetSettings={collectAppSettings}
             onSyncVaultApplied={(settings) => {
               void Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);

@@ -5,7 +5,8 @@ import { PopoutTerminal } from "./components/PopoutTerminal";
 import { applyTheme, getStoredTheme } from "./lib/theme";
 import "./styles/globals.css";
 
-applyTheme(getStoredTheme());
+const initialTheme = getStoredTheme();
+applyTheme(initialTheme);
 
 const params = new URLSearchParams(window.location.search);
 const popoutSessionId = params.get("popout");

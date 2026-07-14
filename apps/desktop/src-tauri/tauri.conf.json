@@ -18,7 +18,8 @@
         "height": 800,
         "minWidth": 900,
         "minHeight": 600,
-        "decorations": false
+        "decorations": false,
+        "transparent": true
       }
     ],
     "security": {
@@ -39,6 +40,16 @@
       "wix": {
         "language": "en-US"
       }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM0Rjg1ODJDOUYxOTYyQUEKUldTcVlobWZMRmo0TkpJSzZPeG96bVp6QVYzbk0vcXFWbWRIOW5hV2lMem93NmRWMVVkenlYZ20K",
+      "endpoints": [
+        "https://azalea-web.pages.dev/updates/latest.json",
+        "https://github.com/rexsystems/azalea/releases/latest/download/latest.json"
+      ]
     }
   }
 }

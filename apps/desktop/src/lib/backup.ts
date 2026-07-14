@@ -65,15 +65,3 @@ export async function importBackupFromFile(replace: boolean): Promise<ImportBack
   }
   return importDataFile(data, replace);
 }
-
-export async function importTermiusFromFile(replace: boolean): Promise<ImportResult | null> {
-  const path = await open({
-    multiple: false,
-    filters: [
-      { name: "Termius / SSH", extensions: ["json", "conf", "cfg", "txt"] },
-    ],
-  });
-  if (!path || Array.isArray(path)) return null;
-  const data = await api.readTextFile(path);
-  return importDataFile(data, replace);
-}

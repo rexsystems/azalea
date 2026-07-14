@@ -1,4 +1,6 @@
-export type ThemeId = "midnight" | "lilac" | "graphite" | "ocean" | "noir";
+import { applyThemeWindowEffects } from "./windowEffects";
+
+export type ThemeId = "midnight" | "lilac" | "graphite" | "ocean" | "noir" | "glossy";
 
 export interface ThemeDefinition {
   id: ThemeId;
@@ -12,6 +14,7 @@ export const themes: ThemeDefinition[] = [
   { id: "graphite", name: "Graphite", preview: "#52525b" },
   { id: "ocean", name: "Ocean", preview: "#0891b2" },
   { id: "noir", name: "Noir", preview: "#0a0a0a" },
+  { id: "glossy", name: "Glossy", preview: "linear-gradient(135deg, rgba(255,255,255,0.35), rgba(125,211,252,0.45))" },
 ];
 
 const STORAGE_KEY = "azalea-theme";
@@ -27,10 +30,12 @@ export function getStoredTheme(): ThemeId {
 export function setStoredTheme(id: ThemeId) {
   localStorage.setItem(STORAGE_KEY, id);
   document.documentElement.dataset.theme = id;
+  void applyThemeWindowEffects(id);
 }
 
 export function applyTheme(id: ThemeId) {
   document.documentElement.dataset.theme = id;
+  void applyThemeWindowEffects(id);
 }
 
 export const hostIconColors = [

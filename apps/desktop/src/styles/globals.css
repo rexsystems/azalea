@@ -109,6 +109,56 @@
   --shadow: none;
 }
 
+/* ── Theme: Glossy (native Windows Mica / Acrylic) ── */
+[data-theme="glossy"] {
+  --bg-base: transparent;
+  --bg-panel: rgba(255, 255, 255, 0.08);
+  --bg-card: rgba(255, 255, 255, 0.11);
+  --bg-card-hover: rgba(255, 255, 255, 0.16);
+  --bg-input: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.18);
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --text: #f8fafc;
+  --text-secondary: rgba(248, 250, 252, 0.82);
+  --text-muted: rgba(248, 250, 252, 0.52);
+  --accent: #bae6fd;
+  --accent-hover: #e0f2fe;
+  --accent-muted: rgba(186, 230, 253, 0.16);
+  --nav-active: rgba(255, 255, 255, 0.14);
+  --terminal-bg: rgba(2, 6, 23, 0.72);
+  --shadow: none;
+}
+
+[data-theme="glossy"] html,
+[data-theme="glossy"] body,
+[data-theme="glossy"] #root {
+  background: transparent !important;
+}
+
+[data-theme="glossy"] .app-shell-root {
+  background: transparent !important;
+}
+
+[data-theme="glossy"] [style*="var(--bg-base)"]:not(.xterm):not(.xterm *) {
+  background: transparent !important;
+}
+
+/* Fallback when native window effects are unavailable (dev browser, Linux, etc.) */
+[data-theme="glossy"]:not(.glossy-native) body,
+[data-theme="glossy"]:not(.glossy-native) #root {
+  background:
+    radial-gradient(ellipse 90% 70% at 12% -5%, rgba(168, 85, 247, 0.35), transparent 55%),
+    radial-gradient(ellipse 80% 60% at 96% 102%, rgba(56, 189, 248, 0.28), transparent 52%),
+    #070b14 !important;
+}
+
+[data-theme="glossy"]:not(.glossy-native) [style*="var(--bg-panel)"],
+[data-theme="glossy"]:not(.glossy-native) [style*="var(--bg-card)"],
+[data-theme="glossy"]:not(.glossy-native) [style*="var(--bg-input)"] {
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+}
+
 * {
   box-sizing: border-box;
 }
