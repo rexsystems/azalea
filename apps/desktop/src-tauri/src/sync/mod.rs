@@ -42,12 +42,12 @@ fn supabase_config() -> anyhow::Result<(String, String)> {
         .ok()
         .filter(|v| !v.is_empty())
         .or_else(|| option_env!("SUPABASE_URL").map(str::to_string))
-        .ok_or_else(|| anyhow::anyhow!("SUPABASE_URL is not configured (.env)"))?;
+        .ok_or_else(|| anyhow::anyhow!("SUPABASE_URL is not configured"))?;
     let key = std::env::var("SUPABASE_ANON_KEY")
         .ok()
         .filter(|v| !v.is_empty())
         .or_else(|| option_env!("SUPABASE_ANON_KEY").map(str::to_string))
-        .ok_or_else(|| anyhow::anyhow!("SUPABASE_ANON_KEY is not configured (.env)"))?;
+        .ok_or_else(|| anyhow::anyhow!("SUPABASE_ANON_KEY is not configured"))?;
     Ok((url.trim_end_matches('/').to_string(), key))
 }
 
