@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Azalea",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "com.azalea.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -47,7 +47,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM0Rjg1ODJDOUYxOTYyQUEKUldTcVlobWZMRmo0TkpJSzZPeG96bVp6QVYzbk0vcXFWbWRIOW5hV2lMem93NmRWMVVkenlYZ20K",
       "endpoints": [
-        "https://azalea-web.pages.dev/updates/latest.json",
+        "https://azalea.rexsystems.me/updates/latest.json",
         "https://github.com/rexsystems/azalea/releases/latest/download/latest.json"
       ]
     }

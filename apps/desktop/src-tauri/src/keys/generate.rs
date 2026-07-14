@@ -65,12 +65,21 @@ pub fn import_private_key(
     private_key_pem: &str,
     passphrase: Option<&str>,
 ) -> anyhow::Result<SshKeyRecord> {
-    // Stored key is always the decrypted OpenSSH PEM, so connects never need
-    // the passphrase again.
+    import_private_key_with_id(name, private_key_pem, passphrase, None)
+}
+
+pub fn import_private_key_with_id(
+    name: &str,
+    private_key_pem: &str,
+    passphrase: Option<&str>,
+    id: Option<&str>,
+) -> anyhow::Result<SshKeyRecord> {
     let private_key = parse_private_key(private_key_pem, passphrase)?;
     let public_key = private_key.public_key();
 
-    let id = Uuid::new_v4().to_string();
+    let id = id
+        .map(str::to_string)
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
     let stored_pem = private_key.to_openssh(LineEnding::LF)?.to_string();
     let public_openssh = public_key.to_openssh()?.to_string();
     let fingerprint = public_key.fingerprint(HashAlg::Sha256).to_string();

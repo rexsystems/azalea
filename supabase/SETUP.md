@@ -75,12 +75,13 @@ supabase functions deploy delete-account
 | Leaked passwords (HIBP) | Authentication -> Providers -> Email -> **Prevent use of leaked passwords** (Pro plan) |
 | Turnstile captcha | Cloudflare Turnstile site key in `.env.local`; secret in Supabase -> Auth -> Attack Protection -> Captcha |
 | Email confirmations | Authentication -> Providers -> Email -> **Confirm email** (required for verification flow) |
-| Site URL | Authentication -> URL Configuration -> `https://azalea-web.pages.dev` |
-| Redirect URLs | Add `https://azalea-web.pages.dev/**` and `http://localhost:3000/**` for dev |
+| Site URL | Authentication -> URL Configuration -> `https://azalea.rexsystems.me` |
+| Redirect URLs | Add `https://azalea.rexsystems.me/**` and `http://localhost:3000/**` for dev |
 
 ### 5. Site env (Cloudflare Pages / `.env.local`)
 
 ```
+NEXT_PUBLIC_SITE_URL=https://azalea.rexsystems.me
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=   # optional

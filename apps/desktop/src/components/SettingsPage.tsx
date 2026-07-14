@@ -26,6 +26,7 @@ interface SettingsPageProps {
   onImportBackupReplace: () => void;
   syncGetSettings: () => unknown;
   onSyncVaultApplied: (settings: unknown) => void;
+  onSyncDataRefresh: () => Promise<void>;
 }
 
 export function SettingsPage({
@@ -41,6 +42,7 @@ export function SettingsPage({
   onImportBackupReplace,
   syncGetSettings,
   onSyncVaultApplied,
+  onSyncDataRefresh,
 }: SettingsPageProps) {
   return (
     <div
@@ -123,7 +125,11 @@ export function SettingsPage({
         </div>
       </section>
 
-      <SyncSection getSettings={syncGetSettings} onVaultApplied={onSyncVaultApplied} />
+      <SyncSection
+        getSettings={syncGetSettings}
+        onVaultApplied={onSyncVaultApplied}
+        onDataRefresh={onSyncDataRefresh}
+      />
 
       <section className="mb-10">
         <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>

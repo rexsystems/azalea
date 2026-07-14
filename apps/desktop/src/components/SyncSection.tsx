@@ -13,10 +13,12 @@ import * as api from "../lib/api";
 import { getStoredAutoSync, setStoredAutoSync } from "../lib/settings";
 import { Button } from "./ui/Button";
 import { SettingToggle } from "./ui/SettingToggle";
+import { SyncResolutionDialog } from "./SyncResolutionDialog";
 
 interface SyncSectionProps {
   getSettings: () => unknown;
   onVaultApplied: (settings: unknown) => void;
+  onDataRefresh: () => Promise<void>;
 }
 
 type Busy = null | "status" | "auth" | "setup" | "unlock" | "sync";
@@ -30,7 +32,11 @@ const inputStyle = {
   color: "var(--text)",
 } as const;
 
-export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
+export function SyncSection({
+  getSettings,
+  onVaultApplied,
+  onDataRefresh,
+}: SyncSectionProps) {
   const [status, setStatus] = useState<api.SyncStatus | null>(null);
   const [busy, setBusy] = useState<Busy>("status");
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +49,7 @@ export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const [recoveryCopied, setRecoveryCopied] = useState(false);
 
-  const [conflict, setConflict] = useState(false);
+  const [preview, setPreview] = useState<api.SyncPreview | null>(null);
   const [autoSync, setAutoSync] = useState(() => getStoredAutoSync());
 
   const refreshStatus = useCallback(async () => {
@@ -60,6 +66,46 @@ export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
   useEffect(() => {
     void refreshStatus();
   }, [refreshStatus]);
+
+  const applyOutcome = useCallback(
+    async (outcome: api.SyncOutcome) => {
+      switch (outcome.status) {
+        case "in_sync":
+          setNotice(`Already in sync (v${outcome.version}).`);
+          break;
+        case "pushed":
+          setNotice(`Local changes uploaded (v${outcome.version}).`);
+          break;
+        case "pulled":
+          onVaultApplied(outcome.settings);
+          await onDataRefresh();
+          setNotice(`Cloud vault downloaded (v${outcome.version}).`);
+          break;
+        case "conflict":
+          setError("Sync conflict — choose which version to keep.");
+          break;
+        case "needs_setup":
+        case "locked":
+          break;
+      }
+    },
+    [onDataRefresh, onVaultApplied],
+  );
+
+  const runPreview = useCallback(async () => {
+    const next = await api.syncPreview(getSettings());
+    if (next.status === "in_sync") {
+      setNotice(`Already in sync (v${next.version}).`);
+      return;
+    }
+    if (
+      next.status === "push" ||
+      next.status === "pull" ||
+      next.status === "conflict"
+    ) {
+      setPreview(next);
+    }
+  }, [getSettings]);
 
   const run = useCallback(
     async (kind: Busy, action: () => Promise<void>) => {
@@ -98,42 +144,40 @@ export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
 
   const handleUnlock = () =>
     run("unlock", async () => {
-      const result = useRecovery
-        ? await api.syncUnlock({ recoveryKey: passphrase })
-        : await api.syncUnlock({ passphrase });
+      if (useRecovery) {
+        await api.syncUnlock({ recoveryKey: passphrase });
+      } else {
+        await api.syncUnlock({ passphrase });
+      }
       setPassphrase("");
-      onVaultApplied(result.settings);
-      setNotice(`Vault unlocked and synced (v${result.version}).`);
+      setNotice("Vault unlocked. Review any pending sync changes below.");
+      await runPreview();
     });
 
-  const handleSync = (resolution?: "keep_local" | "keep_cloud") =>
+  const handleSync = () =>
     run("sync", async () => {
-      setConflict(false);
-      const outcome = await api.syncNow(getSettings(), resolution);
-      switch (outcome.status) {
-        case "in_sync":
-          setNotice(`Already in sync (v${outcome.version}).`);
-          break;
-        case "pushed":
-          setNotice(`Local changes pushed (v${outcome.version}).`);
-          break;
-        case "pulled":
-          onVaultApplied(outcome.settings);
-          setNotice(`Cloud changes pulled (v${outcome.version}).`);
-          break;
-        case "conflict":
-          setConflict(true);
-          break;
-        case "needs_setup":
-        case "locked":
-          break;
-      }
+      await runPreview();
     });
+
+  const handleApplyPreview = async (resolution?: "keep_local" | "keep_cloud") => {
+    setBusy("sync");
+    setError(null);
+    try {
+      const outcome = await api.syncNow(getSettings(), resolution);
+      setPreview(null);
+      await applyOutcome(outcome);
+      setStatus(await api.syncStatus());
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const handleLogout = () =>
     run("auth", async () => {
       await api.syncLogout();
-      setConflict(false);
+      setPreview(null);
     });
 
   const copyRecovery = async () => {
@@ -258,7 +302,7 @@ export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
           <div className="grid grid-cols-2 gap-2">
             <Button disabled={busy !== null || !passphrase} onClick={handleUnlock}>
               {busy === "unlock" ? spinner : <KeyRound size={16} />}
-              Unlock &amp; sync
+              Unlock vault
             </Button>
             <Button
               variant="secondary"
@@ -272,7 +316,8 @@ export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
             </Button>
           </div>
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Unlocking replaces local data with the cloud vault.
+            Unlocking only decrypts the cloud vault key. Your local hosts and keys stay
+            untouched until you choose what to sync.
           </p>
         </div>
       );
@@ -281,33 +326,13 @@ export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
     return (
       <div className="space-y-3">
         {accountRow}
-        {conflict ? (
-          <div
-            className="space-y-2 rounded-lg border p-3"
-            style={{ borderColor: "var(--accent)", background: "var(--accent-muted)" }}
-          >
-            <p className="text-xs" style={{ color: "var(--text)" }}>
-              Both this device and the cloud changed since the last sync. Which version wins?
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button disabled={busy !== null} onClick={() => handleSync("keep_local")}>
-                Keep local
-              </Button>
-              <Button
-                variant="danger"
-                disabled={busy !== null}
-                onClick={() => handleSync("keep_cloud")}
-              >
-                Keep cloud
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <Button className="w-full" disabled={busy !== null} onClick={() => handleSync()}>
-            {busy === "sync" ? spinner : <RefreshCw size={16} />}
-            Sync now
-          </Button>
-        )}
+        <Button className="w-full" disabled={busy !== null} onClick={handleSync}>
+          {busy === "sync" ? spinner : <RefreshCw size={16} />}
+          Check for changes
+        </Button>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Sync always shows what would change before anything is uploaded or downloaded.
+        </p>
       </div>
     );
   };
@@ -327,7 +352,7 @@ export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
         {status?.configured && (
           <SettingToggle
             label="Auto-sync on startup"
-            description="When signed in, ask for your master passphrase at launch and pull the cloud vault."
+            description="When signed in, ask for your master passphrase at launch and review pending sync changes."
             checked={autoSync}
             onChange={(enabled) => {
               setAutoSync(enabled);
@@ -347,6 +372,15 @@ export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
           </p>
         )}
       </div>
+
+      {preview && (
+        <SyncResolutionDialog
+          preview={preview}
+          busy={busy === "sync"}
+          onApply={(resolution) => void handleApplyPreview(resolution)}
+          onSkip={() => setPreview(null)}
+        />
+      )}
 
       {recoveryKey && (
         <div

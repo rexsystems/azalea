@@ -20,6 +20,7 @@ import { useTerminalSettings } from "./hooks/useTerminalSettings";
 import { useTheme } from "./hooks/useTheme";
 import { AddServerDrawer } from "./components/AddServerDrawer";
 import { AutoSyncPrompt } from "./components/AutoSyncPrompt";
+import { SyncResolutionDialog } from "./components/SyncResolutionDialog";
 import { AppShell, type NavPage } from "./components/AppShell";
 import { ConnectionScreen } from "./components/ConnectionScreen";
 import { FileBrowserPanel } from "./components/FileBrowserPanel";
@@ -126,6 +127,7 @@ function App() {
   const [keyMismatch, setKeyMismatch] = useState<HostKeyMismatchEvent | null>(null);
   const [splitPickerOpen, setSplitPickerOpen] = useState(false);
   const [autoSyncPrompt, setAutoSyncPrompt] = useState<{ email: string | null } | null>(null);
+  const [autoSyncPreview, setAutoSyncPreview] = useState<api.SyncPreview | null>(null);
   const [autoSyncBusy, setAutoSyncBusy] = useState(false);
   const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
   const autoSyncCheckedRef = useRef(false);
@@ -745,6 +747,46 @@ function App() {
     }
   };
 
+  const refreshSyncData = useCallback(async () => {
+    await Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
+  }, [refreshGroups, refreshHosts, refreshKeys]);
+
+  const applySyncOutcome = useCallback(
+    async (outcome: api.SyncOutcome) => {
+      if (outcome.status === "pulled") {
+        await refreshSyncData();
+        applyImportedSettings(outcome.settings as Record<string, unknown> | undefined);
+        setStatusMessage(`Cloud vault downloaded (v${outcome.version}).`);
+        return;
+      }
+      if (outcome.status === "pushed") {
+        setStatusMessage(`Local changes uploaded (v${outcome.version}).`);
+        return;
+      }
+      if (outcome.status === "in_sync") {
+        setStatusMessage(`Already in sync (v${outcome.version}).`);
+      }
+    },
+    [refreshSyncData],
+  );
+
+  const showSyncPreviewIfNeeded = useCallback(
+    async (next: api.SyncPreview) => {
+      if (next.status === "in_sync") {
+        setStatusMessage(`Already in sync (v${next.version}).`);
+        return;
+      }
+      if (
+        next.status === "push" ||
+        next.status === "pull" ||
+        next.status === "conflict"
+      ) {
+        setAutoSyncPreview(next);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (autoSyncCheckedRef.current) return;
     autoSyncCheckedRef.current = true;
@@ -756,12 +798,7 @@ function App() {
         if (!status.configured || !status.logged_in || status.vault_exists === false) return;
 
         if (status.unlocked) {
-          const outcome = await api.syncNow(collectAppSettings());
-          if (outcome.status === "pulled") {
-            await Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
-            applyImportedSettings(outcome.settings as Record<string, unknown> | undefined);
-            setStatusMessage(`Auto-sync pulled cloud vault (v${outcome.version}).`);
-          }
+          await showSyncPreviewIfNeeded(await api.syncPreview(collectAppSettings()));
           return;
         }
 
@@ -770,17 +807,29 @@ function App() {
         // User can sync manually in Settings.
       }
     })();
-  }, [refreshGroups, refreshHosts, refreshKeys]);
+  }, [showSyncPreviewIfNeeded]);
 
   const handleAutoSyncUnlock = async (passphrase: string) => {
     setAutoSyncBusy(true);
     setAutoSyncError(null);
     try {
-      const result = await api.syncUnlock({ passphrase });
-      applyImportedSettings(result.settings as Record<string, unknown> | undefined);
-      await Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
+      await api.syncUnlock({ passphrase });
       setAutoSyncPrompt(null);
-      setStatusMessage(`Vault unlocked and synced (v${result.version}).`);
+      await showSyncPreviewIfNeeded(await api.syncPreview(collectAppSettings()));
+    } catch (err) {
+      setAutoSyncError(String(err));
+    } finally {
+      setAutoSyncBusy(false);
+    }
+  };
+
+  const handleAutoSyncApply = async (resolution?: "keep_local" | "keep_cloud") => {
+    setAutoSyncBusy(true);
+    setAutoSyncError(null);
+    try {
+      const outcome = await api.syncNow(collectAppSettings(), resolution);
+      setAutoSyncPreview(null);
+      await applySyncOutcome(outcome);
     } catch (err) {
       setAutoSyncError(String(err));
     } finally {
@@ -926,9 +975,10 @@ function App() {
             onImportBackupReplace={handleImportBackupReplace}
             syncGetSettings={collectAppSettings}
             onSyncVaultApplied={(settings) => {
-              void Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
+              void refreshSyncData();
               applyImportedSettings((settings ?? undefined) as Record<string, unknown> | undefined);
             }}
+            onSyncDataRefresh={refreshSyncData}
           />
         );
       default:
@@ -1201,6 +1251,18 @@ function App() {
           }}
           onSkip={() => {
             setAutoSyncPrompt(null);
+            setAutoSyncError(null);
+          }}
+        />
+      )}
+
+      {autoSyncPreview && (
+        <SyncResolutionDialog
+          preview={autoSyncPreview}
+          busy={autoSyncBusy}
+          onApply={(resolution) => void handleAutoSyncApply(resolution)}
+          onSkip={() => {
+            setAutoSyncPreview(null);
             setAutoSyncError(null);
           }}
         />

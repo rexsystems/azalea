@@ -250,10 +250,30 @@ export type SyncOutcome =
   | { status: "pulled"; version: number; settings: unknown }
   | { status: "conflict"; remote_version: number };
 
-export interface SyncUnlockResult {
-  version: number;
-  settings: unknown;
+export interface ItemDiff {
+  added: string[];
+  removed: string[];
+  modified: string[];
 }
+
+export interface VaultDiff {
+  hosts: ItemDiff;
+  keys: ItemDiff;
+  groups: ItemDiff;
+}
+
+export type SyncPreview =
+  | { status: "needs_setup" }
+  | { status: "locked" }
+  | { status: "in_sync"; version: number }
+  | { status: "push"; remote_version: number; local: VaultDiff }
+  | { status: "pull"; remote_version: number; remote: VaultDiff }
+  | {
+      status: "conflict";
+      remote_version: number;
+      local: VaultDiff;
+      remote: VaultDiff;
+    };
 
 export function syncStatus(): Promise<SyncStatus> {
   return invoke("sync_status");
@@ -285,13 +305,17 @@ export function syncSetupPassphrase(
 export function syncUnlock(input: {
   passphrase?: string;
   recoveryKey?: string;
-}): Promise<SyncUnlockResult> {
+}): Promise<number> {
   return invoke("sync_unlock", {
     input: {
       passphrase: input.passphrase ?? null,
       recovery_key: input.recoveryKey ?? null,
     },
   });
+}
+
+export function syncPreview(settings: unknown): Promise<SyncPreview> {
+  return invoke("sync_preview", { settings });
 }
 
 export function syncNow(

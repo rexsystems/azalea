@@ -79,6 +79,7 @@ pub fn run() {
             sync_commands::sync_logout,
             sync_commands::sync_setup_passphrase,
             sync_commands::sync_unlock,
+            sync_commands::sync_preview,
             sync_commands::sync_now,
             local_terminal::start_local_terminal,
             local_terminal::write_local_terminal,

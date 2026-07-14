@@ -1,4 +1,5 @@
 pub mod crypto;
+pub mod diff;
 
 use std::sync::Arc;
 
@@ -58,7 +59,7 @@ pub fn web_base_url() -> String {
         .ok()
         .filter(|v| !v.is_empty())
         .or_else(|| option_env!("AZALEA_WEB_URL").map(str::to_string))
-        .unwrap_or_else(|| "https://azalea-web.pages.dev".to_string())
+        .unwrap_or_else(|| "https://azalea.rexsystems.me".to_string())
         .trim_end_matches('/')
         .to_string()
 }
@@ -362,12 +363,7 @@ async fn update_vault(
 fn local_vault_json(db: &SharedDatabase, settings: Option<Value>) -> anyhow::Result<(String, String)> {
     let backup = build_backup(db, settings).map_err(|err| anyhow::anyhow!(err))?;
     let json = serde_json::to_string(&backup)?;
-
-    // Fingerprint ignores exported_at so an untouched vault hashes identically.
-    let mut fingerprint_backup = backup;
-    fingerprint_backup.exported_at = 0;
-    let fingerprint = crypto::vault_hash(&serde_json::to_string(&fingerprint_backup)?);
-
+    let fingerprint = diff::semantic_fingerprint(&backup);
     Ok((json, fingerprint))
 }
 
@@ -453,10 +449,10 @@ pub async fn setup_passphrase(
 
 pub async fn unlock(
     state: &mut SyncState,
-    db: &SharedDatabase,
+    _db: &SharedDatabase,
     passphrase: Option<&str>,
     recovery_key: Option<&str>,
-) -> anyhow::Result<(i64, Option<Value>)> {
+) -> anyhow::Result<i64> {
     ensure_session(state).await?;
 
     let vault = fetch_vault(state)
@@ -479,13 +475,11 @@ pub async fn unlock(
         anyhow::bail!("Passphrase or recovery key required.");
     };
 
-    let plaintext = crypto::decrypt(&vault_key, &vault.ciphertext)?;
-    let settings = apply_remote_vault(db, &plaintext)?;
+    // Verify the vault decrypts; do not overwrite local data here.
+    let _plaintext = crypto::decrypt(&vault_key, &vault.ciphertext)?;
 
     state.vault_key = Some(vault_key);
-    set_synced_meta(db, vault.version, settings.as_ref())?;
-
-    Ok((vault.version, settings))
+    Ok(vault.version)
 }
 
 async fn push_local(
@@ -501,6 +495,95 @@ async fn push_local(
     } else {
         Ok(None)
     }
+}
+
+fn parse_backup_json(json: &str) -> anyhow::Result<AzaleaBackup> {
+    serde_json::from_str(json).map_err(|_| anyhow::anyhow!("Unrecognized vault format"))
+}
+
+async fn remote_backup(
+    _state: &SyncState,
+    vault_key: &VaultKey,
+    vault: &VaultRow,
+) -> anyhow::Result<AzaleaBackup> {
+    let plaintext = crypto::decrypt(vault_key, &vault.ciphertext)?;
+    let json = String::from_utf8(plaintext).map_err(|_| anyhow::anyhow!("Corrupted vault payload"))?;
+    parse_backup_json(&json)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case", tag = "status")]
+pub enum SyncPreview {
+    NeedsSetup,
+    Locked,
+    InSync { version: i64 },
+    Push {
+        remote_version: i64,
+        local: diff::VaultDiff,
+    },
+    Pull {
+        remote_version: i64,
+        remote: diff::VaultDiff,
+    },
+    Conflict {
+        remote_version: i64,
+        local: diff::VaultDiff,
+        remote: diff::VaultDiff,
+    },
+}
+
+pub async fn preview_sync(
+    state: &mut SyncState,
+    db: &SharedDatabase,
+    settings: Option<Value>,
+) -> anyhow::Result<SyncPreview> {
+    ensure_session(state).await?;
+
+    let Some(vault) = fetch_vault(state).await? else {
+        return Ok(SyncPreview::NeedsSetup);
+    };
+
+    let Some(vault_key) = state.vault_key else {
+        return Ok(SyncPreview::Locked);
+    };
+
+    let (local_json, fingerprint) = local_vault_json(db, settings.clone())?;
+    let local_backup = parse_backup_json(&local_json)?;
+    let remote_backup = remote_backup(state, &vault_key, &vault).await?;
+
+    let (last_version, last_hash) = synced_meta(db);
+    let dirty = last_hash.as_deref() != Some(fingerprint.as_str());
+    let local_diff = diff::local_side_diff(&local_backup, &remote_backup);
+    let remote_diff = diff::remote_side_diff(&local_backup, &remote_backup);
+
+    if vault.version <= last_version {
+        if !dirty {
+            return Ok(SyncPreview::InSync { version: vault.version });
+        }
+        if local_diff.is_empty() {
+            return Ok(SyncPreview::InSync { version: vault.version });
+        }
+        return Ok(SyncPreview::Push {
+            remote_version: vault.version,
+            local: local_diff,
+        });
+    }
+
+    if !dirty || local_diff.is_empty() && remote_diff.is_empty() {
+        if remote_diff.is_empty() {
+            return Ok(SyncPreview::InSync { version: vault.version });
+        }
+        return Ok(SyncPreview::Pull {
+            remote_version: vault.version,
+            remote: remote_diff,
+        });
+    }
+
+    Ok(SyncPreview::Conflict {
+        remote_version: vault.version,
+        local: local_diff,
+        remote: remote_diff,
+    })
 }
 
 pub async fn perform_sync(
@@ -528,6 +611,12 @@ pub async fn perform_sync(
         if !dirty {
             return Ok(SyncOutcome::InSync { version: vault.version });
         }
+        let local_backup = parse_backup_json(&local_json)?;
+        let remote_backup = remote_backup(state, &vault_key, &vault).await?;
+        if diff::diff_backups(&local_backup, &remote_backup).is_empty() {
+            set_synced_meta(db, vault.version, settings.as_ref())?;
+            return Ok(SyncOutcome::InSync { version: vault.version });
+        }
         match push_local(state, &vault_key, &local_json, vault.version).await? {
             Some(new_version) => {
                 set_synced_meta(db, new_version, settings.as_ref())?;
@@ -536,8 +625,8 @@ pub async fn perform_sync(
             None => Ok(SyncOutcome::Conflict { remote_version: vault.version }),
         }
     } else {
-        // Remote moved ahead of us.
-        if !dirty || resolution == Some("keep_cloud") {
+        // Remote moved ahead of us — never pull without explicit user choice.
+        if resolution == Some("keep_cloud") {
             let plaintext = crypto::decrypt(&vault_key, &vault.ciphertext)?;
             let settings = apply_remote_vault(db, &plaintext)?;
             set_synced_meta(db, vault.version, settings.as_ref())?;

@@ -1,6 +1,6 @@
 [package]
 name = "azalea"
-version = "0.1.0"
+version = "0.1.1"
 description = "A modern open-source SSH terminal client"
 authors = ["Rexsystems"]
 license = "AGPL-3.0-or-later"

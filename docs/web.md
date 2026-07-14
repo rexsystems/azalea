@@ -1,6 +1,6 @@
 # Web app
 
-Standalone repo: **https://github.com/rexsystems/azalea-web** (private) -> Cloudflare Pages
+Standalone repo: **https://github.com/rexsystems/azalea-web** (private, not public) — deployed at **https://azalea.rexsystems.me** (Cloudflare Pages + custom domain).
 
 ## Work from this monorepo
 
@@ -29,7 +29,7 @@ cd apps/azalea-web && npm run build   # static export -> out/
 | Output directory | `out` |
 | Node.js | 22 |
 
-Env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, optional `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `NEXT_PUBLIC_GITHUB_REPO`, optional `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL`
+Env: `NEXT_PUBLIC_SITE_URL` (`https://azalea.rexsystems.me`), `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, optional `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `NEXT_PUBLIC_GITHUB_REPO`, optional `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL`
 
 ## Download links
 

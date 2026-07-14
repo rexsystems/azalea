@@ -8,7 +8,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 use crate::store::SharedDatabase;
-use crate::sync::{self, SharedSyncState, SyncOutcome, SyncStatus};
+use crate::sync::{self, SharedSyncState, SyncOutcome, SyncPreview, SyncStatus};
 
 #[derive(Debug, Deserialize)]
 pub struct CredentialsInput {
@@ -242,29 +242,33 @@ pub struct UnlockInput {
     pub recovery_key: Option<String>,
 }
 
-#[derive(Debug, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct UnlockResult {
-    pub version: i64,
-    pub settings: Option<Value>,
-}
-
 #[tauri::command]
 pub async fn sync_unlock(
     state: tauri::State<'_, SharedSyncState>,
     db: tauri::State<'_, SharedDatabase>,
     input: UnlockInput,
-) -> Result<UnlockResult, String> {
+) -> Result<i64, String> {
     let mut sync = state.lock().await;
-    let (version, settings) = sync::unlock(
+    sync::unlock(
         &mut sync,
         &db,
         input.passphrase.as_deref(),
         input.recovery_key.as_deref(),
     )
     .await
-    .map_err(|err| err.to_string())?;
-    Ok(UnlockResult { version, settings })
+    .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub async fn sync_preview(
+    state: tauri::State<'_, SharedSyncState>,
+    db: tauri::State<'_, SharedDatabase>,
+    settings: Option<Value>,
+) -> Result<SyncPreview, String> {
+    let mut sync = state.lock().await;
+    sync::preview_sync(&mut sync, &db, settings)
+        .await
+        .map_err(|err| err.to_string())
 }
 
 #[tauri::command]

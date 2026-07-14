@@ -6,7 +6,7 @@ use crate::keys::{
     delete_host_password, delete_private_key, get_host_password, get_private_key,
     store_host_password,
 };
-use crate::keys::generate::import_private_key;
+use crate::keys::generate::import_private_key_with_id;
 use crate::models::{Host, HostGroup};
 use crate::store::SharedDatabase;
 
@@ -221,19 +221,29 @@ pub fn import_azalea_backup_db(
     let mut groups_imported = 0usize;
 
     for group in backup.groups {
-        match db.create_group(&group.name) {
-            Ok(created) => {
-                group_id_map.insert(group.id, created.id);
-                groups_imported += 1;
-            }
-            Err(_) if !replace => {
-                if let Ok(existing) = db.list_groups() {
-                    if let Some(found) = existing.iter().find(|g| g.name == group.name) {
-                        group_id_map.insert(group.id, found.id.clone());
+        if replace {
+            let record = HostGroup {
+                id: group.id.clone(),
+                name: group.name.clone(),
+                created_at: group.created_at,
+            };
+            db.insert_group(&record).map_err(|err| err.to_string())?;
+            group_id_map.insert(group.id.clone(), group.id);
+            groups_imported += 1;
+        } else {
+            match db.create_group(&group.name) {
+                Ok(created) => {
+                    group_id_map.insert(group.id, created.id);
+                    groups_imported += 1;
+                }
+                Err(_) => {
+                    if let Ok(existing) = db.list_groups() {
+                        if let Some(found) = existing.iter().find(|g| g.name == group.name) {
+                            group_id_map.insert(group.id, found.id.clone());
+                        }
                     }
                 }
             }
-            Err(err) => return Err(err.to_string()),
         }
     }
 
@@ -244,7 +254,12 @@ pub fn import_azalea_backup_db(
         let pem = key.private_key_pem.ok_or_else(|| {
             format!("Backup key \"{}\" is missing its private key material.", key.name)
         })?;
-        let imported = import_private_key(&key.name, &pem, None).map_err(|err| err.to_string())?;
+        let imported = if replace {
+            import_private_key_with_id(&key.name, &pem, None, Some(&key.id))
+        } else {
+            import_private_key_with_id(&key.name, &pem, None, None)
+        }
+        .map_err(|err| err.to_string())?;
         db.insert_key(&imported).map_err(|err| err.to_string())?;
         key_id_map.insert(key.id, imported.id.clone());
         keys_imported += 1;
@@ -253,7 +268,11 @@ pub fn import_azalea_backup_db(
     let mut hosts_imported = 0usize;
     for host in backup.hosts {
         let now = chrono::Utc::now().timestamp();
-        let id = Uuid::new_v4().to_string();
+        let id = if replace {
+            host.id.clone()
+        } else {
+            Uuid::new_v4().to_string()
+        };
         let mapped_key_id = host.key_id.as_ref().and_then(|old| key_id_map.get(old).cloned());
         let mapped_group_id = host
             .group_id

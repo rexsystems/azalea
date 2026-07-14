@@ -36,8 +36,8 @@ export function AutoSyncPrompt({
               Unlock vault to sync
             </h3>
             <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-              Auto-sync is on{email ? ` for ${email}` : ""}. Enter your master passphrase to pull
-              the latest cloud vault.
+              Auto-sync is on{email ? ` for ${email}` : ""}. Enter your master passphrase to
+              unlock the vault and review any pending sync changes.
             </p>
           </div>
           <button
@@ -77,7 +77,7 @@ export function AutoSyncPrompt({
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Button disabled={busy || !passphrase} onClick={() => onUnlock(passphrase)}>
             {busy ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={16} />}
-            Unlock &amp; sync
+            Unlock vault
           </Button>
           <Button variant="secondary" disabled={busy} onClick={onSkip}>
             Skip for now

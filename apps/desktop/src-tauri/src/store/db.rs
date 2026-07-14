@@ -160,12 +160,16 @@ impl Database {
             created_at: chrono::Utc::now().timestamp(),
         };
 
+        self.insert_group(&group)?;
+        Ok(group)
+    }
+
+    pub fn insert_group(&self, group: &HostGroup) -> anyhow::Result<()> {
         self.conn.execute(
             "INSERT INTO host_groups (id, name, created_at) VALUES (?1, ?2, ?3)",
             params![group.id, group.name, group.created_at],
         )?;
-
-        Ok(group)
+        Ok(())
     }
 
     pub fn update_group(&self, id: &str, name: &str) -> anyhow::Result<HostGroup> {

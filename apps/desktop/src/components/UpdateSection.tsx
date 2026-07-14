@@ -88,7 +88,7 @@ export function UpdateSection() {
         Updates
       </h3>
       <p className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
-        Installed version {appVersion}. Release builds check azalea-web and GitHub for signed
+        Installed version {appVersion}. Release builds check azalea.rexsystems.me and GitHub for signed
         updates.
       </p>
 

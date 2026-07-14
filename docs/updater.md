@@ -4,7 +4,7 @@ The desktop app uses [Tauri updater](https://v2.tauri.app/plugin/updater/) with 
 
 ## Endpoints (in order)
 
-1. `https://azalea-web.pages.dev/updates/latest.json` (public, works with a private GitHub repo)
+1. `https://azalea.rexsystems.me/updates/latest.json` (hosted update manifest; GitHub repo can stay private)
 2. `https://github.com/rexsystems/azalea/releases/latest/download/latest.json` (if the repo is public)
 
 ## GitHub Actions secrets (master release only)
@@ -27,7 +27,7 @@ The **public** key is already in `apps/desktop/src-tauri/tauri.conf.json`. If yo
 ## After each master release
 
 1. CI uploads `latest.json`, `*.nsis.zip`, and signatures to GitHub Releases.
-2. Copy `latest.json` (and optionally the installer zip) to **azalea-web** `public/updates/` so Cloudflare Pages serves a public manifest.
+2. Copy `latest.json` (and optionally the installer zip) to **azalea-web** `public/updates/` so the site at **azalea.rexsystems.me** serves the manifest.
 
 ```powershell
 copy apps\desktop\src-tauri\target\release\bundle\nsis\latest.json ..\azalea-web\public\updates\latest.json
