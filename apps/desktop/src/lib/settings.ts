@@ -49,6 +49,16 @@ export function setStoredConnectScreen(mode: ConnectScreenMode) {
   localStorage.setItem(CONNECT_STORAGE_KEY, mode);
 }
 
+const AUTO_SYNC_KEY = "azalea-auto-sync";
+
+export function getStoredAutoSync(): boolean {
+  return localStorage.getItem(AUTO_SYNC_KEY) === "1";
+}
+
+export function setStoredAutoSync(enabled: boolean) {
+  localStorage.setItem(AUTO_SYNC_KEY, enabled ? "1" : "0");
+}
+
 export const connectScreenOptions: { id: ConnectScreenMode; label: string; description: string }[] =
   [
     {

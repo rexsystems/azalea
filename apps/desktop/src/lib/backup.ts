@@ -2,7 +2,14 @@ import type { ImportBackupResult, ImportResult } from "@azalea/shared";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { ConnectScreenMode, TerminalSettings } from "./settings";
-import { getStoredConnectScreen, getStoredTerminalSettings, setStoredConnectScreen, setStoredTerminalSettings } from "./settings";
+import {
+  getStoredAutoSync,
+  getStoredConnectScreen,
+  getStoredTerminalSettings,
+  setStoredAutoSync,
+  setStoredConnectScreen,
+  setStoredTerminalSettings,
+} from "./settings";
 import type { ThemeId } from "./theme";
 import { getStoredTheme, setStoredTheme } from "./theme";
 import * as api from "./api";
@@ -11,6 +18,7 @@ export interface AppSettingsExport {
   theme: ThemeId;
   connectScreen: ConnectScreenMode;
   terminalSettings: TerminalSettings;
+  autoSync: boolean;
 }
 
 export function collectAppSettings(): AppSettingsExport {
@@ -18,6 +26,7 @@ export function collectAppSettings(): AppSettingsExport {
     theme: getStoredTheme(),
     connectScreen: getStoredConnectScreen(),
     terminalSettings: getStoredTerminalSettings(),
+    autoSync: getStoredAutoSync(),
   };
 }
 
@@ -25,6 +34,7 @@ export function applyAppSettings(settings: Partial<AppSettingsExport>) {
   if (settings.theme) setStoredTheme(settings.theme);
   if (settings.connectScreen) setStoredConnectScreen(settings.connectScreen);
   if (settings.terminalSettings) setStoredTerminalSettings(settings.terminalSettings);
+  if (typeof settings.autoSync === "boolean") setStoredAutoSync(settings.autoSync);
 }
 
 export function exportBackup(settings: AppSettingsExport): Promise<string> {

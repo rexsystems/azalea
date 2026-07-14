@@ -19,6 +19,7 @@ import { useConnectScreen } from "./hooks/useConnectScreen";
 import { useTerminalSettings } from "./hooks/useTerminalSettings";
 import { useTheme } from "./hooks/useTheme";
 import { AddServerDrawer } from "./components/AddServerDrawer";
+import { AutoSyncPrompt } from "./components/AutoSyncPrompt";
 import { AppShell, type NavPage } from "./components/AppShell";
 import { ConnectionScreen } from "./components/ConnectionScreen";
 import { FileBrowserPanel } from "./components/FileBrowserPanel";
@@ -41,6 +42,7 @@ import {
   type AppSettingsExport,
 } from "./lib/backup";
 import { checkForUpdateSilent } from "./lib/updater";
+import { getStoredAutoSync, setStoredAutoSync } from "./lib/settings";
 
 interface TabSession {
   id: string;
@@ -123,6 +125,10 @@ function App() {
   const [forwardsOpen, setForwardsOpen] = useState(false);
   const [keyMismatch, setKeyMismatch] = useState<HostKeyMismatchEvent | null>(null);
   const [splitPickerOpen, setSplitPickerOpen] = useState(false);
+  const [autoSyncPrompt, setAutoSyncPrompt] = useState<{ email: string | null } | null>(null);
+  const [autoSyncBusy, setAutoSyncBusy] = useState(false);
+  const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
+  const autoSyncCheckedRef = useRef(false);
 
   const hasTabs = tabs.some((t) => !t.poppedOut);
 
@@ -734,6 +740,52 @@ function App() {
     if (settings.terminalSettings && typeof settings.terminalSettings === "object") {
       updateTerminalSettings(settings.terminalSettings as Partial<typeof terminalSettings>);
     }
+    if (typeof settings.autoSync === "boolean") {
+      setStoredAutoSync(settings.autoSync);
+    }
+  };
+
+  useEffect(() => {
+    if (autoSyncCheckedRef.current) return;
+    autoSyncCheckedRef.current = true;
+
+    void (async () => {
+      if (!getStoredAutoSync()) return;
+      try {
+        const status = await api.syncStatus();
+        if (!status.configured || !status.logged_in || status.vault_exists === false) return;
+
+        if (status.unlocked) {
+          const outcome = await api.syncNow(collectAppSettings());
+          if (outcome.status === "pulled") {
+            await Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
+            applyImportedSettings(outcome.settings as Record<string, unknown> | undefined);
+            setStatusMessage(`Auto-sync pulled cloud vault (v${outcome.version}).`);
+          }
+          return;
+        }
+
+        setAutoSyncPrompt({ email: status.email ?? null });
+      } catch {
+        // User can sync manually in Settings.
+      }
+    })();
+  }, [refreshGroups, refreshHosts, refreshKeys]);
+
+  const handleAutoSyncUnlock = async (passphrase: string) => {
+    setAutoSyncBusy(true);
+    setAutoSyncError(null);
+    try {
+      const result = await api.syncUnlock({ passphrase });
+      applyImportedSettings(result.settings as Record<string, unknown> | undefined);
+      await Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
+      setAutoSyncPrompt(null);
+      setStatusMessage(`Vault unlocked and synced (v${result.version}).`);
+    } catch (err) {
+      setAutoSyncError(String(err));
+    } finally {
+      setAutoSyncBusy(false);
+    }
   };
 
   const finishImport = async (result: ImportBackupResult | ImportResult) => {
@@ -1135,6 +1187,24 @@ function App() {
         onConfirm={(value) => pendingPrompt?.onConfirm(value)}
         onCancel={() => setPendingPrompt(null)}
       />
+
+      {autoSyncPrompt && (
+        <AutoSyncPrompt
+          email={autoSyncPrompt.email}
+          busy={autoSyncBusy}
+          error={autoSyncError}
+          onUnlock={(passphrase) => void handleAutoSyncUnlock(passphrase)}
+          onDisableAutoSync={() => {
+            setStoredAutoSync(false);
+            setAutoSyncPrompt(null);
+            setAutoSyncError(null);
+          }}
+          onSkip={() => {
+            setAutoSyncPrompt(null);
+            setAutoSyncError(null);
+          }}
+        />
+      )}
 
       <SelectHostDialog
         open={splitPickerOpen}

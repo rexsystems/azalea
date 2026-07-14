@@ -26,6 +26,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let db = init_database(&app.handle())?;
+            keys::keyring::init_storage(&app.handle())?;
             app.manage(db);
             app.manage(init_session_manager());
             app.manage(init_local_terminal_manager());

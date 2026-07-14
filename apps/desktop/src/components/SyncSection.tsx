@@ -10,7 +10,9 @@ import {
   RefreshCw,
 } from "lucide-react";
 import * as api from "../lib/api";
+import { getStoredAutoSync, setStoredAutoSync } from "../lib/settings";
 import { Button } from "./ui/Button";
+import { SettingToggle } from "./ui/SettingToggle";
 
 interface SyncSectionProps {
   getSettings: () => unknown;
@@ -42,6 +44,7 @@ export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
   const [recoveryCopied, setRecoveryCopied] = useState(false);
 
   const [conflict, setConflict] = useState(false);
+  const [autoSync, setAutoSync] = useState(() => getStoredAutoSync());
 
   const refreshStatus = useCallback(async () => {
     setBusy("status");
@@ -321,6 +324,17 @@ export function SyncSection({ getSettings, onVaultApplied }: SyncSectionProps) {
         className="space-y-3 rounded-xl border p-4"
         style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
       >
+        {status?.configured && (
+          <SettingToggle
+            label="Auto-sync on startup"
+            description="When signed in, ask for your master passphrase at launch and pull the cloud vault."
+            checked={autoSync}
+            onChange={(enabled) => {
+              setAutoSync(enabled);
+              setStoredAutoSync(enabled);
+            }}
+          />
+        )}
         {renderBody()}
         {error && (
           <p className="break-words text-xs" style={{ color: "var(--danger, #f87171)" }}>
