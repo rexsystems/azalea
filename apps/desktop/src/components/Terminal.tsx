@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { readText as readClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Terminal as XTerm } from "@xterm/xterm";
@@ -36,7 +37,12 @@ function decodeBase64(data: string): Uint8Array {
 
 async function pasteFromClipboard(term: XTerm) {
   try {
-    const text = await navigator.clipboard.readText();
+    let text = "";
+    try {
+      text = await readClipboardText();
+    } catch {
+      text = await navigator.clipboard.readText();
+    }
     if (text) term.paste(text);
   } catch {
     // clipboard unavailable
@@ -185,6 +191,7 @@ export function TerminalView({
       scrollback: 8000,
       fontFamily: "JetBrains Mono, Fira Code, monospace",
       fontSize: settingsRef.current.fontSize,
+      rightClickSelectsWord: !settingsRef.current.rightClickToPaste,
       theme: xtermPalette(),
     });
 
@@ -217,15 +224,19 @@ export function TerminalView({
       if (text) void navigator.clipboard.writeText(text);
     };
 
-    const onMouseUp = () => copySelection();
+    const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 2) return;
+      copySelection();
+    };
     const onContextMenu = (e: MouseEvent) => {
       if (!settingsRef.current.rightClickToPaste) return;
       e.preventDefault();
+      e.stopPropagation();
       void pasteFromClipboard(term);
     };
 
     container.addEventListener("mouseup", onMouseUp);
-    container.addEventListener("contextmenu", onContextMenu);
+    term.element?.addEventListener("contextmenu", onContextMenu, true);
 
     const resizeObserver = new ResizeObserver(() => {
       if (!activeRef.current) return;
@@ -298,7 +309,7 @@ export function TerminalView({
       unlistenOutput?.();
       unlistenStatus?.();
       container.removeEventListener("mouseup", onMouseUp);
-      container.removeEventListener("contextmenu", onContextMenu);
+      term.element?.removeEventListener("contextmenu", onContextMenu, true);
       resizeObserver.disconnect();
       term.dispose();
       termRef.current = null;
@@ -308,6 +319,12 @@ export function TerminalView({
       bootstrappedRef.current = false;
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    term.options.rightClickSelectsWord = !settings.rightClickToPaste;
+  }, [settings.rightClickToPaste]);
 
   useEffect(() => {
     const term = termRef.current;

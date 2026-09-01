@@ -13,6 +13,7 @@
     "@azalea/shared": "*",
     "@tailwindcss/vite": "^4.1.11",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-clipboard-manager": "^2.3.3",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2",
@@ -33,5 +34,10 @@
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
+  },
+  "optionalDependencies": {
+    "@esbuild/linux-x64": "^0.28.1",
+    "@rollup/rollup-linux-x64-gnu": "^4.62.2",
+    "@tauri-apps/cli-linux-x64-gnu": "^2.11.4"
   }
 }

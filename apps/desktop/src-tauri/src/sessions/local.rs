@@ -93,7 +93,8 @@ pub fn start_local_terminal(
         },
     );
 
-    // Wake the shell so ConPTY emits the initial prompt.
+    // Wake the shell so ConPTY emits the initial prompt on Windows.
+    #[cfg(windows)]
     {
         let mut guard = manager.lock();
         if let Some(session) = guard.sessions.get_mut(&session_id) {

@@ -162,7 +162,7 @@ export function HostsPage({
           onClick={onOpenLocalTerminal}
           className="hover-subtle transition-ui inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium"
           style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-          title="Open a local PowerShell terminal"
+          title="Open a local terminal"
         >
           <SquareTerminal size={14} />
           Terminal

@@ -24,28 +24,41 @@ A modern, open-source SSH terminal client for Windows (and cross-platform). Loca
 
 - [Node.js](https://nodejs.org/) 20+
 - [Rust](https://rustup.rs/) 1.77+
-- Windows: [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with C++ workload
-- WebView2 (preinstalled on Windows 10/11)
+- **Linux (Fedora / Nobara / RHEL):**
+  ```bash
+  sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget squashfs-tools librsvg2-devel rpm-build
+  ```
+- **Linux (Debian / Ubuntu):**
+  ```bash
+  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+  ```
+- **Windows:** [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with C++ workload and WebView2
 
 ### Setup
 
 ```bash
-git clone https://github.com/your-org/azalea.git
+git clone https://github.com/rexsystems/azalea.git
 cd azalea
 npm install
 npm run dev
 ```
 
-### Build installer (Windows)
+### Build installer & packages
 
 ```bash
+# Build for current platform
 npm run build
+
+# Or build specific Linux packages:
+npm run build:rpm   # Fedora / RHEL / openSUSE
+npm run build:deb   # Debian / Ubuntu
 ```
 
 Output:
 
-- `apps/desktop/src-tauri/target/release/bundle/msi/Azalea_0.1.0_x64_en-US.msi`
-- `apps/desktop/src-tauri/target/release/bundle/nsis/Azalea_0.1.0_x64-setup.exe`
+- Linux RPM: `apps/desktop/src-tauri/target/release/bundle/rpm/Azalea-*.rpm`
+- Linux DEB: `apps/desktop/src-tauri/target/release/bundle/deb/Azalea_*.deb`
+- Windows: `apps/desktop/src-tauri/target/release/bundle/nsis/*.exe` or `msi/*.msi`
 
 ## Project structure
 

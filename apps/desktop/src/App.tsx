@@ -233,7 +233,7 @@ function App() {
       {
         id: sessionId,
         hostId: "local",
-        title: "PowerShell",
+        title: "Local Terminal",
         hostname: "localhost",
         port: 0,
         username: "",
