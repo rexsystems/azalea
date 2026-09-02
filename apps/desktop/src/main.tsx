@@ -8,6 +8,16 @@ import "./styles/globals.css";
 const initialTheme = getStoredTheme();
 applyTheme(initialTheme);
 
+// Block WebKit/WebView native context menus app-wide. Custom Azalea menus still
+// open via React handlers; this only suppresses the browser default menu.
+document.addEventListener(
+  "contextmenu",
+  (event) => {
+    event.preventDefault();
+  },
+  true,
+);
+
 const params = new URLSearchParams(window.location.search);
 const popoutSessionId = params.get("popout");
 

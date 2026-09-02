@@ -57,16 +57,6 @@ async function readClipboardTextForPaste(): Promise<string> {
 async function pasteFromClipboard(term: XTerm, sessionId: string) {
   term.focus();
 
-  const textarea = term.element?.querySelector("textarea");
-  if (textarea instanceof HTMLTextAreaElement) {
-    textarea.focus();
-    try {
-      if (document.execCommand("paste")) return;
-    } catch {
-      // fall through to explicit clipboard read
-    }
-  }
-
   const text = await readClipboardTextForPaste();
   if (!text) return;
 
@@ -88,25 +78,31 @@ function bindRightClickPaste(
 ) {
   let lastPasteAt = 0;
 
-  const triggerPaste = (e: MouseEvent) => {
-    if (!getSettings().rightClickToPaste) return;
-
+  const runPaste = () => {
     const now = Date.now();
     if (now - lastPasteAt < 200) return;
     lastPasteAt = now;
-
-    e.preventDefault();
-    e.stopPropagation();
     void pasteFromClipboard(term, sessionId);
   };
 
+  const blockContextMenu = (e: MouseEvent) => {
+    if (!getSettings().rightClickToPaste) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+  };
+
   const onMouseDown = (e: MouseEvent) => {
-    if (e.button !== 2) return;
-    triggerPaste(e);
+    if (!getSettings().rightClickToPaste || e.button !== 2) return;
+    e.preventDefault();
+    e.stopPropagation();
+    runPaste();
   };
 
   const onContextMenu = (e: MouseEvent) => {
-    triggerPaste(e);
+    if (!getSettings().rightClickToPaste) return;
+    blockContextMenu(e);
+    runPaste();
   };
 
   const targets = new Set<HTMLElement>([container]);
@@ -505,6 +501,9 @@ export function TerminalView({
         ref={containerRef}
         className="flex h-full w-full items-start overflow-hidden"
         style={{ background: "var(--terminal-bg)" }}
+        onContextMenu={(e) => {
+          if (settings.rightClickToPaste) e.preventDefault();
+        }}
       />
     </div>
   );

@@ -13,6 +13,7 @@ use sessions::{init_local_terminal_manager, init_session_manager};
 use store::init_database;
 use sync::init_sync_state;
 use tauri::Manager;
+use tauri_plugin_prevent_default::Flags;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,6 +29,11 @@ pub fn run() {
     let _ = dotenvy::dotenv();
 
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_prevent_default::Builder::new()
+                .with_flags(Flags::CONTEXT_MENU)
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
