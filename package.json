@@ -9,11 +9,12 @@
   ],
   "scripts": {
     "dev": "npm run tauri dev --workspace @azalea/desktop",
-    "build": "node scripts/build.mjs",
-    "build:rpm": "node scripts/build.mjs --bundles rpm",
-    "build:deb": "node scripts/build.mjs --bundles deb",
+    "build": "npm run tauri build --workspace @azalea/desktop -- --no-sign",
+    "build:ci": "npm run tauri build --workspace @azalea/desktop",
+    "build:linux": "npm run tauri build --workspace @azalea/desktop -- --bundles deb,rpm --no-sign",
+    "build:rpm": "npm run tauri build --workspace @azalea/desktop -- --bundles rpm --no-sign",
+    "build:deb": "npm run tauri build --workspace @azalea/desktop -- --bundles deb --no-sign",
     "lint": "npm run build --workspace @azalea/desktop",
-    "link:web": "powershell -ExecutionPolicy Bypass -File scripts/link-web.ps1",
     "dev:web": "npm run dev --prefix apps/azalea-web"
   }
 }

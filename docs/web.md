@@ -4,12 +4,11 @@ Standalone repo: **https://github.com/rexsystems/azalea-web** (private, not publ
 
 ## Work from this monorepo
 
-The web app is linked locally via a **junction** (not committed):
+The web app is linked locally via a **junction** (not committed). Clone `azalea-web` next to this repo, then:
 
 ```powershell
-npm run link:web
-# creates apps/azalea-web -> ../azalea-web
-# (or apps/web when that folder is not locked)
+# From repo root (Windows)
+New-Item -ItemType Junction -Path apps\azalea-web -Target ..\azalea-web
 ```
 
 Then edit at `apps/azalea-web/`. Changes go to the separate repo.

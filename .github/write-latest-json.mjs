@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Writes Tauri v2 updater latest.json next to NSIS artifacts.
- * Usage: node scripts/write-latest-json.mjs <version> <bundle-dir>
+ * Usage: node .github/write-latest-json.mjs <version> <bundle-dir>
  */
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -10,7 +10,7 @@ const version = process.argv[2];
 const bundleDir = process.argv[3];
 
 if (!version || !bundleDir) {
-  console.error("Usage: node scripts/write-latest-json.mjs <version> <bundle-dir>");
+  console.error("Usage: node .github/write-latest-json.mjs <version> <bundle-dir>");
   process.exit(1);
 }
 

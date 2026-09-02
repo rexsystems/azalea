@@ -259,7 +259,7 @@ function App() {
       minWidth: 480,
       minHeight: 320,
       decorations: false,
-      transparent: true,
+      transparent: false,
     });
 
     void popout.once("tauri://created", () => {

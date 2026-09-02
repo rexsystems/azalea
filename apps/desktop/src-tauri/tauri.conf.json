@@ -14,12 +14,12 @@
       {
         "label": "main",
         "title": "Azalea",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 900,
-        "minHeight": 600,
+        "width": 1400,
+        "height": 860,
+        "minWidth": 1000,
+        "minHeight": 680,
         "decorations": false,
-        "transparent": true
+        "transparent": false
       }
     ],
     "security": {

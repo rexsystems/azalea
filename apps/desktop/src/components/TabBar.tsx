@@ -12,11 +12,11 @@ interface TabBarProps {
 export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, actions }: TabBarProps) {
   return (
     <div
-      className="flex shrink-0 items-center gap-1 overflow-x-auto border-b px-3 py-2"
+      className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b px-3.5 py-2.5"
       style={{
         background: "var(--bg-panel)",
         borderColor: "var(--border-subtle)",
-        minHeight: "44px",
+        minHeight: "3rem",
       }}
     >
       {tabs.map((tab) => {
@@ -45,10 +45,10 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, actions }: 
             <button
               type="button"
               onClick={() => onSelectTab(tab.id)}
-              className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-3 pr-1"
+              className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pl-3.5 pr-1.5"
             >
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: dotColor }} />
-              <span className="max-w-[200px] truncate font-medium">{tab.title}</span>
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: dotColor }} />
+              <span className="max-w-[220px] truncate font-medium">{tab.title}</span>
             </button>
             <button
               type="button"
@@ -60,7 +60,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, actions }: 
               style={{ color: "var(--text-muted)" }}
               aria-label={`Close ${tab.title}`}
             >
-              <X size={12} />
+              <X size={14} />
             </button>
           </div>
         );

@@ -7,7 +7,7 @@ export interface TerminalSettings {
 export const defaultTerminalSettings: TerminalSettings = {
   selectToCopy: true,
   rightClickToPaste: true,
-  fontSize: 14,
+  fontSize: 16,
 };
 
 const STORAGE_KEY = "azalea-terminal-settings";
@@ -32,7 +32,7 @@ export function setStoredTerminalSettings(settings: TerminalSettings) {
 }
 
 export function clampFontSize(size: number): number {
-  return Math.min(22, Math.max(11, Math.round(size)));
+  return Math.min(26, Math.max(12, Math.round(size)));
 }
 
 export type ConnectScreenMode = "fancy" | "instant";

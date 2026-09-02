@@ -127,19 +127,19 @@ export function HostsPage({
 
       {/* Toolbar — Termius-style */}
       <div
-        className="flex shrink-0 items-center gap-3 border-b px-5 py-3"
+        className="flex shrink-0 items-center gap-3 border-b px-5 py-3.5"
         style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
       >
         <div className="flex items-center gap-1 text-sm" style={{ color: "var(--text-muted)" }}>
           <span>Personal</span>
-          <ChevronRight size={14} />
+          <ChevronRight size={16} />
           <span style={{ color: "var(--text)" }}>Hosts</span>
         </div>
 
         <div className="relative mx-4 min-w-0 flex-1">
           <Search
-            size={15}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+            size={17}
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2"
             style={{ color: "var(--text-muted)" }}
           />
           <input
@@ -149,7 +149,7 @@ export function HostsPage({
               if (e.key === "Enter") onQuickConnect();
             }}
             placeholder="Find a host or ssh user@hostname..."
-            className="transition-ui w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none"
+            className="transition-ui w-full rounded-lg border py-2.5 pl-10 pr-3.5 text-sm outline-none"
             style={{
               background: "var(--bg-input)",
               borderColor: "var(--border-subtle)",
@@ -160,17 +160,17 @@ export function HostsPage({
 
         <button
           onClick={onOpenLocalTerminal}
-          className="hover-subtle transition-ui inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium"
+          className="hover-subtle transition-ui inline-flex shrink-0 items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium"
           style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
           title="Open a local terminal"
         >
-          <SquareTerminal size={14} />
+          <SquareTerminal size={16} />
           Terminal
         </button>
 
         <button
           onClick={() => onAddServer()}
-          className="transition-ui inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium"
+          className="transition-ui inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium"
           style={{ background: "var(--accent)", color: "var(--accent-fg, #fff)" }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background = "var(--accent-hover)";
@@ -179,7 +179,7 @@ export function HostsPage({
             e.currentTarget.style.background = "var(--accent)";
           }}
         >
-          <Plus size={14} />
+          <Plus size={16} />
           New Host
         </button>
       </div>

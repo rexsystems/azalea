@@ -46,13 +46,21 @@ npm run dev
 ### Build installer & packages
 
 ```bash
-# Build for current platform
+# Local build (unsigned)
 npm run build
+
+# CI / signed release build
+npm run build:ci
+
+# Linux packages only (deb + rpm)
+npm run build:linux
 
 # Or build specific Linux packages:
 npm run build:rpm   # Fedora / RHEL / openSUSE
 npm run build:deb   # Debian / Ubuntu
 ```
+
+Pushes to `master` build **Windows**, **deb** (Ubuntu/Debian), and **rpm** (Fedora/RHEL) via GitHub Actions.
 
 Output:
 

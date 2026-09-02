@@ -51,7 +51,7 @@ export function ContextMenu({ x, y, sections, onClose }: ContextMenuProps) {
   return createPortal(
     <div
       ref={ref}
-      className="animate-menu-in fixed z-[100] min-w-[180px] rounded-lg border py-1"
+      className="animate-menu-in fixed z-[100] min-w-[200px] rounded-lg border py-1.5"
       style={{
         left: x,
         top: y,
@@ -73,7 +73,7 @@ export function ContextMenu({ x, y, sections, onClose }: ContextMenuProps) {
                 item.onClick();
                 onClose();
               }}
-              className="transition-ui flex w-full px-3 py-1.5 text-left text-sm disabled:opacity-40"
+              className="transition-ui flex w-full px-3.5 py-2 text-left text-sm disabled:opacity-40"
               style={{
                 color: item.danger ? "#f87171" : "var(--text-secondary)",
               }}

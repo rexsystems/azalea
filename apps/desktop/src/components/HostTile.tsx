@@ -30,26 +30,26 @@ export function HostTile({
         type="button"
         disabled={connecting}
         onClick={() => onConnect(host)}
-        className="hover-subtle transition-ui flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left disabled:opacity-50"
+        className="hover-subtle transition-ui flex w-full items-center gap-3.5 rounded-xl border px-3.5 py-3.5 text-left disabled:opacity-50"
         style={{
           background: "var(--bg-card)",
           borderColor: "var(--border-subtle)",
         }}
       >
         <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
           style={{ background: iconColor }}
         >
           {getHostInitials(host.name)}
         </div>
         <div className="min-w-0 flex-1">
           <div
-            className="truncate text-sm font-medium"
+            className="truncate text-base font-medium"
             style={{ color: "var(--text)" }}
           >
             {host.name}
           </div>
-          <div className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
+          <div className="truncate text-sm" style={{ color: "var(--text-muted)" }}>
             ssh, {host.username}
           </div>
         </div>

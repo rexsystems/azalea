@@ -131,26 +131,25 @@ function terminalBgColor(): string {
 
 function xtermPalette() {
   const theme = document.documentElement.dataset.theme ?? "midnight";
-  if (theme === "noir" || theme === "glossy") {
-    const isGlossy = theme === "glossy";
+  if (theme === "noir") {
     return {
       background: terminalBgColor(),
-      foreground: isGlossy ? "#f1f5f9" : "#f5f5f5",
-      cursor: isGlossy ? "#bae6fd" : "#ffffff",
-      selectionBackground: isGlossy ? "#bae6fd33" : "#ffffff33",
-      black: isGlossy ? "#0f172a" : "#0a0a0a",
+      foreground: "#f5f5f5",
+      cursor: "#ffffff",
+      selectionBackground: "#ffffff33",
+      black: "#0a0a0a",
       red: "#f87171",
       green: "#4ade80",
       yellow: "#facc15",
-      blue: isGlossy ? "#7dd3fc" : "#93c5fd",
-      magenta: isGlossy ? "#e9d5ff" : "#d8b4fe",
-      cyan: isGlossy ? "#a5f3fc" : "#67e8f9",
-      white: isGlossy ? "#f1f5f9" : "#f5f5f5",
-      brightBlack: isGlossy ? "#64748b" : "#737373",
+      blue: "#93c5fd",
+      magenta: "#d8b4fe",
+      cyan: "#67e8f9",
+      white: "#f5f5f5",
+      brightBlack: "#737373",
       brightRed: "#fca5a5",
       brightGreen: "#86efac",
       brightYellow: "#fde047",
-      brightBlue: isGlossy ? "#bae6fd" : "#bfdbfe",
+      brightBlue: "#bfdbfe",
       brightMagenta: "#e9d5ff",
       brightCyan: "#a5f3fc",
       brightWhite: "#ffffff",
@@ -263,8 +262,11 @@ export function TerminalView({
     const term = new XTerm({
       cursorBlink: true,
       scrollback: 8000,
-      fontFamily: "JetBrains Mono, Fira Code, monospace",
+      fontFamily: '"JetBrains Mono", "Cascadia Mono", "Fira Code", monospace',
       fontSize: settingsRef.current.fontSize,
+      lineHeight: 1.15,
+      letterSpacing: 0,
+      allowTransparency: false,
       rightClickSelectsWord: !settingsRef.current.rightClickToPaste,
       theme: xtermPalette(),
     });

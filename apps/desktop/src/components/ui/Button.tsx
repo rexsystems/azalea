@@ -15,7 +15,7 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
-  const sizeClass = size === "sm" ? "px-2.5 py-1.5 text-xs rounded-lg" : "px-3 py-2 text-sm rounded-lg";
+  const sizeClass = size === "sm" ? "px-3 py-2 text-sm rounded-lg" : "px-4 py-2.5 text-sm rounded-lg";
 
   const hoverClass =
     variant === "primary" ? "hover:brightness-110" : variant === "danger" ? "hover-subtle" : "hover-subtle";

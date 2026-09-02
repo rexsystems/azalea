@@ -54,7 +54,7 @@ export function Select({ label, value, options, placeholder, onChange }: SelectP
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="transition-ui flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left text-sm outline-none focus:border-[var(--accent)]"
+        className="transition-ui flex w-full items-center justify-between gap-2 rounded-lg border px-3.5 py-3 text-left text-sm outline-none focus:border-[var(--accent)]"
         style={{
           background: "var(--bg-input)",
           borderColor: open ? "var(--accent)" : "var(--border-subtle)",

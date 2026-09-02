@@ -49,7 +49,7 @@ export function SettingsPage({
       className="flex h-full flex-col overflow-y-auto p-6"
       style={{ background: "var(--bg-base)" }}
     >
-      <h2 className="mb-1 text-lg font-semibold" style={{ color: "var(--text)" }}>
+      <h2 className="mb-1 text-xl font-semibold" style={{ color: "var(--text)" }}>
         Settings
       </h2>
       <p className="mb-8 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -115,8 +115,8 @@ export function SettingsPage({
         <div className="mt-4">
           <Slider
             label="Font size"
-            min={11}
-            max={22}
+            min={12}
+            max={26}
             step={1}
             value={terminalSettings.fontSize}
             formatValue={(v) => `${v}px`}
@@ -165,7 +165,7 @@ export function SettingsPage({
         <p className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
           Pick a look for the app
         </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {themes.map((t) => (
             <button
               key={t.id}
@@ -180,7 +180,7 @@ export function SettingsPage({
                 className="mb-3 h-8 w-8 rounded-lg border"
                 style={{
                   background: t.preview,
-                  borderColor: t.id === "noir" || t.id === "glossy" ? "var(--border)" : "transparent",
+                  borderColor: t.id === "noir" ? "var(--border)" : "transparent",
                 }}
               />
               <div className="text-sm font-medium" style={{ color: "var(--text)" }}>

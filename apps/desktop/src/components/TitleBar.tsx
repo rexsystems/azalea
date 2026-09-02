@@ -29,7 +29,7 @@ export function TitleBar({ title }: { title?: string }) {
   return (
     <div
       data-tauri-drag-region
-      className="flex h-9 shrink-0 items-center justify-between border-b"
+      className="flex h-10 shrink-0 items-center justify-between border-b"
       style={{
         background: "var(--bg-panel)",
         borderColor: "var(--border-subtle)",
@@ -37,10 +37,10 @@ export function TitleBar({ title }: { title?: string }) {
     >
       <div
         data-tauri-drag-region
-        className="flex items-center gap-2 px-3 text-xs font-medium"
+        className="flex items-center gap-2.5 px-3.5 text-sm font-medium"
         style={{ color: "var(--text-muted)" }}
       >
-        <Logo size={16} style={{ color: "var(--accent)", pointerEvents: "none" }} />
+        <Logo size={18} style={{ color: "var(--accent)", pointerEvents: "none" }} />
         {title ?? "Azalea"}
       </div>
 
@@ -51,7 +51,7 @@ export function TitleBar({ title }: { title?: string }) {
           title="Minimize"
           tabIndex={-1}
         >
-          <Minus size={14} />
+          <Minus size={16} />
         </button>
         <button
           onClick={() => void appWindow.toggleMaximize()}
@@ -60,9 +60,9 @@ export function TitleBar({ title }: { title?: string }) {
           tabIndex={-1}
         >
           {maximized ? (
-            <Copy size={12} style={{ transform: "scaleX(-1)" }} />
+            <Copy size={13} style={{ transform: "scaleX(-1)" }} />
           ) : (
-            <Square size={11} />
+            <Square size={12} />
           )}
         </button>
         <button
@@ -71,7 +71,7 @@ export function TitleBar({ title }: { title?: string }) {
           title="Close"
           tabIndex={-1}
         >
-          <X size={15} />
+          <X size={17} />
         </button>
       </div>
     </div>
