@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Check,
   Copy,
+  ExternalLink,
   Globe,
   KeyRound,
   Loader2,
@@ -9,19 +10,26 @@ import {
   LogOut,
   RefreshCw,
 } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import * as api from "../lib/api";
+import { maskEmail } from "../lib/utils";
 import { getStoredAutoSync, setStoredAutoSync } from "../lib/settings";
 import { Button } from "./ui/Button";
+import { PlanBadge } from "./PlanBadge";
 import { SettingToggle } from "./ui/SettingToggle";
 import { SyncResolutionDialog } from "./SyncResolutionDialog";
 
 interface SyncSectionProps {
+  status: api.SyncStatus | null;
+  onStatusChange: (status: api.SyncStatus) => void;
   getSettings: () => unknown;
   onVaultApplied: (settings: unknown) => void;
   onDataRefresh: () => Promise<void>;
 }
 
 type Busy = null | "status" | "auth" | "setup" | "unlock" | "sync";
+
+const WEB_PRICING_URL = "https://azalea.rexsystems.me/pricing";
 
 const inputClass =
   "w-full rounded-lg border px-3 py-2 text-sm outline-none transition-ui";
@@ -32,13 +40,96 @@ const inputStyle = {
   color: "var(--text)",
 } as const;
 
+function fmtBytes(bytes: number): string {
+  if (bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function syncStateLabel(status: api.SyncStatus): string {
+  if (status.storage_blocked) return "Storage full — upload blocked";
+  if (!status.unlocked) return status.vault_exists === false ? "No cloud vault" : "Locked";
+  if (
+    status.remote_version != null &&
+    status.remote_version > status.last_synced_version
+  ) {
+    return "Cloud has newer changes";
+  }
+  if (
+    status.local_estimated_bytes != null &&
+    status.cloud_used_bytes !== status.local_estimated_bytes
+  ) {
+    return "Local changes pending";
+  }
+  return "In sync";
+}
+
+function StoragePanel({ status }: { status: api.SyncStatus }) {
+  const used = status.cloud_used_bytes;
+  const limit = status.storage_limit_bytes;
+  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+
+  return (
+    <div
+      className="space-y-2 rounded-lg border p-3"
+      style={{ borderColor: "var(--border-subtle)", background: "var(--bg-base)" }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
+          Cloud storage
+        </span>
+        <PlanBadge plan={status.plan} />
+      </div>
+      <div
+        className="mt-2 h-1.5 overflow-hidden rounded-full"
+        style={{ background: "rgba(255,255,255,0.08)" }}
+      >
+        <div
+          className="h-full rounded-full transition-all"
+          style={{
+            width: `${pct}%`,
+            background: status.storage_blocked ? "#fbbf24" : "var(--accent)",
+          }}
+        />
+      </div>
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        {fmtBytes(used)} / {fmtBytes(limit)} in cloud
+      </p>
+      {status.unlocked && status.local_estimated_bytes != null && (
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          This device (estimated): {fmtBytes(status.local_estimated_bytes)}
+        </p>
+      )}
+      {status.storage_blocked && (
+        <p className="text-xs" style={{ color: "#fbbf24" }}>
+          Your vault is too large for the {status.plan === "pro" ? "Pro" : "Free"} plan. Remove
+          hosts or keys locally, then sync again.
+        </p>
+      )}
+      {status.plan !== "pro" && (
+        <button
+          type="button"
+          className="mt-1 inline-flex items-center gap-1 text-xs transition-colors hover:opacity-80"
+          style={{ color: "var(--accent)" }}
+          onClick={() => void openUrl(WEB_PRICING_URL)}
+        >
+          Upgrade to Pro
+          <ExternalLink size={11} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function SyncSection({
+  status,
+  onStatusChange,
   getSettings,
   onVaultApplied,
   onDataRefresh,
 }: SyncSectionProps) {
-  const [status, setStatus] = useState<api.SyncStatus | null>(null);
-  const [busy, setBusy] = useState<Busy>("status");
+  const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -55,17 +146,19 @@ export function SyncSection({
   const refreshStatus = useCallback(async () => {
     setBusy("status");
     try {
-      setStatus(await api.syncStatus());
+      onStatusChange(await api.syncStatus());
     } catch (err) {
       setError(String(err));
     } finally {
       setBusy(null);
     }
-  }, []);
+  }, [onStatusChange]);
 
   useEffect(() => {
-    void refreshStatus();
-  }, [refreshStatus]);
+    if (!status) {
+      void refreshStatus();
+    }
+  }, [refreshStatus, status]);
 
   const applyOutcome = useCallback(
     async (outcome: api.SyncOutcome) => {
@@ -93,6 +186,12 @@ export function SyncSection({
   );
 
   const runPreview = useCallback(async () => {
+    if (status?.storage_blocked) {
+      setError(
+        "Cloud vault is full. Remove hosts or keys locally, then try again, or upgrade to Pro.",
+      );
+      return;
+    }
     const next = await api.syncPreview(getSettings());
     if (next.status === "in_sync") {
       setNotice(`Already in sync (v${next.version}).`);
@@ -105,7 +204,7 @@ export function SyncSection({
     ) {
       setPreview(next);
     }
-  }, [getSettings]);
+  }, [getSettings, status?.storage_blocked]);
 
   const run = useCallback(
     async (kind: Busy, action: () => Promise<void>) => {
@@ -114,7 +213,7 @@ export function SyncSection({
       setNotice(null);
       try {
         await action();
-        setStatus(await api.syncStatus());
+        onStatusChange(await api.syncStatus());
       } catch (err) {
         setError(String(err));
       } finally {
@@ -150,11 +249,11 @@ export function SyncSection({
         await api.syncUnlock({ passphrase });
       }
       setPassphrase("");
-      setNotice("Vault unlocked. Review any pending sync changes below.");
+      setNotice("Vault unlocked.");
       await runPreview();
     });
 
-  const handleSync = () =>
+  const handleSyncNow = () =>
     run("sync", async () => {
       await runPreview();
     });
@@ -166,7 +265,7 @@ export function SyncSection({
       const outcome = await api.syncNow(getSettings(), resolution);
       setPreview(null);
       await applyOutcome(outcome);
-      setStatus(await api.syncStatus());
+      onStatusChange(await api.syncStatus());
     } catch (err) {
       setError(String(err));
     } finally {
@@ -201,7 +300,7 @@ export function SyncSection({
     if (!status.configured) {
       return (
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Cloud sync is not configured in this build (missing Supabase settings).
+          Cloud sync is not available in this build.
         </p>
       );
     }
@@ -210,8 +309,8 @@ export function SyncSection({
       return (
         <div className="space-y-3">
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Sign in through your browser to link this device. Creating an account
-            and password resets happen on the Azalea website.
+            Sign in through your browser to link this device. Account signup and password resets
+            happen on the Azalea website.
           </p>
           <Button
             className="w-full"
@@ -226,17 +325,23 @@ export function SyncSection({
     }
 
     const accountRow = (
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
-            {status.email ?? "Signed in"}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
+              {status.email ? maskEmail(status.email) : "Signed in"}
+            </div>
+            <PlanBadge plan={status.plan} size="md" />
           </div>
           <div className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {status.unlocked
-              ? `Unlocked · synced version ${status.last_synced_version}`
-              : status.vault_exists === false
-                ? "No vault yet"
-                : "Vault locked"}
+            {syncStateLabel(status)}
+            {status.remote_version != null && (
+              <span className="opacity-70">
+                {" "}
+                · cloud v{status.remote_version}
+                {status.last_synced_version > 0 && ` · synced v${status.last_synced_version}`}
+              </span>
+            )}
           </div>
         </div>
         <Button variant="secondary" disabled={busy !== null} onClick={handleLogout}>
@@ -246,13 +351,16 @@ export function SyncSection({
       </div>
     );
 
+    const storagePanel = <StoragePanel status={status} />;
+
     if (status.vault_exists === false) {
       return (
         <div className="space-y-3">
           {accountRow}
+          {storagePanel}
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Choose a master passphrase. It encrypts everything on your device before upload —
-            it is never sent to the server and cannot be reset. You will get a one-time recovery key.
+            Choose a master passphrase. It encrypts everything before upload — never sent to the
+            server. You will get a one-time recovery key.
           </p>
           <input
             className={inputClass}
@@ -288,6 +396,7 @@ export function SyncSection({
       return (
         <div className="space-y-3">
           {accountRow}
+          {storagePanel}
           <input
             className={inputClass}
             style={inputStyle}
@@ -315,10 +424,6 @@ export function SyncSection({
               {useRecovery ? "Use passphrase" : "Use recovery key"}
             </Button>
           </div>
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Unlocking only decrypts the cloud vault key. Your local hosts and keys stay
-            untouched until you choose what to sync.
-          </p>
         </div>
       );
     }
@@ -326,12 +431,29 @@ export function SyncSection({
     return (
       <div className="space-y-3">
         {accountRow}
-        <Button className="w-full" disabled={busy !== null} onClick={handleSync}>
-          {busy === "sync" ? spinner : <RefreshCw size={16} />}
-          Check for changes
-        </Button>
+        {storagePanel}
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            className="w-full"
+            disabled={busy !== null || status.storage_blocked}
+            onClick={handleSyncNow}
+          >
+            {busy === "sync" ? spinner : <RefreshCw size={16} />}
+            Sync now
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full"
+            disabled={busy !== null}
+            onClick={() => void refreshStatus()}
+          >
+            {busy === "status" ? spinner : <RefreshCw size={16} />}
+            Refresh status
+          </Button>
+        </div>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Sync always shows what would change before anything is uploaded or downloaded.
+          Sync shows what would change before anything is uploaded or downloaded. Local data is
+          unlimited — only encrypted cloud storage counts toward your plan.
         </p>
       </div>
     );
@@ -339,19 +461,23 @@ export function SyncSection({
 
   return (
     <section className="mb-10">
-      <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>
-        Account &amp; Sync
-      </h3>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-medium" style={{ color: "var(--text)" }}>
+          Account &amp; Sync
+        </h3>
+        {status?.logged_in && <PlanBadge plan={status.plan} size="md" />}
+      </div>
       <p className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
-        End-to-end encrypted sync of hosts, keys, snippets, and settings across devices.
+        Encrypted cloud backup for hosts, keys, and settings. Free includes sync — you only pay for
+        more cloud space.
       </p>
       <div
         className="space-y-3 rounded-xl border p-4"
         style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
       >
-        {status?.configured && (
+        {status?.configured && status.logged_in && (
           <SettingToggle
-            label="Auto-sync on startup"
+            label="Prompt for passphrase on startup"
             description="When signed in, ask for your master passphrase at launch and review pending sync changes."
             checked={autoSync}
             onChange={(enabled) => {
@@ -395,8 +521,8 @@ export function SyncSection({
               Save your recovery key
             </h4>
             <p className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
-              This is the only way to recover your vault if you forget the master passphrase.
-              It is shown once — store it somewhere safe.
+              This is the only way to recover your vault if you forget the master passphrase. It is
+              shown once — store it somewhere safe.
             </p>
             <div
               className="mb-3 break-all rounded-lg border p-3 font-mono text-xs"

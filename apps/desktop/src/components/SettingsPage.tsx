@@ -10,8 +10,10 @@ import { Button } from "./ui/Button";
 import { SettingToggle } from "./ui/SettingToggle";
 import { Slider } from "./ui/Slider";
 import { SyncSection } from "./SyncSection";
+import { PlanBadge } from "./PlanBadge";
 import { UpdateSection } from "./UpdateSection";
 import { Download, Upload } from "lucide-react";
+import type { SyncStatus } from "../lib/api";
 
 interface SettingsPageProps {
   theme: ThemeId;
@@ -25,6 +27,8 @@ interface SettingsPageProps {
   onImportBackup: () => void;
   onImportBackupReplace: () => void;
   syncGetSettings: () => unknown;
+  syncStatus: SyncStatus | null;
+  onSyncStatusChange: (status: SyncStatus) => void;
   onSyncVaultApplied: (settings: unknown) => void;
   onSyncDataRefresh: () => Promise<void>;
 }
@@ -41,6 +45,8 @@ export function SettingsPage({
   onImportBackup,
   onImportBackupReplace,
   syncGetSettings,
+  syncStatus,
+  onSyncStatusChange,
   onSyncVaultApplied,
   onSyncDataRefresh,
 }: SettingsPageProps) {
@@ -49,12 +55,32 @@ export function SettingsPage({
       className="flex h-full flex-col overflow-y-auto p-6"
       style={{ background: "var(--bg-base)" }}
     >
-      <h2 className="mb-1 text-xl font-semibold" style={{ color: "var(--text)" }}>
-        Settings
-      </h2>
-      <p className="mb-8 text-sm" style={{ color: "var(--text-muted)" }}>
-        Appearance, connection behavior, and app info
-      </p>
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="mb-1 text-xl font-semibold" style={{ color: "var(--text)" }}>
+            Settings
+          </h2>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            Appearance, cloud sync, connection behavior, and app info
+          </p>
+        </div>
+        {syncStatus?.logged_in && (
+          <div
+            className="rounded-xl border px-3 py-2"
+            style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+          >
+            <div className="text-[10px] uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+              Your plan
+            </div>
+            <div className="mt-1 flex items-center gap-2">
+              <PlanBadge plan={syncStatus.plan} size="md" />
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {syncStatus.plan === "pro" ? "10 MB cloud" : "256 KB cloud"}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
 
       <section className="mb-10">
         <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>
@@ -126,6 +152,8 @@ export function SettingsPage({
       </section>
 
       <SyncSection
+        status={syncStatus}
+        onStatusChange={onSyncStatusChange}
         getSettings={syncGetSettings}
         onVaultApplied={onSyncVaultApplied}
         onDataRefresh={onSyncDataRefresh}

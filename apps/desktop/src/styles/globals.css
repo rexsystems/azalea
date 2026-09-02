@@ -260,3 +260,14 @@ textarea,
   animation: connect-spin 1s linear infinite;
   pointer-events: none;
 }
+
+.no-number-spinners::-webkit-outer-spin-button,
+.no-number-spinners::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-number-spinners {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}

@@ -16,6 +16,7 @@ import { useGroups } from "./hooks/useGroups";
 import { useHosts } from "./hooks/useHosts";
 import { useKeys } from "./hooks/useKeys";
 import { useConnectScreen } from "./hooks/useConnectScreen";
+import { useSyncStatus } from "./hooks/useSyncStatus";
 import { useTerminalSettings } from "./hooks/useTerminalSettings";
 import { useTheme } from "./hooks/useTheme";
 import { AddServerDrawer } from "./components/AddServerDrawer";
@@ -98,6 +99,8 @@ function App() {
   } = useGroups();
   const { theme, changeTheme } = useTheme();
   const { connectScreen, changeConnectScreen } = useConnectScreen();
+  const { status: syncStatus, setStatus: setSyncStatus, refresh: refreshSyncStatus } =
+    useSyncStatus();
   const { terminalSettings, updateTerminalSettings } = useTerminalSettings();
 
   const [tabs, setTabs] = useState<TabSession[]>([]);
@@ -748,8 +751,8 @@ function App() {
   };
 
   const refreshSyncData = useCallback(async () => {
-    await Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
-  }, [refreshGroups, refreshHosts, refreshKeys]);
+    await Promise.all([refreshHosts(), refreshGroups(), refreshKeys(), refreshSyncStatus()]);
+  }, [refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus]);
 
   const applySyncOutcome = useCallback(
     async (outcome: api.SyncOutcome) => {
@@ -795,6 +798,7 @@ function App() {
       if (!getStoredAutoSync()) return;
       try {
         const status = await api.syncStatus();
+        setSyncStatus(status);
         if (!status.configured || !status.logged_in || status.vault_exists === false) return;
 
         if (status.unlocked) {
@@ -807,7 +811,7 @@ function App() {
         // User can sync manually in Settings.
       }
     })();
-  }, [showSyncPreviewIfNeeded]);
+  }, [setSyncStatus, showSyncPreviewIfNeeded]);
 
   const handleAutoSyncUnlock = async (passphrase: string) => {
     setAutoSyncBusy(true);
@@ -974,6 +978,8 @@ function App() {
             onImportBackup={handleImportBackup}
             onImportBackupReplace={handleImportBackupReplace}
             syncGetSettings={collectAppSettings}
+            syncStatus={syncStatus}
+            onSyncStatusChange={setSyncStatus}
             onSyncVaultApplied={(settings) => {
               void refreshSyncData();
               applyImportedSettings((settings ?? undefined) as Record<string, unknown> | undefined);
@@ -1127,6 +1133,7 @@ function App() {
         activePage={navPage}
         onNavigate={handleNavigate}
         statusMessage={statusMessage}
+        syncStatus={syncStatus}
         showTabs={hasTabs}
         tabBar={
           <TabBar

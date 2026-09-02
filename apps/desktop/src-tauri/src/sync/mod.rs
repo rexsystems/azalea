@@ -13,6 +13,79 @@ use crypto::VaultKey;
 const KEYRING_SERVICE: &str = "azalea";
 const META_LAST_VERSION: &str = "sync_last_version";
 const META_LAST_HASH: &str = "sync_last_hash";
+const FREE_VAULT_LIMIT_BYTES: i64 = 262_144;
+
+fn vault_row_bytes(
+    ciphertext: &str,
+    verifier: &str,
+    kdf_salt: &str,
+    recovery_envelope: Option<&str>,
+) -> i64 {
+    let recovery = recovery_envelope.unwrap_or("");
+    (ciphertext.len() + verifier.len() + kdf_salt.len() + recovery.len()) as i64
+}
+
+fn ensure_vault_within_limit(limit_bytes: i64, total_bytes: i64) -> anyhow::Result<()> {
+    if total_bytes > limit_bytes {
+        let used_kb = total_bytes / 1024;
+        let limit_kb = limit_bytes / 1024;
+        anyhow::bail!(
+            "Cloud vault exceeds your plan limit ({used_kb} KB / {limit_kb} KB). Remove hosts or keys locally, then sync again, or upgrade to Pro."
+        );
+    }
+    Ok(())
+}
+
+fn vault_error_message(body: &Value) -> String {
+    let msg = auth_error_message(body);
+    if msg.contains("Cloud vault exceeds") || msg.contains("storage limit") {
+        return "Cloud vault is full. Remove hosts or keys locally, then sync again, or upgrade to Pro on the website.".to_string();
+    }
+    msg
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AccountPlanRow {
+    plan: String,
+    limit_bytes: i64,
+    used_bytes: i64,
+    #[allow(dead_code)]
+    remaining_bytes: i64,
+}
+
+impl Default for AccountPlanRow {
+    fn default() -> Self {
+        Self {
+            plan: "free".to_string(),
+            limit_bytes: FREE_VAULT_LIMIT_BYTES,
+            used_bytes: 0,
+            remaining_bytes: FREE_VAULT_LIMIT_BYTES,
+        }
+    }
+}
+
+async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
+    let Ok((status, body)) = rest_request(
+        state,
+        reqwest::Method::POST,
+        "rpc/get_account_plan",
+        Some(json!({})),
+        None,
+    )
+    .await
+    else {
+        return AccountPlanRow::default();
+    };
+
+    if !status.is_success() {
+        return AccountPlanRow::default();
+    }
+
+    serde_json::from_value::<Vec<AccountPlanRow>>(body)
+        .ok()
+        .and_then(|rows| rows.into_iter().next())
+        .unwrap_or_default()
+}
 
 pub struct SyncState {
     http: reqwest::Client,
@@ -322,7 +395,7 @@ async fn insert_vault(
     .await?;
 
     if !status.is_success() {
-        anyhow::bail!("Could not create vault: {}", auth_error_message(&body));
+        anyhow::bail!("Could not create vault: {}", vault_error_message(&body));
     }
     Ok(())
 }
@@ -353,7 +426,7 @@ async fn update_vault(
     .await?;
 
     if !status.is_success() {
-        anyhow::bail!("Could not push vault: {}", auth_error_message(&body));
+        anyhow::bail!("Could not push vault: {}", vault_error_message(&body));
     }
     Ok(body.as_array().map(|rows| !rows.is_empty()).unwrap_or(false))
 }
@@ -439,6 +512,10 @@ pub async fn setup_passphrase(
     let (json, _) = local_vault_json(db, settings.clone())?;
     let ciphertext = crypto::encrypt(&vault_key, json.as_bytes())?;
 
+    let plan = fetch_account_plan(state).await;
+    let total = vault_row_bytes(&ciphertext, &verifier, &salt, Some(&recovery_envelope));
+    ensure_vault_within_limit(plan.limit_bytes, total)?;
+
     insert_vault(state, &salt, &verifier, &recovery_envelope, &ciphertext).await?;
 
     state.vault_key = Some(vault_key);
@@ -487,8 +564,17 @@ async fn push_local(
     vault_key: &VaultKey,
     local_json: &str,
     expected: i64,
+    vault_meta: &VaultRow,
+    limit_bytes: i64,
 ) -> anyhow::Result<Option<i64>> {
     let ciphertext = crypto::encrypt(vault_key, local_json.as_bytes())?;
+    let total = vault_row_bytes(
+        &ciphertext,
+        &vault_meta.verifier,
+        &vault_meta.kdf_salt,
+        vault_meta.recovery_envelope.as_deref(),
+    );
+    ensure_vault_within_limit(limit_bytes, total)?;
     let new_version = expected + 1;
     if update_vault(state, expected, new_version, &ciphertext).await? {
         Ok(Some(new_version))
@@ -605,6 +691,7 @@ pub async fn perform_sync(
     let (local_json, fingerprint) = local_vault_json(db, settings.clone())?;
     let (last_version, last_hash) = synced_meta(db);
     let dirty = last_hash.as_deref() != Some(fingerprint.as_str());
+    let plan = fetch_account_plan(state).await;
 
     if vault.version <= last_version {
         // We are up to date with (or ahead of) the remote.
@@ -617,7 +704,15 @@ pub async fn perform_sync(
             set_synced_meta(db, vault.version, settings.as_ref())?;
             return Ok(SyncOutcome::InSync { version: vault.version });
         }
-        match push_local(state, &vault_key, &local_json, vault.version).await? {
+        match push_local(
+            state,
+            &vault_key,
+            &local_json,
+            vault.version,
+            &vault,
+            plan.limit_bytes,
+        )
+        .await? {
             Some(new_version) => {
                 set_synced_meta(db, new_version, settings.as_ref())?;
                 Ok(SyncOutcome::Pushed { version: new_version })
@@ -633,7 +728,15 @@ pub async fn perform_sync(
             return Ok(SyncOutcome::Pulled { version: vault.version, settings });
         }
         if resolution == Some("keep_local") {
-            return match push_local(state, &vault_key, &local_json, vault.version).await? {
+            return match push_local(
+                state,
+                &vault_key,
+                &local_json,
+                vault.version,
+                &vault,
+                plan.limit_bytes,
+            )
+            .await? {
                 Some(new_version) => {
                     set_synced_meta(db, new_version, settings.as_ref())?;
                     Ok(SyncOutcome::Pushed { version: new_version })
@@ -655,6 +758,11 @@ pub struct SyncStatus {
     pub vault_exists: Option<bool>,
     pub remote_version: Option<i64>,
     pub last_synced_version: i64,
+    pub plan: String,
+    pub storage_limit_bytes: i64,
+    pub cloud_used_bytes: i64,
+    pub local_estimated_bytes: Option<i64>,
+    pub storage_blocked: bool,
 }
 
 pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
@@ -665,15 +773,47 @@ pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
         logged_in = ensure_session(state).await.is_ok();
     }
 
+    let mut vault_row: Option<VaultRow> = None;
     let (vault_exists, remote_version) = if logged_in {
         match fetch_vault(state).await {
-            Ok(Some(vault)) => (Some(true), Some(vault.version)),
+            Ok(Some(vault)) => {
+                vault_row = Some(vault.clone());
+                (Some(true), Some(vault.version))
+            }
             Ok(None) => (Some(false), None),
             Err(_) => (None, None),
         }
     } else {
         (None, None)
     };
+
+    let plan = if logged_in {
+        fetch_account_plan(state).await
+    } else {
+        AccountPlanRow::default()
+    };
+
+    let mut local_estimated_bytes = None;
+    let mut storage_blocked = false;
+
+    if logged_in && state.is_unlocked() {
+        if let Some(vault_key) = state.vault_key.as_ref() {
+            if let Ok((local_json, _)) = local_vault_json(db, None) {
+                if let Ok(ciphertext) = crypto::encrypt(vault_key, local_json.as_bytes()) {
+                    if let Some(vault) = vault_row.as_ref() {
+                        let total = vault_row_bytes(
+                            &ciphertext,
+                            &vault.verifier,
+                            &vault.kdf_salt,
+                            vault.recovery_envelope.as_deref(),
+                        );
+                        local_estimated_bytes = Some(total);
+                        storage_blocked = total > plan.limit_bytes;
+                    }
+                }
+            }
+        }
+    }
 
     let (last_version, _) = synced_meta(db);
 
@@ -685,5 +825,10 @@ pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
         vault_exists,
         remote_version,
         last_synced_version: last_version,
+        plan: plan.plan,
+        storage_limit_bytes: plan.limit_bytes,
+        cloud_used_bytes: plan.used_bytes,
+        local_estimated_bytes,
+        storage_blocked,
     }
 }

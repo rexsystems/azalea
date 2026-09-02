@@ -14,6 +14,7 @@ Thumbs.db
 azalea-backup-*.json
 apps/desktop/src-tauri/gen/
 
-# Web app is a separate repo (rexsystems/azalea-web). Local junction: npm run link:web
+apps/web
 apps/web/
+apps/azalea-web
 apps/azalea-web/

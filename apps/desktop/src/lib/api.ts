@@ -240,6 +240,11 @@ export interface SyncStatus {
   vault_exists: boolean | null;
   remote_version: number | null;
   last_synced_version: number;
+  plan: "free" | "pro";
+  storage_limit_bytes: number;
+  cloud_used_bytes: number;
+  local_estimated_bytes: number | null;
+  storage_blocked: boolean;
 }
 
 export type SyncOutcome =

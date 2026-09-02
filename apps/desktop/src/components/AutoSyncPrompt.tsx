@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { KeyRound, Loader2, X } from "lucide-react";
+import { maskEmail } from "../lib/utils";
 import { Button } from "./ui/Button";
 
 interface AutoSyncPromptProps {
@@ -36,8 +37,8 @@ export function AutoSyncPrompt({
               Unlock vault to sync
             </h3>
             <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-              Auto-sync is on{email ? ` for ${email}` : ""}. Enter your master passphrase to
-              unlock the vault and review any pending sync changes.
+              Auto-sync is on{email ? ` for ${maskEmail(email)}` : ""}. Enter your master passphrase
+              to unlock the vault and review any pending sync changes.
             </p>
           </div>
           <button

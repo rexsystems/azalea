@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Host, HostGroup, SshKey } from "@azalea/shared";
 import { ChevronDown, Folder, KeyRound, Lock, Plug, Save, Trash2 } from "lucide-react";
 import type { HostFormValues } from "../lib/utils";
+import { parsePortInput, validateHostForm } from "../lib/utils";
 import { Button } from "./ui/Button";
 import { Drawer } from "./ui/Drawer";
 import { Input } from "./ui/Input";
@@ -80,14 +81,17 @@ export function AddServerDrawer({
     }
   }, [values.hostname, values.name, host]);
 
+  const isEdit = Boolean(host);
+
   const handleSubmit = async (connectAfter: boolean) => {
-    if (!values.hostname || !values.username) {
-      setError("Address and username are required.");
+    const validationError = validateHostForm(values, isEdit);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
     let authType: HostFormValues["auth_type"] = "none";
-    if (values.auth_type === "password" && values.password) {
+    if (values.auth_type === "password") {
       authType = "password";
     } else if (values.auth_type === "key" && values.key_id) {
       authType = "key";
@@ -98,7 +102,9 @@ export function AddServerDrawer({
     const finalValues: HostFormValues = {
       ...values,
       auth_type: authType,
-      name: values.name || values.hostname.split(".")[0] || values.hostname,
+      hostname: values.hostname.trim(),
+      username: values.username.trim(),
+      name: values.name.trim() || values.hostname.trim().split(".")[0] || values.hostname.trim(),
     };
 
     try {
@@ -112,8 +118,6 @@ export function AddServerDrawer({
       setSaving(false);
     }
   };
-
-  const isEdit = Boolean(host);
 
   return (
     <Drawer
@@ -152,7 +156,7 @@ export function AddServerDrawer({
         <div className="grid grid-cols-[1fr_80px] gap-3">
           <Input
             label="Address"
-            placeholder="192.168.1.10"
+            placeholder="192.168.1.10 or server.example.com"
             value={values.hostname}
             onChange={(e) =>
               setValues((prev) => ({ ...prev, hostname: e.target.value }))
@@ -160,14 +164,18 @@ export function AddServerDrawer({
           />
           <Input
             label="Port"
-            type="number"
-            value={values.port}
-            onChange={(e) =>
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            placeholder="22"
+            value={String(values.port)}
+            onChange={(e) => {
+              const next = parsePortInput(e.target.value);
               setValues((prev) => ({
                 ...prev,
-                port: Number(e.target.value) || 22,
-              }))
-            }
+                port: next ?? prev.port,
+              }));
+            }}
           />
         </div>
 
@@ -252,7 +260,7 @@ export function AddServerDrawer({
           <Input
             label="Password"
             type="password"
-            placeholder={isEdit ? "Leave blank to keep current" : "Optional — add later"}
+            placeholder={isEdit ? "Leave blank to keep current" : "Required for password login"}
             value={values.password}
             onChange={(e) =>
               setValues((prev) => ({ ...prev, password: e.target.value }))

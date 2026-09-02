@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import { Folder, KeyRound, Server, Settings } from "lucide-react";
+import type { SyncStatus } from "../lib/api";
+import { maskEmail } from "../lib/utils";
+import { PlanBadge } from "./PlanBadge";
 import { TitleBar } from "./TitleBar";
 
 export type NavPage = "hosts" | "groups" | "keys" | "settings";
@@ -9,6 +12,7 @@ interface AppShellProps {
   activePage: NavPage;
   onNavigate: (page: NavPage) => void;
   statusMessage?: string;
+  syncStatus?: SyncStatus | null;
   showTabs?: boolean;
   tabBar?: ReactNode;
   sidePanel?: ReactNode;
@@ -26,6 +30,7 @@ export function AppShell({
   activePage,
   onNavigate,
   statusMessage,
+  syncStatus,
   showTabs,
   tabBar,
   sidePanel,
@@ -63,6 +68,28 @@ export function AppShell({
               );
             })}
           </div>
+
+          {syncStatus?.logged_in && (
+            <div
+              className="border-t px-3 py-3"
+              style={{ borderColor: "var(--border-subtle)" }}
+            >
+              <div className="mb-1.5 truncate text-xs font-medium" style={{ color: "var(--text)" }}>
+                {syncStatus.email ? maskEmail(syncStatus.email) : "Signed in"}
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <PlanBadge plan={syncStatus.plan} />
+                <button
+                  type="button"
+                  onClick={() => onNavigate("settings")}
+                  className="text-[10px] transition-opacity hover:opacity-80"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Account
+                </button>
+              </div>
+            </div>
+          )}
         </nav>
 
         <div className="flex min-w-0 flex-1 flex-col">
