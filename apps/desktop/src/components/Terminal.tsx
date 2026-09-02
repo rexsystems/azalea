@@ -35,18 +35,96 @@ function decodeBase64(data: string): Uint8Array {
   return bytes;
 }
 
-async function pasteFromClipboard(term: XTerm) {
+function prepareTextForTerminal(text: string): string {
+  return text.replace(/\r?\n/g, "\r");
+}
+
+async function readClipboardTextForPaste(): Promise<string> {
   try {
-    let text = "";
-    try {
-      text = await readClipboardText();
-    } catch {
-      text = await navigator.clipboard.readText();
-    }
-    if (text) term.paste(text);
+    const text = await readClipboardText();
+    if (text) return text;
   } catch {
-    // clipboard unavailable
+    // fall through
   }
+
+  try {
+    return await navigator.clipboard.readText();
+  } catch {
+    return "";
+  }
+}
+
+async function pasteFromClipboard(term: XTerm, sessionId: string) {
+  term.focus();
+
+  const textarea = term.element?.querySelector("textarea");
+  if (textarea instanceof HTMLTextAreaElement) {
+    textarea.focus();
+    try {
+      if (document.execCommand("paste")) return;
+    } catch {
+      // fall through to explicit clipboard read
+    }
+  }
+
+  const text = await readClipboardTextForPaste();
+  if (!text) return;
+
+  try {
+    term.paste(text);
+  } catch {
+    const prepared = prepareTextForTerminal(text);
+    await api
+      .writeTerminal(sessionId, encodeBytes(new TextEncoder().encode(prepared)))
+      .catch(() => undefined);
+  }
+}
+
+function bindRightClickPaste(
+  term: XTerm,
+  container: HTMLElement,
+  sessionId: string,
+  getSettings: () => TerminalSettings,
+) {
+  let lastPasteAt = 0;
+
+  const triggerPaste = (e: MouseEvent) => {
+    if (!getSettings().rightClickToPaste) return;
+
+    const now = Date.now();
+    if (now - lastPasteAt < 200) return;
+    lastPasteAt = now;
+
+    e.preventDefault();
+    e.stopPropagation();
+    void pasteFromClipboard(term, sessionId);
+  };
+
+  const onMouseDown = (e: MouseEvent) => {
+    if (e.button !== 2) return;
+    triggerPaste(e);
+  };
+
+  const onContextMenu = (e: MouseEvent) => {
+    triggerPaste(e);
+  };
+
+  const targets = new Set<HTMLElement>([container]);
+  if (term.element instanceof HTMLElement) targets.add(term.element);
+  const textarea = term.element?.querySelector("textarea");
+  if (textarea instanceof HTMLElement) targets.add(textarea);
+
+  for (const target of targets) {
+    target.addEventListener("mousedown", onMouseDown, true);
+    target.addEventListener("contextmenu", onContextMenu, true);
+  }
+
+  return () => {
+    for (const target of targets) {
+      target.removeEventListener("mousedown", onMouseDown, true);
+      target.removeEventListener("contextmenu", onContextMenu, true);
+    }
+  };
 }
 
 function terminalBgColor(): string {
@@ -228,15 +306,14 @@ export function TerminalView({
       if (e.button === 2) return;
       copySelection();
     };
-    const onContextMenu = (e: MouseEvent) => {
-      if (!settingsRef.current.rightClickToPaste) return;
-      e.preventDefault();
-      e.stopPropagation();
-      void pasteFromClipboard(term);
-    };
+    const unbindRightClickPaste = bindRightClickPaste(
+      term,
+      container,
+      sessionId,
+      () => settingsRef.current,
+    );
 
     container.addEventListener("mouseup", onMouseUp);
-    term.element?.addEventListener("contextmenu", onContextMenu, true);
 
     const resizeObserver = new ResizeObserver(() => {
       if (!activeRef.current) return;
@@ -309,7 +386,7 @@ export function TerminalView({
       unlistenOutput?.();
       unlistenStatus?.();
       container.removeEventListener("mouseup", onMouseUp);
-      term.element?.removeEventListener("contextmenu", onContextMenu, true);
+      unbindRightClickPaste();
       resizeObserver.disconnect();
       term.dispose();
       termRef.current = null;
