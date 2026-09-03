@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Check,
+  KeyRound,
+  Network,
+  SquareTerminal,
+  X,
+} from "lucide-react";
 import { getHostIconColor } from "../lib/theme";
 import { getHostInitials } from "../lib/utils";
 
@@ -8,9 +14,98 @@ interface ConnectionScreenProps {
   username: string;
   hostname: string;
   port: number;
-  status: "connecting" | "error";
+  status: "connecting" | "connected" | "error";
   error?: string;
   logs: string[];
+  onExitComplete?: () => void;
+}
+
+type StepState = "pending" | "active" | "done" | "failed";
+
+interface Step {
+  id: string;
+  label: string;
+  state: StepState;
+  Icon: typeof Network;
+}
+
+function buildSteps(
+  logs: string[],
+  status: "connecting" | "connected" | "error",
+): Step[] {
+  if (status === "connected") {
+    return [
+      { id: "reach", label: "Reach", Icon: Network, state: "done" },
+      { id: "auth", label: "Auth", Icon: KeyRound, state: "done" },
+      { id: "shell", label: "Shell", Icon: SquareTerminal, state: "done" },
+    ];
+  }
+
+  const joined = logs.join("\n").toLowerCase();
+  const has = (needle: string) => joined.includes(needle.toLowerCase());
+
+  const tcp = has("tcp connection established") || has("authenticating");
+  const authStarted = has("authenticating");
+  const authOk =
+    has("authentication successful") || has("opening shell") || has("shell ready");
+  const shellStarted = has("opening shell") || has("shell ready");
+  const shellOk = has("shell ready");
+  const failed = status === "error";
+
+  const mark = (
+    done: boolean,
+    activeWhen: boolean,
+    failHere: boolean,
+  ): StepState => {
+    if (done) return "done";
+    if (failed && failHere) return "failed";
+    if (activeWhen && !failed) return "active";
+    if (failed) return "pending";
+    return "pending";
+  };
+
+  return [
+    {
+      id: "reach",
+      label: "Reach",
+      Icon: Network,
+      state: mark(tcp, true, !tcp),
+    },
+    {
+      id: "auth",
+      label: "Auth",
+      Icon: KeyRound,
+      state: mark(authOk, authStarted || tcp, authStarted && !authOk),
+    },
+    {
+      id: "shell",
+      label: "Shell",
+      Icon: SquareTerminal,
+      state: mark(shellOk, shellStarted || authOk, shellStarted && !shellOk),
+    },
+  ];
+}
+
+function StepNode({ state, Icon }: { state: StepState; Icon: typeof Network }) {
+  if (state === "done") {
+    return (
+      <span className="connect-node done">
+        <Check size={12} strokeWidth={3} />
+      </span>
+    );
+  }
+  if (state === "failed") {
+    return (
+      <span className="connect-node failed">
+        <X size={12} strokeWidth={3} />
+      </span>
+    );
+  }
+  return (
+    <span className={`connect-node ${state === "active" ? "active" : "pending"}`}>
+      <Icon size={12} strokeWidth={state === "active" ? 2.25 : 2} />
+    </span>
+  );
 }
 
 export function ConnectionScreen({
@@ -21,85 +116,188 @@ export function ConnectionScreen({
   status,
   error,
   logs,
+  onExitComplete,
 }: ConnectionScreenProps) {
-  const [logsOpen, setLogsOpen] = useState(false);
   const iconColor = getHostIconColor(hostName);
   const portSuffix = port === 22 ? "" : `:${port}`;
+  const steps = useMemo(() => buildSteps(logs, status), [logs, status]);
+  const logEndRef = useRef<HTMLDivElement>(null);
+  const visibleLogs = logs.slice(-5);
+  const latestLog = visibleLogs[visibleLogs.length - 1];
+  const [entered, setEntered] = useState(false);
+  const [exiting, setExiting] = useState(false);
+  const exitStarted = useRef(false);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [logs.length]);
+
+  useEffect(() => {
+    if (status !== "connected" || exitStarted.current) return;
+    exitStarted.current = true;
+
+    const hold = window.setTimeout(() => setExiting(true), 420);
+    const done = window.setTimeout(() => onExitComplete?.(), 420 + 380);
+    return () => {
+      window.clearTimeout(hold);
+      window.clearTimeout(done);
+    };
+  }, [status, onExitComplete]);
+
+  const headline =
+    status === "error"
+      ? "Could not connect"
+      : status === "connected"
+        ? "Connected"
+        : steps.find((s) => s.state === "active")?.label === "Reach"
+          ? "Reaching host"
+          : steps.find((s) => s.state === "active")?.label === "Auth"
+            ? "Authenticating"
+            : steps.find((s) => s.state === "active")?.label === "Shell"
+              ? "Opening shell"
+              : "Connecting";
 
   return (
     <div
-      className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6"
-      style={{ background: "var(--bg-base)" }}
+      className={`connect-screen absolute inset-0 z-10 flex flex-col items-center justify-center px-6 ${
+        entered ? "entered" : ""
+      } ${exiting ? "exiting" : ""}`}
     >
-      <div className="flex w-full max-w-md flex-col items-center">
-        <div className="relative mb-5">
-          <div
-            className="flex h-16 w-16 items-center justify-center rounded-2xl text-lg font-bold text-white"
-            style={{ background: iconColor }}
-          >
-            {getHostInitials(hostName)}
-          </div>
-          {status === "connecting" && (
-            <div
-              className="connect-ring absolute -inset-1.5 rounded-[18px]"
-              style={{ borderColor: "var(--accent)" }}
-            />
-          )}
+      <div
+        className="connect-wash"
+        style={{
+          background: `radial-gradient(ellipse 70% 55% at 50% 35%, ${iconColor}22 0%, transparent 70%)`,
+        }}
+        aria-hidden
+      />
+
+      <div className="connect-stage relative z-10 flex w-full max-w-sm flex-col items-center text-center">
+        <div
+          className="connect-avatar mb-5 flex h-16 w-16 items-center justify-center rounded-2xl text-xl font-semibold text-white"
+          style={{ background: iconColor }}
+        >
+          {getHostInitials(hostName)}
         </div>
 
-        <h2 className="text-lg font-semibold" style={{ color: "var(--text)" }}>
+        <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>
           {hostName}
         </h2>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+        <p className="mt-1.5 font-mono text-[13px]" style={{ color: "var(--text-muted)" }}>
           {username}@{hostname}
           {portSuffix}
         </p>
 
-        <div className="mt-6 flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-          {status === "connecting" ? (
-            <>
-              <Loader2 size={16} className="connect-spin" style={{ color: "var(--accent)" }} />
-              Connecting...
-            </>
-          ) : (
-            <span style={{ color: "#f87171" }}>{error ?? "Connection failed"}</span>
-          )}
+        <p
+          className="mt-5 text-sm font-medium"
+          style={{
+            color:
+              status === "error"
+                ? "#f87171"
+                : status === "connected"
+                  ? "#86efac"
+                  : "var(--text-secondary)",
+          }}
+        >
+          {status === "error"
+            ? (error ?? headline)
+            : status === "connected"
+              ? headline
+              : `${headline}…`}
+        </p>
+
+        <div className="mt-6 w-full">
+          <div className="flex items-start justify-between gap-2">
+            {steps.map((step, index) => (
+              <div
+                key={step.id}
+                className="connect-step-col flex min-w-0 flex-1 flex-col items-center gap-2"
+                style={{ transitionDelay: `${80 + index * 70}ms` }}
+              >
+                <div className="flex w-full items-center">
+                  {index > 0 && (
+                    <div
+                      className={`connect-step-line h-px flex-1 ${
+                        steps[index - 1].state === "done" ? "filled" : ""
+                      }`}
+                    />
+                  )}
+                  <StepNode state={step.state} Icon={step.Icon} />
+                  {index < steps.length - 1 && (
+                    <div
+                      className={`connect-step-line h-px flex-1 ${
+                        step.state === "done" ? "filled" : ""
+                      }`}
+                    />
+                  )}
+                </div>
+                <span
+                  className="text-[11px] font-medium"
+                  style={{
+                    color:
+                      step.state === "active"
+                        ? "var(--text)"
+                        : step.state === "done"
+                          ? "#86efac"
+                          : step.state === "failed"
+                            ? "#fca5a5"
+                            : "var(--text-muted)",
+                  }}
+                >
+                  {step.label}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {logs.length > 0 && (
-          <div className="mt-8 w-full">
-            <button
-              type="button"
-              onClick={() => setLogsOpen((v) => !v)}
-              className="hover-subtle transition-ui flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-xs"
-              style={{
-                borderColor: "var(--border-subtle)",
-                color: "var(--text-muted)",
-                background: "var(--bg-card)",
-              }}
+        <div
+          className="connect-session mt-7 w-full rounded-xl border px-3.5 py-3 text-left"
+          style={{
+            borderColor: "var(--border-subtle)",
+            background: "var(--terminal-bg)",
+          }}
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <span
+              className="text-[10px] font-medium uppercase tracking-[0.12em]"
+              style={{ color: "var(--text-muted)" }}
             >
-              <span>Connection log ({logs.length})</span>
-              <ChevronDown
-                size={14}
-                className={`transition-transform ${logsOpen ? "rotate-180" : ""}`}
-              />
-            </button>
-            {logsOpen && (
-              <div
-                className="mt-2 max-h-40 overflow-y-auto rounded-lg border p-3 font-mono text-[11px] leading-relaxed"
-                style={{
-                  borderColor: "var(--border-subtle)",
-                  background: "var(--bg-panel)",
-                  color: "var(--text-secondary)",
-                }}
-              >
-                {logs.map((line, i) => (
-                  <div key={i}>{line}</div>
-                ))}
-              </div>
-            )}
+              Session
+            </span>
+            {status === "connecting" && <span className="connect-live-dot" aria-hidden />}
           </div>
-        )}
+          <div
+            className="font-mono text-[11px] leading-relaxed"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            {status === "error" && error ? (
+              <span style={{ color: "#fca5a5" }}>{error}</span>
+            ) : status === "connected" ? (
+              <span style={{ color: "#86efac" }}>Shell ready</span>
+            ) : latestLog ? (
+              visibleLogs.map((line, i) => (
+                <div
+                  key={`${logs.length - visibleLogs.length + i}-${line}`}
+                  className="truncate py-px"
+                  style={{
+                    color: i === visibleLogs.length - 1 ? "var(--text)" : "var(--text-muted)",
+                    opacity: i === visibleLogs.length - 1 ? 1 : 0.75,
+                  }}
+                >
+                  {line}
+                </div>
+              ))
+            ) : (
+              <span style={{ color: "var(--text-muted)" }}>Waiting for handshake…</span>
+            )}
+            <div ref={logEndRef} />
+          </div>
+        </div>
       </div>
     </div>
   );

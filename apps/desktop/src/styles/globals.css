@@ -16,7 +16,7 @@
   --text-xl: 1.3125rem;
 }
 
-/* ── Theme: Midnight (Termius-like) ── */
+/* ── Theme: Midnight ── */
 [data-theme="midnight"] {
   --bg-base: #171a21;
   --bg-panel: #1e222a;
@@ -244,21 +244,152 @@ textarea,
   filter: brightness(1.06);
 }
 
-@keyframes connect-spin {
-  to {
-    transform: rotate(360deg);
+@keyframes connect-live {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
-.connect-spin {
-  animation: connect-spin 0.8s linear infinite;
+.connect-screen {
+  background: var(--bg-base);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 320ms ease;
 }
 
-.connect-ring {
-  border: 2px solid transparent;
-  border-top-color: var(--accent);
-  animation: connect-spin 1s linear infinite;
+.connect-screen.entered {
+  opacity: 1;
+}
+
+.connect-screen.exiting {
+  opacity: 0;
   pointer-events: none;
+  transition: opacity 360ms ease;
+}
+
+.connect-wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 420ms ease;
+}
+
+.connect-screen.entered .connect-wash {
+  opacity: 1;
+}
+
+.connect-screen.exiting .connect-wash {
+  opacity: 0;
+}
+
+.connect-stage {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 380ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.connect-screen.entered .connect-stage {
+  opacity: 1;
+  transform: none;
+}
+
+.connect-screen.exiting .connect-stage {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 340ms ease,
+    transform 340ms ease;
+}
+
+.connect-avatar {
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.connect-screen.entered .connect-avatar {
+  transform: none;
+}
+
+.connect-step-col {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 280ms ease,
+    transform 280ms ease;
+}
+
+.connect-screen.entered .connect-step-col {
+  opacity: 1;
+  transform: none;
+}
+
+.connect-step-line {
+  background: var(--border-subtle);
+  transition: background 320ms ease;
+}
+
+.connect-step-line.filled {
+  background: color-mix(in srgb, #34d399 65%, var(--border-subtle));
+}
+
+.connect-node {
+  display: inline-flex;
+  height: 1.5rem;
+  width: 1.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  transition:
+    border-color 280ms ease,
+    background 280ms ease,
+    color 280ms ease,
+    transform 280ms ease;
+}
+
+.connect-node.pending {
+  background: var(--bg-card);
+}
+
+.connect-node.active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-subtle));
+  background: var(--accent-muted);
+  color: var(--accent);
+  transform: scale(1.06);
+}
+
+.connect-node.done {
+  border-color: transparent;
+  background: rgba(52, 211, 153, 0.18);
+  color: #34d399;
+}
+
+.connect-node.failed {
+  border-color: transparent;
+  background: rgba(248, 113, 113, 0.18);
+  color: #f87171;
+}
+
+.connect-session {
+  transition: border-color 280ms ease, opacity 280ms ease;
+}
+
+.connect-live-dot {
+  display: inline-block;
+  height: 0.35rem;
+  width: 0.35rem;
+  border-radius: 9999px;
+  background: var(--accent);
+  animation: connect-live 1.4s ease-in-out infinite;
 }
 
 .no-number-spinners::-webkit-outer-spin-button,
@@ -271,3 +402,27 @@ textarea,
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+.settings-shell {
+  width: 100%;
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 2.5rem;
+}
+
+.settings-section {
+  margin-bottom: 1.5rem;
+}
+
+.settings-section-icon {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+

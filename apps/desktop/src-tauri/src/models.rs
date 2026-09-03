@@ -70,6 +70,21 @@ pub struct SshKeyRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateKeyInput {
     pub name: String,
+    #[serde(default)]
+    pub algorithm: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstallPublicKeyInput {
+    pub key_id: String,
+    pub host_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct InstallPublicKeyResult {
+    pub status: String,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

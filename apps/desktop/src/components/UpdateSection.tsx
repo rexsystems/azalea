@@ -83,17 +83,24 @@ export function UpdateSection() {
   }, [pendingUpdate, pendingVersion]);
 
   return (
-    <section className="mb-10">
-      <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text)" }}>
-        Updates
-      </h3>
-      <p className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
-        Installed version {appVersion}. Release builds check azalea.rexsystems.me and GitHub for signed
-        updates.
-      </p>
+    <section className="settings-section">
+      <div className="mb-3 flex items-start gap-3">
+        <div className="settings-section-icon" aria-hidden>
+          <RefreshCw size={16} />
+        </div>
+        <div className="min-w-0 pt-0.5">
+          <h3 className="text-sm font-medium" style={{ color: "var(--text)" }}>
+            Updates
+          </h3>
+          <p className="mt-0.5 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+            Installed version {appVersion}. Release builds check azalea.rexsystems.me and GitHub for
+            signed updates.
+          </p>
+        </div>
+      </div>
 
       <div
-        className="rounded-xl border px-4 py-3"
+        className="rounded-lg border px-3 py-2.5"
         style={{
           background: "var(--bg-card)",
           borderColor: "var(--border-subtle)",

@@ -908,12 +908,47 @@ function App() {
       .filter((tab) => !tab.poppedOut);
   }, [tabs]);
   const useFancyConnect = connectScreen === "fancy";
+  const activeNeedsConnectOverlay = Boolean(
+    activeTab &&
+      useFancyConnect &&
+      viewingTerminal &&
+      (activeTab.status === "connecting" || activeTab.status === "error") &&
+      !activeTab.hadConnected,
+  );
+
+  const [connectOverlayTabId, setConnectOverlayTabId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeNeedsConnectOverlay && activeTab) {
+      setConnectOverlayTabId(activeTab.id);
+    }
+  }, [activeNeedsConnectOverlay, activeTab?.id]);
+
+  useEffect(() => {
+    if (!useFancyConnect) setConnectOverlayTabId(null);
+  }, [useFancyConnect]);
+
+  const overlayTab =
+    connectOverlayTabId != null
+      ? tabs.find((t) => t.id === connectOverlayTabId) ?? null
+      : null;
+
   const showConnectionScreen =
     viewingTerminal &&
-    activeTab &&
     useFancyConnect &&
-    (activeTab.status === "connecting" || activeTab.status === "error") &&
-    !activeTab.hadConnected;
+    overlayTab != null &&
+    (activeTabId === overlayTab.id || activeNeedsConnectOverlay);
+
+  const connectOverlayStatus: "connecting" | "connected" | "error" =
+    overlayTab?.status === "error"
+      ? "error"
+      : overlayTab?.status === "connected" || overlayTab?.hadConnected
+        ? "connected"
+        : "connecting";
+
+  const clearConnectOverlay = useCallback(() => {
+    setConnectOverlayTabId(null);
+  }, []);
 
   const renderNavPage = () => {
     switch (navPage) {
@@ -955,8 +990,9 @@ function App() {
         return (
           <KeysPage
             keys={keys}
-            onGenerate={async (name) => {
-              await generateKey({ name });
+            hosts={hosts}
+            onGenerate={async (input) => {
+              await generateKey(input);
             }}
             onImport={async (name, pem, passphrase) => {
               await importKey({ name, private_key_pem: pem, passphrase: passphrase ?? null });
@@ -1079,15 +1115,17 @@ function App() {
               );
             })}
 
-            {showConnectionScreen && activeTab && (
+            {showConnectionScreen && overlayTab && (
               <ConnectionScreen
-                hostName={activeTab.title}
-                username={activeTab.username}
-                hostname={activeTab.hostname}
-                port={activeTab.port}
-                status={activeTab.status === "error" ? "error" : "connecting"}
-                error={activeTab.error}
-                logs={activeTab.logs}
+                key={overlayTab.id}
+                hostName={overlayTab.title}
+                username={overlayTab.username}
+                hostname={overlayTab.hostname}
+                port={overlayTab.port}
+                status={connectOverlayStatus}
+                error={overlayTab.error}
+                logs={overlayTab.logs}
+                onExitComplete={clearConnectOverlay}
               />
             )}
 
@@ -1135,6 +1173,8 @@ function App() {
         statusMessage={statusMessage}
         syncStatus={syncStatus}
         showTabs={hasTabs}
+        hostCount={hosts.length}
+        keyCount={keys.length}
         tabBar={
           <TabBar
             tabs={displayTabs}

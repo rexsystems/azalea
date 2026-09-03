@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Host, HostGroup } from "@azalea/shared";
 import { ChevronRight, FolderPlus, Plus, Search, SquareTerminal } from "lucide-react";
 import { groupHostsByGroup } from "../lib/utils";
 import { EmptyHostsState, GroupSection } from "./HostTile";
 import { useContextMenu } from "./ui/ContextMenu";
+import { SelectGroupDialog } from "./ui/SelectGroupDialog";
 
 interface HostsPageProps {
   hosts: Host[];
@@ -41,6 +42,7 @@ export function HostsPage({
   onOpenLocalTerminal,
 }: HostsPageProps) {
   const { openMenu, menuElement } = useContextMenu();
+  const [groupPickHost, setGroupPickHost] = useState<Host | null>(null);
 
   const filteredHosts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -58,33 +60,18 @@ export function HostsPage({
     [filteredHosts, groups],
   );
 
-  const buildMoveItems = (host: Host) =>
-    groups.map((g) => ({
-      id: `move-${g.id}`,
-      label: g.id === host.group_id ? `✓ ${g.name}` : g.name,
-      disabled: g.id === host.group_id,
-      onClick: () => onMoveHost(host.id, g.id),
-    }));
-
   const hostMenu = (host: Host) => [
     {
       items: [
         { id: "connect", label: "Connect", onClick: () => onConnect(host) },
         { id: "edit", label: "Edit", onClick: () => onEditHost(host) },
+        {
+          id: "add-to-group",
+          label: host.group_id ? "Move to group…" : "Add to group…",
+          onClick: () => setGroupPickHost(host),
+        },
       ],
     },
-    ...(groups.length > 0
-      ? [
-          {
-            items: [
-              ...buildMoveItems(host),
-              ...(host.group_id
-                ? [{ id: "ungroup", label: "Remove from group", onClick: () => onMoveHost(host.id, null) }]
-                : []),
-            ],
-          },
-        ]
-      : []),
     {
       items: [{ id: "delete", label: "Delete", danger: true, onClick: () => onDeleteHost(host) }],
     },
@@ -125,7 +112,26 @@ export function HostsPage({
     >
       {menuElement}
 
-      {/* Toolbar — Termius-style */}
+      <SelectGroupDialog
+        open={Boolean(groupPickHost)}
+        title={groupPickHost?.group_id ? "Move to group" : "Add to group"}
+        message={
+          groupPickHost
+            ? `Choose a group for ${groupPickHost.name}.`
+            : undefined
+        }
+        groups={groups}
+        currentGroupId={groupPickHost?.group_id ?? null}
+        allowUngroup={Boolean(groupPickHost?.group_id)}
+        onSelect={(groupId) => {
+          if (!groupPickHost) return;
+          onMoveHost(groupPickHost.id, groupId);
+          setGroupPickHost(null);
+        }}
+        onCancel={() => setGroupPickHost(null)}
+      />
+
+      {/* Toolbar */}
       <div
         className="flex shrink-0 items-center gap-3 border-b px-5 py-3.5"
         style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}

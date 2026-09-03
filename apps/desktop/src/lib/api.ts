@@ -7,6 +7,7 @@ import type {
   Host,
   HostGroup,
   ImportKeyInput,
+  InstallPublicKeyResult,
   PortForward,
   SftpListResult,
   Snippet,
@@ -68,6 +69,13 @@ export function importKey(input: ImportKeyInput): Promise<SshKey> {
 
 export function deleteKey(id: string): Promise<void> {
   return invoke("delete_key", { id });
+}
+
+export function installPublicKey(
+  keyId: string,
+  hostId: string,
+): Promise<InstallPublicKeyResult> {
+  return invoke("install_public_key", { input: { key_id: keyId, host_id: hostId } });
 }
 
 export function prepareSsh(hostId: string): Promise<string> {

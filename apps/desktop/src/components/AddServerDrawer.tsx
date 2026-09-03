@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Host, HostGroup, SshKey } from "@azalea/shared";
-import { ChevronDown, Folder, KeyRound, Lock, Plug, Save, Trash2 } from "lucide-react";
+import { ChevronDown, EthernetPort, Folder, KeyRound, Lock, Save, Trash2 } from "lucide-react";
 import type { HostFormValues } from "../lib/utils";
 import { parsePortInput, validateHostForm } from "../lib/utils";
 import { Button } from "./ui/Button";
@@ -133,11 +133,11 @@ export function AddServerDrawer({
           {!isEdit && (
             <Button
               variant="primary"
-              className="flex-1"
+              className="flex-1 !gap-2.5"
               disabled={saving}
               onClick={() => void handleSubmit(true)}
             >
-              <Plug size={16} />
+              <EthernetPort size={20} strokeWidth={2.25} />
               Save & Connect
             </Button>
           )}

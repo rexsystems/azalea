@@ -315,9 +315,12 @@ dependencies = [
  "dotenvy",
  "keyring",
  "parking_lot",
+ "pkcs1",
+ "pkcs8",
  "portable-pty",
  "rand 0.8.7",
  "reqwest 0.12.28",
+ "rsa",
  "rusqlite",
  "russh",
  "russh-keys",
@@ -1193,6 +1196,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "dsa"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48bc224a9084ad760195584ce5abb3c2c34a225fa312a128ad245a6b412b7689"
+dependencies = [
+ "digest",
+ "num-bigint-dig",
+ "num-traits",
+ "pkcs8",
+ "rfc6979",
+ "sha2",
+ "signature",
+ "zeroize",
 ]
 
 [[package]]
@@ -4943,6 +4962,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b86f5297f0f04d08cabaa0f6bff7cb6aec4d9c3b49d87990d63da9d9156a8c3"
 dependencies = [
  "bcrypt-pbkdf",
+ "dsa",
  "ed25519-dalek",
  "num-bigint-dig",
  "p256",
@@ -4951,6 +4971,7 @@ dependencies = [
  "rand_core 0.6.4",
  "rsa",
  "sec1",
+ "sha1",
  "sha2",
  "signature",
  "ssh-cipher",

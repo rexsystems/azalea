@@ -338,7 +338,7 @@ fn import_termius_json(
     let entries = extract_termius_entries(&value);
     if entries.is_empty() {
         return Err(
-            "No hosts found. Use Termius JSON export or an OpenSSH config (Host blocks).".to_string(),
+            "No hosts found. Use a JSON host export or an OpenSSH config (Host blocks).".to_string(),
         );
     }
 

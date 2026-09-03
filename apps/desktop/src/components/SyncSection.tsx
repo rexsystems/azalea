@@ -460,19 +460,26 @@ export function SyncSection({
   };
 
   return (
-    <section className="mb-10">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-medium" style={{ color: "var(--text)" }}>
-          Account &amp; Sync
-        </h3>
-        {status?.logged_in && <PlanBadge plan={status.plan} size="md" />}
+    <section className="settings-section">
+      <div className="mb-3 flex items-start gap-3">
+        <div className="settings-section-icon" aria-hidden>
+          <Globe size={16} />
+        </div>
+        <div className="min-w-0 pt-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-medium" style={{ color: "var(--text)" }}>
+              Account &amp; Sync
+            </h3>
+            {status?.logged_in && <PlanBadge plan={status.plan} size="md" />}
+          </div>
+          <p className="mt-0.5 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+            Encrypted cloud backup for hosts, keys, and settings. Free includes sync — you only pay
+            for more cloud space.
+          </p>
+        </div>
       </div>
-      <p className="mb-4 text-xs" style={{ color: "var(--text-muted)" }}>
-        Encrypted cloud backup for hosts, keys, and settings. Free includes sync — you only pay for
-        more cloud space.
-      </p>
       <div
-        className="space-y-3 rounded-xl border p-4"
+        className="space-y-3 rounded-lg border p-3"
         style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
       >
         {status?.configured && status.logged_in && (

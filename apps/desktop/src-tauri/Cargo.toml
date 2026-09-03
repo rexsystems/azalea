@@ -32,7 +32,10 @@ async-trait = "0.1"
 russh = "0.48"
 russh-keys = "0.48"
 russh-sftp = "2"
-ssh-key = { version = "0.6", features = ["ed25519", "rsa"] }
+rsa = { version = "0.9", features = ["pem", "std"] }
+pkcs1 = { version = "0.7", features = ["pem", "std"] }
+pkcs8 = { version = "0.10", features = ["pem", "std", "encryption"] }
+ssh-key = { version = "0.6", features = ["ed25519", "rsa", "ecdsa", "p256", "p384", "p521", "dsa", "encryption"] }
 base64 = "0.22"
 parking_lot = "0.12"
 chrono = "0.4"

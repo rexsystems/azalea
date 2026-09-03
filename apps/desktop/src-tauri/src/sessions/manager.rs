@@ -12,10 +12,10 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
-use crate::keys::{get_host_password, load_key_pair};
+use crate::keys::{get_host_password, load_key_pair, public_key_identity};
 use crate::models::{
-    ConnectionLogEvent, FileEntry, Host, HostKeyMismatchEvent, KnownHostRecord, PortForward,
-    SftpListResult, TerminalOutputEvent, TerminalStatusEvent,
+    ConnectionLogEvent, FileEntry, Host, HostKeyMismatchEvent, InstallPublicKeyResult,
+    KnownHostRecord, PortForward, SftpListResult, TerminalOutputEvent, TerminalStatusEvent,
 };
 use crate::store::SharedDatabase;
 
@@ -717,6 +717,130 @@ fn emit_status(app: &AppHandle, session_id: &str, status: &str, error: Option<St
             error,
         },
     );
+}
+
+/// One-shot SSH + SFTP install of a public key into `~/.ssh/authorized_keys`.
+/// Skips the write when the key blob is already present.
+pub async fn install_authorized_key(
+    app: AppHandle,
+    db: SharedDatabase,
+    host: Host,
+    public_key_openssh: &str,
+) -> anyhow::Result<InstallPublicKeyResult> {
+    let identity = public_key_identity(public_key_openssh)
+        .ok_or_else(|| anyhow::anyhow!("Invalid public key format"))?;
+    let pubkey_line = public_key_openssh
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !line.starts_with('#'))
+        .ok_or_else(|| anyhow::anyhow!("Public key is empty"))?
+        .to_string();
+
+    if host.auth_type == "none" {
+        anyhow::bail!(
+            "Host has no login method. Add a password or another SSH key first, then install this public key."
+        );
+    }
+
+    let config = Arc::new(client::Config {
+        inactivity_timeout: Some(std::time::Duration::from_secs(60)),
+        ..Default::default()
+    });
+
+    let addr = format!("{}:{}", host.hostname, host.port);
+    let session_id = format!("install-key-{}", Uuid::new_v4());
+    let key_mismatch = Arc::new(parking_lot::Mutex::new(false));
+
+    let handler = SshClientHandler {
+        db,
+        app,
+        session_id: session_id.clone(),
+        hostname: host.hostname.clone(),
+        port: host.port,
+        key_mismatch: key_mismatch.clone(),
+    };
+
+    let mut session = client::connect(config, &addr, handler)
+        .await
+        .map_err(|err| anyhow::anyhow!("Could not reach host: {err}"))?;
+
+    if *key_mismatch.lock() {
+        anyhow::bail!("Host key mismatch — trust the new key from a normal connection first.");
+    }
+
+    authenticate(&mut session, &host).await?;
+
+    let channel = session.channel_open_session().await?;
+    channel.request_subsystem(true, "sftp").await?;
+    let sftp = SftpSession::new(channel.into_stream()).await?;
+
+    let home = sftp
+        .canonicalize(".")
+        .await
+        .map_err(|err| anyhow::anyhow!("Could not resolve home directory: {err}"))?;
+    let ssh_dir = format!("{home}/.ssh");
+    let auth_keys_path = format!("{ssh_dir}/authorized_keys");
+
+    if !sftp.try_exists(&ssh_dir).await.unwrap_or(false) {
+        sftp.create_dir(&ssh_dir)
+            .await
+            .map_err(|err| anyhow::anyhow!("Could not create ~/.ssh: {err}"))?;
+    }
+
+    let existing = if sftp.try_exists(&auth_keys_path).await.unwrap_or(false) {
+        String::from_utf8(sftp.read(&auth_keys_path).await.unwrap_or_default())
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let already_present = existing.lines().any(|line| {
+        public_key_identity(line)
+            .map(|id| id == identity)
+            .unwrap_or(false)
+    });
+
+    if already_present {
+        let _ = session
+            .disconnect(Disconnect::ByApplication, "Key already present", "en")
+            .await;
+        return Ok(InstallPublicKeyResult {
+            status: "already_present".to_string(),
+            message: format!(
+                "Public key already on {}@{} — nothing to change.",
+                host.username, host.hostname
+            ),
+        });
+    }
+
+    let mut next = existing;
+    if !next.is_empty() && !next.ends_with('\n') {
+        next.push('\n');
+    }
+    next.push_str(&pubkey_line);
+    next.push('\n');
+
+    use tokio::io::AsyncWriteExt;
+    {
+        let mut file = sftp
+            .create(&auth_keys_path)
+            .await
+            .map_err(|err| anyhow::anyhow!("Could not write authorized_keys: {err}"))?;
+        file.write_all(next.as_bytes()).await?;
+        file.shutdown().await?;
+    }
+
+    let _ = session
+        .disconnect(Disconnect::ByApplication, "Key installed", "en")
+        .await;
+
+    Ok(InstallPublicKeyResult {
+        status: "installed".to_string(),
+        message: format!(
+            "Public key added to {}@{}:~/.ssh/authorized_keys",
+            host.username, host.hostname
+        ),
+    })
 }
 
 pub type SharedSshSessionManager = Arc<tokio::sync::Mutex<SshSessionManager>>;

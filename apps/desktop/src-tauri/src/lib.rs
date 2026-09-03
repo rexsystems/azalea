@@ -63,6 +63,7 @@ pub fn run() {
             key_commands::generate_key,
             key_commands::import_key,
             key_commands::delete_key,
+            key_commands::install_public_key,
             ssh_commands::prepare_ssh,
             ssh_commands::start_ssh,
             ssh_commands::reconnect_ssh,

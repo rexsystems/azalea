@@ -64,7 +64,7 @@ export const connectScreenOptions: { id: ConnectScreenMode; label: string; descr
     {
       id: "fancy",
       label: "Connect screen",
-      description: "Termius-style loading with connection logs",
+      description: "Animated loading screen with connection logs",
     },
     {
       id: "instant",

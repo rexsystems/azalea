@@ -321,6 +321,25 @@ impl Database {
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
+    pub fn get_key(&self, id: &str) -> anyhow::Result<Option<SshKeyRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, public_key, key_type, fingerprint, created_at FROM keys WHERE id = ?1",
+        )?;
+
+        let mut rows = stmt.query_map(params![id], |row| {
+            Ok(SshKeyRecord {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                public_key: row.get(2)?,
+                key_type: row.get(3)?,
+                fingerprint: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })?;
+
+        rows.next().transpose().map_err(Into::into)
+    }
+
     pub fn insert_key(&self, key: &SshKeyRecord) -> anyhow::Result<()> {
         self.conn.execute(
             "INSERT INTO keys (id, name, public_key, key_type, fingerprint, created_at)

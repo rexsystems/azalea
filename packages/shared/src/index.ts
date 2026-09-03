@@ -60,6 +60,12 @@ export interface SshKey {
 
 export interface CreateKeyInput {
   name: string;
+  algorithm?: "ed25519" | "rsa" | "ecdsa-p256" | "ecdsa-p384" | "ecdsa-p521";
+}
+
+export interface InstallPublicKeyResult {
+  status: "installed" | "already_present" | string;
+  message: string;
 }
 
 export interface ImportKeyInput {
