@@ -329,13 +329,44 @@ textarea,
   transform: none;
 }
 
-.connect-step-line {
+.connect-step-track {
+  position: relative;
+  height: 2px;
+  flex: 1 1 auto;
+  overflow: hidden;
+  border-radius: 9999px;
   background: var(--border-subtle);
-  transition: background 320ms ease;
 }
 
-.connect-step-line.filled {
-  background: color-mix(in srgb, #34d399 65%, var(--border-subtle));
+.connect-step-fill {
+  position: absolute;
+  inset: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+  border-radius: inherit;
+  background: color-mix(in srgb, #34d399 75%, var(--border-subtle));
+  transition: transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.connect-step-fill.filled {
+  transform: scaleX(1);
+}
+
+.connect-step-label {
+  color: var(--text-muted);
+  transition: color 280ms ease;
+}
+
+.connect-step-label.active {
+  color: var(--text);
+}
+
+.connect-step-label.done {
+  color: #86efac;
+}
+
+.connect-step-label.failed {
+  color: #fca5a5;
 }
 
 .connect-node {
@@ -350,10 +381,10 @@ textarea,
   background: var(--bg-panel);
   color: var(--text-muted);
   transition:
-    border-color 280ms ease,
-    background 280ms ease,
-    color 280ms ease,
-    transform 280ms ease;
+    border-color 320ms ease,
+    background 320ms ease,
+    color 320ms ease,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .connect-node.pending {

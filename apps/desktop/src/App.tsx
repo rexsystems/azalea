@@ -1125,6 +1125,7 @@ function App() {
                 status={connectOverlayStatus}
                 error={overlayTab.error}
                 logs={overlayTab.logs}
+                markSeed={overlayTab.hostId || overlayTab.id}
                 onExitComplete={clearConnectOverlay}
               />
             )}

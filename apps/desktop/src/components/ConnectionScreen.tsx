@@ -6,8 +6,7 @@ import {
   SquareTerminal,
   X,
 } from "lucide-react";
-import { getHostIconColor } from "../lib/theme";
-import { getHostInitials } from "../lib/utils";
+import { HostMark, hostMarkAccent } from "./HostMark";
 
 interface ConnectionScreenProps {
   hostName: string;
@@ -17,6 +16,7 @@ interface ConnectionScreenProps {
   status: "connecting" | "connected" | "error";
   error?: string;
   logs: string[];
+  markSeed?: string;
   onExitComplete?: () => void;
 }
 
@@ -116,9 +116,11 @@ export function ConnectionScreen({
   status,
   error,
   logs,
+  markSeed,
   onExitComplete,
 }: ConnectionScreenProps) {
-  const iconColor = getHostIconColor(hostName);
+  const seed = markSeed || `${username}@${hostname}:${port}` || hostName;
+  const accent = hostMarkAccent(seed);
   const portSuffix = port === 22 ? "" : `:${port}`;
   const steps = useMemo(() => buildSteps(logs, status), [logs, status]);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -171,17 +173,14 @@ export function ConnectionScreen({
       <div
         className="connect-wash"
         style={{
-          background: `radial-gradient(ellipse 70% 55% at 50% 35%, ${iconColor}22 0%, transparent 70%)`,
+          background: `radial-gradient(ellipse 70% 55% at 50% 35%, ${accent}22 0%, transparent 70%)`,
         }}
         aria-hidden
       />
 
       <div className="connect-stage relative z-10 flex w-full max-w-sm flex-col items-center text-center">
-        <div
-          className="connect-avatar mb-5 flex h-16 w-16 items-center justify-center rounded-2xl text-xl font-semibold text-white"
-          style={{ background: iconColor }}
-        >
-          {getHostInitials(hostName)}
+        <div className="connect-avatar mb-5">
+          <HostMark seed={seed} size={64} rounded={16} />
         </div>
 
         <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>
@@ -220,33 +219,27 @@ export function ConnectionScreen({
               >
                 <div className="flex w-full items-center">
                   {index > 0 && (
-                    <div
-                      className={`connect-step-line h-px flex-1 ${
-                        steps[index - 1].state === "done" ? "filled" : ""
-                      }`}
-                    />
+                    <div className="connect-step-track flex-1">
+                      <div
+                        className={`connect-step-fill ${
+                          steps[index - 1].state === "done" ? "filled" : ""
+                        }`}
+                      />
+                    </div>
                   )}
                   <StepNode state={step.state} Icon={step.Icon} />
                   {index < steps.length - 1 && (
-                    <div
-                      className={`connect-step-line h-px flex-1 ${
-                        step.state === "done" ? "filled" : ""
-                      }`}
-                    />
+                    <div className="connect-step-track flex-1">
+                      <div
+                        className={`connect-step-fill ${
+                          step.state === "done" ? "filled" : ""
+                        }`}
+                      />
+                    </div>
                   )}
                 </div>
                 <span
-                  className="text-[11px] font-medium"
-                  style={{
-                    color:
-                      step.state === "active"
-                        ? "var(--text)"
-                        : step.state === "done"
-                          ? "#86efac"
-                          : step.state === "failed"
-                            ? "#fca5a5"
-                            : "var(--text-muted)",
-                  }}
+                  className={`text-[11px] font-medium connect-step-label ${step.state}`}
                 >
                   {step.label}
                 </span>

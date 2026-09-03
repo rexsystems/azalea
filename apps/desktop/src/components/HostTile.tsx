@@ -1,7 +1,6 @@
 import type { Host, HostGroup } from "@azalea/shared";
 import { Pencil, Server } from "lucide-react";
-import { getHostIconColor } from "../lib/theme";
-import { getHostInitials } from "../lib/utils";
+import { HostMark } from "./HostMark";
 
 interface HostTileProps {
   host: Host;
@@ -18,8 +17,6 @@ export function HostTile({
   onEdit,
   onContextMenu,
 }: HostTileProps) {
-  const iconColor = getHostIconColor(host.name);
-
   return (
     <div
       className="group relative"
@@ -36,12 +33,7 @@ export function HostTile({
           borderColor: "var(--border-subtle)",
         }}
       >
-        <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white"
-          style={{ background: iconColor }}
-        >
-          {getHostInitials(host.name)}
-        </div>
+        <HostMark seed={host.id || host.name} size={48} rounded={10} />
         <div className="min-w-0 flex-1">
           <div
             className="truncate text-base font-medium"
