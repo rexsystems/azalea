@@ -196,7 +196,7 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
       className="flex h-full min-h-0 flex-col overflow-hidden"
       style={{ background: "var(--bg-base)" }}
     >
-      <div className="settings-shell keys-shell flex h-full min-h-0 flex-1 flex-col !pb-0">
+      <div className="settings-shell keys-shell flex min-h-0 flex-1 flex-col">
         <div className="mb-5 flex shrink-0 flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h2
@@ -217,7 +217,7 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
           className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-2xl border"
           style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
         >
-          <div className="space-y-8 p-5 pb-8 sm:p-6 sm:pb-10">
+          <div className="space-y-8 p-5 pb-6 sm:p-6 sm:pb-8">
             <section>
               <div
                 className="mb-5 flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-start sm:justify-between"

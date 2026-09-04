@@ -27,6 +27,7 @@ import { CommandPalette, type CommandPaletteActionId } from "./components/Comman
 import { SyncResolutionDialog } from "./components/SyncResolutionDialog";
 import { AppShell, type NavPage } from "./components/AppShell";
 import { ConnectionScreen } from "./components/ConnectionScreen";
+import { ReconnectOverlay, type ReconnectInfo, type ReconnectPhase } from "./components/ReconnectOverlay";
 import { FileBrowserPanel } from "./components/FileBrowserPanel";
 import { ForwardsPopover } from "./components/ForwardsPopover";
 import { HomePage } from "./components/HomePage";
@@ -132,7 +133,10 @@ function App() {
   const [backupBusy, setBackupBusy] = useState(false);
   const closingTabsRef = useRef(new Set<string>());
   const reconnectTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const [filesPanelOpen, setFilesPanelOpen] = useState(false);
+  const reconnectPhaseTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>[]>());
+  const reconnectAttemptsRef = useRef(new Map<string, number>());
+  const [reconnectUi, setReconnectUi] = useState<Record<string, ReconnectInfo>>({});
+  const [filesPanelTabs, setFilesPanelTabs] = useState<Set<string>>(() => new Set());
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [forwardsOpen, setForwardsOpen] = useState(false);
   const [keyMismatch, setKeyMismatch] = useState<HostKeyMismatchEvent | null>(null);
@@ -377,6 +381,29 @@ function App() {
   );
 
   const removeTab = useCallback((tabId: string) => {
+    setFilesPanelTabs((prev) => {
+      if (!prev.has(tabId)) return prev;
+      const next = new Set(prev);
+      next.delete(tabId);
+      return next;
+    });
+    reconnectAttemptsRef.current.delete(tabId);
+    setReconnectUi((prev) => {
+      if (!(tabId in prev)) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
+    const phaseTimers = reconnectPhaseTimersRef.current.get(tabId);
+    if (phaseTimers) {
+      for (const timer of phaseTimers) clearTimeout(timer);
+      reconnectPhaseTimersRef.current.delete(tabId);
+    }
+    const reconnectTimer = reconnectTimersRef.current.get(tabId);
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimersRef.current.delete(tabId);
+    }
     setTabs((prev) => {
       const next = prev
         .filter((tab) => tab.id !== tabId)
@@ -390,39 +417,136 @@ function App() {
     });
   }, []);
 
-  const clearReconnectTimer = useCallback((sessionId: string) => {
-    const timer = reconnectTimersRef.current.get(sessionId);
-    if (timer) {
-      clearTimeout(timer);
-      reconnectTimersRef.current.delete(sessionId);
-    }
+  const clearReconnectPhaseTimers = useCallback((sessionId: string) => {
+    const timers = reconnectPhaseTimersRef.current.get(sessionId);
+    if (!timers) return;
+    for (const timer of timers) clearTimeout(timer);
+    reconnectPhaseTimersRef.current.delete(sessionId);
   }, []);
 
-  const scheduleReconnect = useCallback((sessionId: string) => {
-    if (closingTabsRef.current.has(sessionId)) return;
-    if (reconnectTimersRef.current.has(sessionId)) return;
+  const clearReconnectTimer = useCallback(
+    (sessionId: string) => {
+      const timer = reconnectTimersRef.current.get(sessionId);
+      if (timer) {
+        clearTimeout(timer);
+        reconnectTimersRef.current.delete(sessionId);
+      }
+      clearReconnectPhaseTimers(sessionId);
+    },
+    [clearReconnectPhaseTimers],
+  );
 
-    setTabs((prev) =>
-      prev.map((tab) =>
-        tab.id === sessionId ? { ...tab, status: "reconnecting" as const, error: undefined } : tab,
-      ),
-    );
-    setStatusMessage("Connection lost — reconnecting...");
-
-    const timer = setTimeout(() => {
-      reconnectTimersRef.current.delete(sessionId);
-      void api.reconnectSsh(sessionId, DEFAULT_COLS, DEFAULT_ROWS).catch(() => {
-        scheduleReconnect(sessionId);
+  const clearReconnectState = useCallback(
+    (sessionId: string) => {
+      clearReconnectTimer(sessionId);
+      reconnectAttemptsRef.current.delete(sessionId);
+      setReconnectUi((prev) => {
+        if (!(sessionId in prev)) return prev;
+        const next = { ...prev };
+        delete next[sessionId];
+        return next;
       });
-    }, 2000);
+    },
+    [clearReconnectTimer],
+  );
 
-    reconnectTimersRef.current.set(sessionId, timer);
+  const setReconnectPhase = useCallback((sessionId: string, phase: ReconnectPhase, patch?: Partial<ReconnectInfo>) => {
+    setReconnectUi((prev) => {
+      const current = prev[sessionId];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [sessionId]: { ...current, ...patch, phase },
+      };
+    });
   }, []);
+
+  const RECONNECT_DELAYS_MS = [2500, 5000, 10000, 20000, 30000] as const;
+
+  const scheduleReconnect = useCallback(
+    (sessionId: string, lastError?: string) => {
+      if (closingTabsRef.current.has(sessionId)) return;
+      if (reconnectTimersRef.current.has(sessionId)) return;
+
+      const attempt = reconnectAttemptsRef.current.get(sessionId) ?? 0;
+      const delay =
+        RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length - 1)] ?? 30000;
+      const nextRetryAt = Date.now() + delay;
+      reconnectAttemptsRef.current.set(sessionId, attempt + 1);
+
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === sessionId
+            ? { ...tab, status: "reconnecting" as const, error: lastError ?? tab.error }
+            : tab,
+        ),
+      );
+
+      setReconnectUi((prev) => ({
+        ...prev,
+        [sessionId]: {
+          attempt: attempt + 1,
+          nextRetryAt,
+          phase: "disconnected",
+          lastError,
+        },
+      }));
+
+      if (attempt === 0) {
+        setStatusMessage("Disconnected — checking host…");
+      }
+
+      clearReconnectPhaseTimers(sessionId);
+      const phaseTimers: ReturnType<typeof setTimeout>[] = [];
+      const checkAt = Math.min(900, Math.floor(delay * 0.35));
+      phaseTimers.push(
+        setTimeout(() => setReconnectPhase(sessionId, "checking"), checkAt),
+      );
+
+      const timer = setTimeout(() => {
+        reconnectTimersRef.current.delete(sessionId);
+        clearReconnectPhaseTimers(sessionId);
+        setReconnectPhase(sessionId, "reconnecting", { nextRetryAt: Date.now() });
+        void api.reconnectSsh(sessionId, DEFAULT_COLS, DEFAULT_ROWS).catch((err) => {
+          scheduleReconnect(sessionId, String(err).replace(/^Error:\s*/, ""));
+        });
+      }, delay);
+
+      reconnectPhaseTimersRef.current.set(sessionId, phaseTimers);
+      reconnectTimersRef.current.set(sessionId, timer);
+    },
+    [clearReconnectPhaseTimers, setReconnectPhase],
+  );
+
+  const retryReconnectNow = useCallback(
+    (sessionId: string) => {
+      if (closingTabsRef.current.has(sessionId)) return;
+      clearReconnectTimer(sessionId);
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === sessionId ? { ...tab, status: "reconnecting" as const } : tab,
+        ),
+      );
+      setReconnectUi((prev) => ({
+        ...prev,
+        [sessionId]: {
+          attempt: reconnectAttemptsRef.current.get(sessionId) ?? 1,
+          nextRetryAt: Date.now(),
+          phase: "reconnecting",
+          lastError: prev[sessionId]?.lastError,
+        },
+      }));
+      void api.reconnectSsh(sessionId, DEFAULT_COLS, DEFAULT_ROWS).catch((err) => {
+        scheduleReconnect(sessionId, String(err).replace(/^Error:\s*/, ""));
+      });
+    },
+    [clearReconnectTimer, scheduleReconnect],
+  );
 
   const closeTab = useCallback(
     async (tabId: string) => {
       closingTabsRef.current.add(tabId);
-      clearReconnectTimer(tabId);
+      clearReconnectState(tabId);
       if (api.isLocalSession(tabId)) {
         await api.closeLocalTerminal(tabId).catch(() => undefined);
       } else {
@@ -431,7 +555,7 @@ function App() {
       removeTab(tabId);
       closingTabsRef.current.delete(tabId);
     },
-    [clearReconnectTimer, removeTab],
+    [clearReconnectState, removeTab],
   );
 
 
@@ -465,7 +589,7 @@ function App() {
           if (msg === "HOST_KEY_CHANGED") {
             // Key mismatch dialog is triggered by the host-key-mismatch event;
             // never auto-reconnect into the same failure.
-            clearReconnectTimer(session_id);
+            clearReconnectState(session_id);
             setTabs((prev) =>
               prev.map((t) =>
                 t.id === session_id
@@ -488,16 +612,40 @@ function App() {
                 message: msg,
                 logs,
               });
+              setStatusMessage(msg);
             } else if (tab?.hadConnected) {
-              scheduleReconnect(session_id);
+              // Mid-session drop: stay in-terminal with cooldown reconnect UI.
+              scheduleReconnect(session_id, msg);
             }
             return prev.map((t) =>
               t.id === session_id
-                ? { ...t, status: tab?.hadConnected ? ("reconnecting" as const) : ("error" as const), error: msg, logs }
+                ? {
+                    ...t,
+                    status: tab?.hadConnected ? ("reconnecting" as const) : ("error" as const),
+                    error: msg,
+                    logs,
+                  }
                 : t,
             );
           });
-          setStatusMessage(msg);
+          return;
+        }
+
+        if (status === "connected") {
+          clearReconnectState(session_id);
+          setTabs((prev) =>
+            prev.map((tab) =>
+              tab.id === session_id
+                ? {
+                    ...tab,
+                    status: "connected" as const,
+                    error: undefined,
+                    hadConnected: true,
+                  }
+                : tab,
+            ),
+          );
+          setStatusMessage("Connected");
           return;
         }
 
@@ -508,12 +656,11 @@ function App() {
                   ...tab,
                   status: status as TabSession["status"],
                   error,
-                  hadConnected: status === "connected" ? true : tab.hadConnected,
+                  hadConnected: tab.hadConnected,
                 }
               : tab,
           ),
         );
-        if (status === "connected") setStatusMessage("Connected");
       },
     );
 
@@ -548,7 +695,7 @@ function App() {
       void unlistenUnknown.then((unlisten) => unlisten());
       void unlistenOs.then((unlisten) => unlisten());
     };
-  }, [scheduleReconnect, clearReconnectTimer, removeTab, refreshHosts]);
+  }, [scheduleReconnect, clearReconnectState, removeTab, refreshHosts]);
 
   const openAddDrawer = (groupId?: string | null, initial?: Partial<HostFormValues>) => {
     setEditingHost(null);
@@ -1041,6 +1188,29 @@ function App() {
   const showHostDrawer = drawerOpen && (navPage === "hosts" || navPage === "home");
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  const filesPanelOpen = Boolean(activeTabId && filesPanelTabs.has(activeTabId));
+
+  const setFilesPanelOpenForActive = (open: boolean) => {
+    if (!activeTabId) return;
+    setFilesPanelTabs((prev) => {
+      const has = prev.has(activeTabId);
+      if (open === has) return prev;
+      const next = new Set(prev);
+      if (open) next.add(activeTabId);
+      else next.delete(activeTabId);
+      return next;
+    });
+  };
+
+  const toggleFilesPanelForActive = () => {
+    if (!activeTabId) return;
+    setFilesPanelTabs((prev) => {
+      const next = new Set(prev);
+      if (next.has(activeTabId)) next.delete(activeTabId);
+      else next.add(activeTabId);
+      return next;
+    });
+  };
 
   const displayTabs = useMemo(() => {
     const hostCounts = new Map<string, number>();
@@ -1206,6 +1376,12 @@ function App() {
                 !isMobile && !isActive && activeTab?.splitWithId === tab.id;
               const isLocalConnecting =
                 api.isLocalSession(tab.id) && tab.status === "connecting";
+              const midSessionReconnect =
+                tab.hadConnected &&
+                (tab.status === "reconnecting" ||
+                  tab.status === "disconnected" ||
+                  tab.status === "connecting" ||
+                  tab.status === "error");
               const keepTerminal =
                 tab.status === "connecting" ||
                 tab.status === "connected" ||
@@ -1218,6 +1394,7 @@ function App() {
                 tab.status === "connected" ||
                 tab.status === "reconnecting" ||
                 tab.status === "disconnected" ||
+                midSessionReconnect ||
                 isLocalConnecting ||
                 (connectScreen === "instant" && tab.status === "connecting");
               const terminalVisible =
@@ -1228,7 +1405,9 @@ function App() {
               return (
                 <div
                   key={tab.id}
-                  className={terminalVisible ? "h-full min-w-0 flex-1" : "hidden"}
+                  className={
+                    terminalVisible ? "relative h-full min-w-0 flex-1" : "hidden"
+                  }
                   style={
                     terminalVisible && isSplitPartner
                       ? { borderLeft: "1px solid var(--border-subtle)" }
@@ -1249,8 +1428,7 @@ function App() {
                       viewingTerminal &&
                       (isActive || isSplitPartner) &&
                       (tab.status === "connected" ||
-                        tab.status === "reconnecting" ||
-                        tab.status === "disconnected" ||
+                        midSessionReconnect ||
                         isLocalConnecting)
                     }
                     onResize={handleTerminalResize}
@@ -1269,6 +1447,24 @@ function App() {
                       );
                     }}
                   />
+                  {midSessionReconnect && (
+                    <ReconnectOverlay
+                      hostName={tab.title}
+                      info={
+                        reconnectUi[tab.id] ?? {
+                          attempt: reconnectAttemptsRef.current.get(tab.id) ?? 1,
+                          nextRetryAt: Date.now(),
+                          phase:
+                            tab.status === "connecting" || tab.status === "reconnecting"
+                              ? "reconnecting"
+                              : "disconnected",
+                          lastError: tab.error,
+                        }
+                      }
+                      onCloseSession={() => void closeTab(tab.id)}
+                      onRetryNow={() => retryReconnectNow(tab.id)}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -1310,7 +1506,7 @@ function App() {
             <FileBrowserPanel
               key={activeTab.id}
               sessionId={activeTab.id}
-              onClose={() => setFilesPanelOpen(false)}
+              onClose={() => setFilesPanelOpenForActive(false)}
               onCdTerminal={(path) =>
                 sendCommandToTerminal(activeTab.id, `cd '${path.replace(/'/g, "'\\''")}'`)
               }
@@ -1347,7 +1543,7 @@ function App() {
               isMobile
                 ? () => {
                     setViewingTerminal(false);
-                    setFilesPanelOpen(false);
+                    setFilesPanelOpenForActive(false);
                     setNavPage("hosts");
                   }
                 : undefined
@@ -1371,7 +1567,7 @@ function App() {
                             icon: FolderTree,
                             title: "File browser",
                             active: filesPanelOpen,
-                            onClick: () => setFilesPanelOpen((v) => !v),
+                            onClick: () => toggleFilesPanelForActive(),
                           },
                           ...(!isMobile
                             ? [
@@ -1418,10 +1614,14 @@ function App() {
             ].map(({ icon: Icon, title, active, onClick }) => (
               <button
                 key={title}
+                type="button"
                 onClick={onClick}
                 className="hover-subtle transition-ui rounded-lg p-2"
                 style={{ color: active ? "var(--accent)" : "var(--text-muted)" }}
                 title={title}
+                {...(title === "Port forwarding" || title === "Snippets"
+                  ? { "data-azalea-popover-trigger": "" }
+                  : {})}
               >
                 <Icon size={15} />
               </button>
@@ -1530,7 +1730,8 @@ function App() {
         open={
           connectionError !== null &&
           viewingTerminal &&
-          activeTabId === connectionError.sessionId
+          activeTabId === connectionError.sessionId &&
+          !tabs.find((t) => t.id === connectionError.sessionId)?.hadConnected
         }
         title="Connection failed"
         hostName={connectionError?.hostName ?? ""}

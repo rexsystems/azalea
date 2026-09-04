@@ -415,11 +415,8 @@ export function TerminalView({
           if (event.payload.session_id !== sessionId) return;
           onStatusChangeRef.current?.(event.payload.status, event.payload.error);
           if (event.payload.status === "disconnected" || event.payload.status === "error") {
-            const label =
-              event.payload.status === "error"
-                ? event.payload.error ?? "Connection failed"
-                : "Connection lost, reconnecting...";
-            term.write(`\r\n\x1b[38;5;141m[Azalea]\x1b[0m ${label}\r\n`);
+            // Mid-session reconnect UI lives in ReconnectOverlay; avoid spamming the buffer.
+            return;
           }
         },
       );

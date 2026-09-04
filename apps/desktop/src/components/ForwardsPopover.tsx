@@ -32,9 +32,12 @@ export function ForwardsPopover({ hostId, sessionId, onClose, onStatus }: Forwar
 
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onClose();
-      }
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      if (panelRef.current?.contains(target)) return;
+      // Toolbar toggle: mousedown would close, then click would reopen.
+      if (target.closest("[data-azalea-popover-trigger]")) return;
+      onClose();
     };
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);

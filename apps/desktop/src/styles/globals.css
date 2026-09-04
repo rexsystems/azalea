@@ -31,6 +31,7 @@
   --accent: #5b9bf5;
   --accent-hover: #7ab0ff;
   --accent-muted: rgba(91, 155, 245, 0.12);
+  --accent-fg: #ffffff;
   --nav-active: #262a33;
   --terminal-bg: #14171d;
   --shadow: none;
@@ -51,6 +52,7 @@
   --accent: #9333ea;
   --accent-hover: #a855f7;
   --accent-muted: rgba(147, 51, 234, 0.12);
+  --accent-fg: #ffffff;
   --nav-active: #1e1629;
   --terminal-bg: #0f0a14;
   --shadow: none;
@@ -71,6 +73,7 @@
   --accent: #a1a1aa;
   --accent-hover: #d4d4d8;
   --accent-muted: rgba(161, 161, 170, 0.1);
+  --accent-fg: #18181b;
   --nav-active: #27272a;
   --terminal-bg: #141416;
   --shadow: none;
@@ -91,6 +94,7 @@
   --accent: #0891b2;
   --accent-hover: #06b6d4;
   --accent-muted: rgba(8, 145, 178, 0.12);
+  --accent-fg: #ffffff;
   --nav-active: #1a2332;
   --terminal-bg: #0a0f18;
   --shadow: none;
@@ -132,6 +136,7 @@
   --accent: #e8913a;
   --accent-hover: #f0a85a;
   --accent-muted: rgba(232, 145, 58, 0.14);
+  --accent-fg: #140e0c;
   --nav-active: #261c17;
   --terminal-bg: #100b09;
   --shadow: none;
@@ -536,7 +541,9 @@ textarea,
   max-width: none;
   min-height: 0;
   overflow: hidden;
-  padding-bottom: 1.25rem !important;
+  box-sizing: border-box;
+  /* Keep the panel clear of the status footer */
+  padding: 1.5rem 1.5rem 1.25rem;
 }
 
 .settings-tabs {
@@ -594,6 +601,22 @@ html[data-mobile="true"] .file-browser-panel {
   z-index: 30;
   width: 100% !important;
   border-left: none;
+}
+
+html[data-mobile="true"] .file-browser-resize {
+  display: none;
+}
+
+.file-browser-resize-line {
+  background: transparent;
+  opacity: 0;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.file-browser-resize:hover .file-browser-resize-line,
+.file-browser-resize.is-resizing .file-browser-resize-line {
+  background: var(--accent);
+  opacity: 1;
 }
 
 html[data-mobile="true"] .settings-shell {
