@@ -23,6 +23,7 @@ import { useTerminalSettings } from "./hooks/useTerminalSettings";
 import { useTheme } from "./hooks/useTheme";
 import { AddServerDrawer } from "./components/AddServerDrawer";
 import { AutoSyncPrompt } from "./components/AutoSyncPrompt";
+import { CommandPalette, type CommandPaletteActionId } from "./components/CommandPalette";
 import { SyncResolutionDialog } from "./components/SyncResolutionDialog";
 import { AppShell, type NavPage } from "./components/AppShell";
 import { ConnectionScreen } from "./components/ConnectionScreen";
@@ -125,6 +126,7 @@ function App() {
   const [connectionError, setConnectionError] = useState<ConnectionErrorState | null>(null);
   const [wakeBusy, setWakeBusy] = useState(false);
   const [focusSettingsSync, setFocusSettingsSync] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [keyPickerHost, setKeyPickerHost] = useState<Host | null>(null);
   const keyPickerResolver = useRef<((keyId: string | null) => void) | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
@@ -709,6 +711,15 @@ function App() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
+      const mod = e.ctrlKey || e.metaKey;
+
+      if (mod && e.key === "/") {
+        e.preventDefault();
+        setCommandPaletteOpen((v) => !v);
+        return;
+      }
+
+      if (commandPaletteOpen) return;
 
       if (e.ctrlKey && key === "tab") {
         const cycle = tabs.filter((t) => !t.poppedOut);
@@ -748,6 +759,62 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  const handleCommandPaletteAction = useCallback(
+    (id: CommandPaletteActionId) => {
+      if (id === "nav-home") {
+        handleNavigate("home");
+        return;
+      }
+      if (id === "nav-hosts") {
+        handleNavigate("hosts");
+        return;
+      }
+      if (id === "nav-keys") {
+        handleNavigate("keys");
+        return;
+      }
+      if (id === "nav-settings") {
+        handleNavigate("settings");
+        return;
+      }
+      if (id === "action-new-host") {
+        handleNavigate("hosts");
+        openAddDrawer();
+        return;
+      }
+      if (id === "action-new-group") {
+        handleNavigate("hosts");
+        handleAddGroup();
+        return;
+      }
+      if (id === "action-local-terminal") {
+        void openLocalTerminal();
+        return;
+      }
+      if (id === "action-sign-in") {
+        handleSignInForSync();
+        return;
+      }
+      if (id.startsWith("host:")) {
+        const hostId = id.slice(5);
+        const host = hosts.find((h) => h.id === hostId);
+        if (host) void connectToHost(host);
+        return;
+      }
+      if (id.startsWith("key:")) {
+        handleNavigate("keys");
+      }
+    },
+    [
+      handleNavigate,
+      openAddDrawer,
+      handleAddGroup,
+      openLocalTerminal,
+      handleSignInForSync,
+      hosts,
+      connectToHost,
+    ],
+  );
   const dismissConnectionError = () => {
     const err = connectionError;
     setConnectionError(null);
@@ -1508,6 +1575,16 @@ function App() {
             .catch((err) => setStatusMessage(String(err)));
         }}
         onCancel={() => setKeyMismatch(null)}
+      />
+
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        hosts={hosts}
+        keys={keys}
+        isMobile={isMobile}
+        signedIn={Boolean(syncStatus?.logged_in)}
+        onAction={handleCommandPaletteAction}
       />
 
       <ConfirmDialog
