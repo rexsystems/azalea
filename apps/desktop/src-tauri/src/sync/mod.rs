@@ -235,17 +235,6 @@ async fn auth_request(
     serde_json::from_value(body).map_err(|_| anyhow::anyhow!("Unexpected auth response"))
 }
 
-pub async fn login(state: &mut SyncState, email: &str, password: &str) -> anyhow::Result<()> {
-    let session = auth_request(
-        state,
-        "token?grant_type=password",
-        json!({ "email": email, "password": password }),
-    )
-    .await?;
-    state.apply_session(session);
-    Ok(())
-}
-
 /// Signs in using a refresh token obtained from the browser login flow.
 /// The token is exchanged for a fresh session (and persisted to the keyring).
 pub async fn login_with_refresh_token(

@@ -168,12 +168,18 @@ pub struct HostKeyMismatchEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TrustHostKeyInput {
+pub struct HostKeyUnknownEvent {
+    pub session_id: String,
     pub hostname: String,
     pub port: i64,
     pub key_type: String,
-    pub public_key: String,
     pub fingerprint: String,
+    pub public_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrustHostKeyInput {
+    pub session_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

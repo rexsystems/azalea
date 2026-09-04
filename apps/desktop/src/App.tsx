@@ -3,6 +3,7 @@ import type {
   Host,
   HostGroup,
   HostKeyMismatchEvent,
+  HostKeyUnknownEvent,
   ImportBackupResult,
   ImportResult,
 } from "@azalea/shared";
@@ -129,6 +130,7 @@ function App() {
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [forwardsOpen, setForwardsOpen] = useState(false);
   const [keyMismatch, setKeyMismatch] = useState<HostKeyMismatchEvent | null>(null);
+  const [unknownHostKey, setUnknownHostKey] = useState<HostKeyUnknownEvent | null>(null);
   const [splitPickerOpen, setSplitPickerOpen] = useState(false);
   const [autoSyncPrompt, setAutoSyncPrompt] = useState<{ email: string | null } | null>(null);
   const [autoSyncPreview, setAutoSyncPreview] = useState<api.SyncPreview | null>(null);
@@ -526,10 +528,15 @@ function App() {
       setKeyMismatch(event.payload);
     });
 
+    const unlistenUnknown = listen<HostKeyUnknownEvent>("host-key-unknown", (event) => {
+      setUnknownHostKey(event.payload);
+    });
+
     return () => {
       void unlistenStatus.then((unlisten) => unlisten());
       void unlistenLog.then((unlisten) => unlisten());
       void unlistenMismatch.then((unlisten) => unlisten());
+      void unlistenUnknown.then((unlisten) => unlisten());
     };
   }, [scheduleReconnect, clearReconnectTimer, removeTab]);
 
@@ -1386,13 +1393,7 @@ function App() {
           setKeyMismatch(null);
           if (!mismatch) return;
           void api
-            .trustHostKey({
-              hostname: mismatch.hostname,
-              port: mismatch.port,
-              key_type: mismatch.key_type,
-              public_key: mismatch.public_key,
-              fingerprint: mismatch.new_fingerprint,
-            })
+            .trustHostKey(mismatch.session_id)
             .then(() => {
               setTabs((prev) =>
                 prev.map((t) =>
@@ -1406,6 +1407,33 @@ function App() {
             .catch((err) => setStatusMessage(String(err)));
         }}
         onCancel={() => setKeyMismatch(null)}
+      />
+
+      <ConfirmDialog
+        open={unknownHostKey !== null}
+        title="Unknown server key"
+        message={
+          unknownHostKey
+            ? `${unknownHostKey.hostname}:${unknownHostKey.port} has not been seen before.\n\n` +
+              `${unknownHostKey.key_type} fingerprint:\n${unknownHostKey.fingerprint}\n\n` +
+              `Only continue if this fingerprint matches the server. Azalea will remember it for future connections.`
+            : ""
+        }
+        confirmLabel="Trust & connect"
+        onConfirm={() => {
+          const pending = unknownHostKey;
+          setUnknownHostKey(null);
+          if (!pending) return;
+          void api
+            .respondHostKey(pending.session_id, true)
+            .catch((err) => setStatusMessage(String(err)));
+        }}
+        onCancel={() => {
+          const pending = unknownHostKey;
+          setUnknownHostKey(null);
+          if (!pending) return;
+          void api.respondHostKey(pending.session_id, false).catch(() => undefined);
+        }}
       />
     </>
   );

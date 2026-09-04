@@ -162,3 +162,12 @@ export interface HostKeyMismatchEvent {
   new_fingerprint: string;
   public_key: string;
 }
+
+export interface HostKeyUnknownEvent {
+  session_id: string;
+  hostname: string;
+  port: number;
+  key_type: string;
+  fingerprint: string;
+  public_key: string;
+}

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { CreateKeyInput, Host, SshKey } from "@azalea/shared";
-import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import {
   Check,
   Copy,
@@ -107,16 +106,21 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
   };
 
   const handleImport = async () => {
-    const selected = await openFileDialog({ multiple: false });
-    if (!selected || typeof selected !== "string") return;
+    let picked: api.PickedTextFile | null = null;
+    try {
+      picked = await api.pickTextFile([{ name: "Private key", extensions: ["*"] }]);
+    } catch (err) {
+      setError(String(err));
+      return;
+    }
+    if (!picked) return;
 
-    const derivedName = filenameToKeyName(selected);
-    const name = newKeyName.trim() || derivedName;
+    const name = newKeyName.trim() || filenameToKeyName(picked.path);
 
     try {
       setBusy(true);
       setError(null);
-      const pem = await api.readTextFile(selected);
+      const pem = picked.contents;
       setBusy(false);
       await finishImport(name, pem);
     } catch (err) {
@@ -136,16 +140,15 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
   };
 
   const exportPublicKey = async (key: SshKey) => {
-    const path = await saveFileDialog({
-      defaultPath: `${key.name.replace(/[^\w.-]+/g, "_")}.pub`,
-      filters: [{ name: "Public key", extensions: ["pub"] }],
-    });
-    if (!path) return;
     try {
       setBusy(true);
       setError(null);
-      await api.writeTextFile(path, `${key.public_key.trim()}\n`);
-      setNotice(`Saved public key to ${path}`);
+      const path = await api.saveTextFile(
+        `${key.name.replace(/[^\w.-]+/g, "_")}.pub`,
+        [{ name: "Public key", extensions: ["pub"] }],
+        `${key.public_key.trim()}\n`,
+      );
+      if (path) setNotice(`Saved public key to ${path}`);
     } catch (err) {
       setError(String(err));
     } finally {

@@ -16,7 +16,7 @@ ciphertext — un breach la Supabase nu expune nimic.
 | Ce | Cum |
 |---|---|
 | Derivare cheie | Argon2id (m=64MB, t=3, p=1) din master passphrase + salt per user |
-| Criptare vault | AES-256-GCM, nonce random per push, AAD = user_id + version |
+| Criptare vault | AES-256-GCM, nonce random per push |
 | Verificare passphrase | un mic `verifier` blob criptat cu aceeași cheie (decriptezi ok = passphrase corect) |
 | Recovery key | cheie random de 32 bytes care criptează o copie a cheii de vault (envelope) |
 

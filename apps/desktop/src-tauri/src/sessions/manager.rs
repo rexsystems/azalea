@@ -14,8 +14,9 @@ use uuid::Uuid;
 
 use crate::keys::{get_host_password, load_key_pair, public_key_identity};
 use crate::models::{
-    ConnectionLogEvent, FileEntry, Host, HostKeyMismatchEvent, InstallPublicKeyResult,
-    KnownHostRecord, PortForward, SftpListResult, TerminalOutputEvent, TerminalStatusEvent,
+    ConnectionLogEvent, FileEntry, Host, HostKeyMismatchEvent, HostKeyUnknownEvent,
+    InstallPublicKeyResult, KnownHostRecord, PortForward, SftpListResult, TerminalOutputEvent,
+    TerminalStatusEvent,
 };
 use crate::store::SharedDatabase;
 
@@ -26,6 +27,43 @@ pub struct SshClientHandler {
     hostname: String,
     port: i64,
     key_mismatch: Arc<parking_lot::Mutex<bool>>,
+}
+
+/// How long the handshake waits for the user to accept an unknown host key.
+const HOST_KEY_PROMPT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+type HostKeyDecisions = parking_lot::Mutex<HashMap<String, oneshot::Sender<bool>>>;
+type PendingMismatches = parking_lot::Mutex<HashMap<String, KnownHostRecord>>;
+
+fn host_key_decisions() -> &'static HostKeyDecisions {
+    static DECISIONS: std::sync::OnceLock<HostKeyDecisions> = std::sync::OnceLock::new();
+    DECISIONS.get_or_init(Default::default)
+}
+
+fn pending_mismatches() -> &'static PendingMismatches {
+    static PENDING: std::sync::OnceLock<PendingMismatches> = std::sync::OnceLock::new();
+    PENDING.get_or_init(Default::default)
+}
+
+/// Answers a pending "unknown host key" prompt. Returns false when no prompt
+/// is waiting, so the frontend cannot approve keys out of band.
+pub fn resolve_host_key_prompt(session_id: &str, accept: bool) -> bool {
+    let sender = host_key_decisions().lock().remove(session_id);
+    match sender {
+        Some(tx) => tx.send(accept).is_ok(),
+        None => false,
+    }
+}
+
+/// Consumes the host key recorded when a mismatch was reported, so trusting a
+/// key is only possible for a mismatch this session actually saw.
+pub fn take_pending_mismatch(session_id: &str) -> Option<KnownHostRecord> {
+    pending_mismatches().lock().remove(session_id)
+}
+
+fn clear_host_key_state(session_id: &str) {
+    host_key_decisions().lock().remove(session_id);
+    pending_mismatches().lock().remove(session_id);
 }
 
 #[async_trait]
@@ -52,11 +90,43 @@ impl client::Handler for SshClientHandler {
                 let record = KnownHostRecord {
                     hostname: self.hostname.clone(),
                     port: self.port,
-                    key_type,
-                    public_key,
+                    key_type: key_type.clone(),
+                    public_key: public_key.clone(),
                     fingerprint: fingerprint.clone(),
                     created_at: chrono::Utc::now().timestamp(),
                 };
+
+                let (tx, rx) = oneshot::channel();
+                host_key_decisions()
+                    .lock()
+                    .insert(self.session_id.clone(), tx);
+
+                let emitted = self.app.emit(
+                    "host-key-unknown",
+                    HostKeyUnknownEvent {
+                        session_id: self.session_id.clone(),
+                        hostname: self.hostname.clone(),
+                        port: self.port,
+                        key_type,
+                        fingerprint,
+                        public_key,
+                    },
+                );
+                if emitted.is_err() {
+                    clear_host_key_state(&self.session_id);
+                    return Ok(false);
+                }
+
+                let accepted = match tokio::time::timeout(HOST_KEY_PROMPT_TIMEOUT, rx).await {
+                    Ok(Ok(accepted)) => accepted,
+                    _ => false,
+                };
+                clear_host_key_state(&self.session_id);
+
+                if !accepted {
+                    return Ok(false);
+                }
+
                 let db = self.db.lock();
                 let _ = db.upsert_known_host(&record);
                 Ok(true)
@@ -64,6 +134,17 @@ impl client::Handler for SshClientHandler {
             Some(known) if known.fingerprint == fingerprint => Ok(true),
             Some(known) => {
                 *self.key_mismatch.lock() = true;
+                pending_mismatches().lock().insert(
+                    self.session_id.clone(),
+                    KnownHostRecord {
+                        hostname: self.hostname.clone(),
+                        port: self.port,
+                        key_type: key_type.clone(),
+                        public_key: public_key.clone(),
+                        fingerprint: fingerprint.clone(),
+                        created_at: chrono::Utc::now().timestamp(),
+                    },
+                );
                 let _ = self.app.emit(
                     "host-key-mismatch",
                     HostKeyMismatchEvent {

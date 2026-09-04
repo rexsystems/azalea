@@ -82,6 +82,7 @@ jobs:
             wget \
             file \
             libssl-dev \
+            libdbus-1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
             rpm

@@ -1,6 +1,5 @@
 import type { ImportBackupResult, ImportResult } from "@azalea/shared";
 import { invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
 import type { ConnectScreenMode, TerminalSettings } from "./settings";
 import {
   getStoredAutoSync,
@@ -52,24 +51,19 @@ export function importDataFile(data: string, replace: boolean): Promise<ImportRe
 export async function exportBackupToFile(settings: AppSettingsExport): Promise<string | null> {
   const json = await exportBackup(settings);
   const stamp = new Date().toISOString().slice(0, 10);
-  const path = await save({
-    defaultPath: `azalea-backup-${stamp}.json`,
-    filters: [{ name: "Azalea Backup", extensions: ["json"] }],
-  });
-  if (!path) return null;
-  await api.writeTextFile(path, json);
-  return path;
+  return api.saveTextFile(
+    `azalea-backup-${stamp}.json`,
+    [{ name: "Azalea Backup", extensions: ["json"] }],
+    json,
+  );
 }
 
 export async function importBackupFromFile(replace: boolean): Promise<ImportBackupResult | ImportResult | null> {
-  const path = await open({
-    multiple: false,
-    filters: [
-      { name: "Backup / Import", extensions: ["json", "tbk", "conf", "cfg", "txt"] },
-    ],
-  });
-  if (!path || Array.isArray(path)) return null;
-  const data = await api.readTextFile(path);
+  const picked = await api.pickTextFile([
+    { name: "Backup / Import", extensions: ["json", "tbk", "conf", "cfg", "txt"] },
+  ]);
+  if (!picked) return null;
+  const data = picked.contents;
   if (data.includes('"format": "azalea-backup"') || data.includes('"format":"azalea-backup"')) {
     return importAzaleaBackup(data, replace);
   }

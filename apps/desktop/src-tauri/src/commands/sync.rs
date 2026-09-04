@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -10,12 +9,6 @@ use tokio::net::TcpListener;
 use crate::store::SharedDatabase;
 use crate::sync::{self, SharedSyncState, SyncOutcome, SyncPreview, SyncStatus};
 
-#[derive(Debug, Deserialize)]
-pub struct CredentialsInput {
-    pub email: String,
-    pub password: String,
-}
-
 #[tauri::command]
 pub async fn sync_status(
     state: tauri::State<'_, SharedSyncState>,
@@ -23,17 +16,6 @@ pub async fn sync_status(
 ) -> Result<SyncStatus, String> {
     let mut sync = state.lock().await;
     Ok(sync::status(&mut sync, &db).await)
-}
-
-#[tauri::command]
-pub async fn sync_login(
-    state: tauri::State<'_, SharedSyncState>,
-    input: CredentialsInput,
-) -> Result<(), String> {
-    let mut sync = state.lock().await;
-    sync::login(&mut sync, &input.email, &input.password)
-        .await
-        .map_err(|err| err.to_string())
 }
 
 // ---------- browser login (loopback handoff) ----------
@@ -55,118 +37,110 @@ fn random_state() -> String {
         .collect()
 }
 
-fn percent_decode(input: &str) -> String {
-    let bytes = input.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'%' if i + 2 < bytes.len() => {
-                let h = (bytes[i + 1] as char).to_digit(16);
-                let l = (bytes[i + 2] as char).to_digit(16);
-                if let (Some(h), Some(l)) = (h, l) {
-                    out.push((h * 16 + l) as u8);
-                    i += 3;
-                } else {
-                    out.push(bytes[i]);
-                    i += 1;
-                }
-            }
-            b'+' => {
-                out.push(b' ');
-                i += 1;
-            }
-            b => {
-                out.push(b);
-                i += 1;
-            }
-        }
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-fn parse_query(path: &str) -> HashMap<String, String> {
-    let mut map = HashMap::new();
-    if let Some(query) = path.split('?').nth(1) {
-        for pair in query.split('&') {
-            let mut it = pair.splitn(2, '=');
-            if let (Some(k), Some(v)) = (it.next(), it.next()) {
-                map.insert(percent_decode(k), percent_decode(v));
-            }
-        }
-    }
-    map
-}
-
-fn html_response(ok: bool) -> String {
-    let (title, body) = if ok {
-        (
-            "Azalea connected",
-            "You&#39;re signed in. Return to the Azalea app — you can close this tab.",
-        )
-    } else {
-        (
-            "Azalea login failed",
-            "Something went wrong. Please try signing in again from the app.",
-        )
-    };
-    let html = format!(
-        "<!doctype html><html><head><meta charset=\"utf-8\"><title>{title}</title>\
-<style>body{{font-family:system-ui,-apple-system,sans-serif;background:#0b0710;color:#f5f3ff;\
-display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}}\
-.c{{text-align:center;max-width:22rem;padding:2rem}}h1{{color:#a855f7;font-size:1.25rem;margin:0 0 .5rem}}\
-p{{color:#8b7fad;font-size:.9rem;line-height:1.5;margin:0}}</style></head>\
-<body><div class=\"c\"><h1>{title}</h1><p>{body}</p></div></body></html>"
-    );
+fn json_response(status: &str, body: &str) -> String {
     format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        html.len(),
-        html
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n\
+Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: content-type\r\n\
+Access-Control-Allow-Methods: POST, OPTIONS\r\nCache-Control: no-store\r\n\
+Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
     )
 }
 
+const PREFLIGHT_RESPONSE: &str = "HTTP/1.1 204 No Content\r\n\
+Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: content-type\r\n\
+Access-Control-Allow-Methods: POST, OPTIONS\r\nConnection: close\r\n\r\n";
+
 const NO_CONTENT_RESPONSE: &str = "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n";
 
-/// Waits for the browser to hit `/callback?state=..&refresh_token=..` on the
-/// loopback server, validates the state, and returns the refresh token.
+#[derive(Debug, Deserialize)]
+struct CallbackBody {
+    state: String,
+    refresh_token: String,
+}
+
+/// Waits for the browser to POST `{state, refresh_token}` to `/callback` on the
+/// loopback server, validates the state, and returns the refresh token. The
+/// token is kept out of the URL so it never reaches browser history or logs.
 async fn wait_for_callback(listener: TcpListener, expected_state: &str) -> anyhow::Result<String> {
     loop {
         let (mut stream, _) = listener.accept().await?;
 
         let mut buf = Vec::new();
         let mut tmp = [0u8; 2048];
+        let mut header_end = None;
+        let mut content_length = 0usize;
+
         loop {
             let n = stream.read(&mut tmp).await?;
             if n == 0 {
                 break;
             }
             buf.extend_from_slice(&tmp[..n]);
-            if buf.windows(4).any(|w| w == b"\r\n\r\n") || buf.len() > 16384 {
+
+            if header_end.is_none() {
+                if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                    header_end = Some(pos + 4);
+                    let headers = String::from_utf8_lossy(&buf[..pos]).to_ascii_lowercase();
+                    content_length = headers
+                        .lines()
+                        .find_map(|line| line.strip_prefix("content-length:"))
+                        .and_then(|v| v.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+                }
+            }
+
+            if let Some(start) = header_end {
+                if buf.len() >= start + content_length {
+                    break;
+                }
+            }
+            if buf.len() > 16384 {
                 break;
             }
         }
 
-        let text = String::from_utf8_lossy(&buf);
+        let header_end = header_end.unwrap_or(buf.len());
+        let text = String::from_utf8_lossy(&buf[..header_end]);
         let first_line = text.lines().next().unwrap_or("");
-        let path = first_line.split_whitespace().nth(1).unwrap_or("");
+        let mut parts = first_line.split_whitespace();
+        let method = parts.next().unwrap_or("");
+        let path = parts.next().unwrap_or("");
 
-        if !path.starts_with("/callback") {
+        if method.eq_ignore_ascii_case("OPTIONS") {
+            let _ = stream.write_all(PREFLIGHT_RESPONSE.as_bytes()).await;
+            let _ = stream.shutdown().await;
+            continue;
+        }
+
+        if !method.eq_ignore_ascii_case("POST") || !path.starts_with("/callback") {
             let _ = stream.write_all(NO_CONTENT_RESPONSE.as_bytes()).await;
             let _ = stream.shutdown().await;
             continue;
         }
 
-        let params = parse_query(path);
-        let got_state = params.get("state").cloned().unwrap_or_default();
-        let refresh = params.get("refresh_token").cloned().unwrap_or_default();
+        let body = &buf[header_end..];
+        let parsed: Option<CallbackBody> = serde_json::from_slice(body).ok();
 
-        if got_state != expected_state || refresh.is_empty() {
-            let _ = stream.write_all(html_response(false).as_bytes()).await;
-            let _ = stream.shutdown().await;
-            anyhow::bail!("Login handshake failed (state mismatch or missing token).");
-        }
+        let refresh = match parsed {
+            Some(payload)
+                if payload.state == expected_state && !payload.refresh_token.is_empty() =>
+            {
+                payload.refresh_token
+            }
+            _ => {
+                let _ = stream
+                    .write_all(json_response("400 Bad Request", r#"{"ok":false}"#).as_bytes())
+                    .await;
+                let _ = stream.shutdown().await;
+                anyhow::bail!("Login handshake failed (state mismatch or missing token).");
+            }
+        };
 
-        let _ = stream.write_all(html_response(true).as_bytes()).await;
+        let _ = stream
+            .write_all(json_response("200 OK", r#"{"ok":true}"#).as_bytes())
+            .await;
         let _ = stream.flush().await;
         let _ = stream.shutdown().await;
         return Ok(refresh);

@@ -228,7 +228,7 @@ export function SettingsPage({
         <Section
           icon={<Archive size={16} />}
           title="Backup & restore"
-          description="Hosts, keys, passwords, groups, and settings in one file"
+          description="Hosts, keys, passwords, groups, and settings in one unencrypted file — keep it somewhere safe"
         >
           <div
             className="space-y-2 rounded-lg border p-3"

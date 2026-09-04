@@ -1,16 +1,24 @@
 # Supabase setup (Azalea)
 
-All SQL and Edge Functions live here. The same folder exists in **azalea-web** (`apps/azalea-web/supabase` is a junction to that repo).
+> **Canonical copy:** the complete set of SQL files lives in **azalea-web**
+> (`apps/azalea-web/supabase`, a junction to that repo). This folder only keeps
+> `schema.sql` and `account.sql` for reference. `schema.sql` alone leaves the
+> approval gate and storage limits **off**, so always deploy the full list below
+> from the azalea-web folder.
 
 ## File map
 
 | File | What it does |
 |------|----------------|
 | `schema.sql` | `vaults` table + RLS (cloud sync) |
-| `profiles.sql` | Manual approval + vault gate for unapproved users |
+| `profiles.sql` | `profiles` table, manual approval + vault gate for unapproved users |
 | `admin.sql` | Admin panel RPCs + `admins` table |
+| `admin-approval-system.sql` | Global approval toggle for the admin panel |
+| `plans.sql` | Free / Pro plans + server-side vault storage limit trigger |
 | `account.sql` | Drops old `delete_own_account` RPC |
-| `security-fixes.sql` | One-shot cleanup for Security Advisor |
+| `security-fixes.sql` | Revokes RPC access to trigger-only functions |
+| `security-advisor-plans.sql` | Same, for the functions added by `plans.sql` |
+| `admin-users-storage.sql` | Adds `vault_bytes` to `admin_list_users` |
 | `bootstrap-admin.sql` | **You run this to become admin** |
 | `functions/delete-account/index.ts` | Edge Function for self-serve account delete |
 
@@ -18,13 +26,19 @@ All SQL and Edge Functions live here. The same folder exists in **azalea-web** (
 
 ### 1. SQL (Dashboard -> SQL Editor)
 
-Run **in this order**, each as a new query:
+Run **all of these, in this order**, each as a new query. Skipping
+`profiles.sql` or `plans.sql` means unapproved accounts can sync and vault
+storage limits are never enforced.
 
 1. `schema.sql`
 2. `profiles.sql`
 3. `admin.sql`
-4. `account.sql`
-4. `security-fixes.sql` (only if you had the old `delete_own_account` RPC before)
+4. `admin-approval-system.sql`
+5. `plans.sql`
+6. `account.sql`
+7. `security-fixes.sql`
+8. `security-advisor-plans.sql`
+9. `admin-users-storage.sql`
 
 ### 2. Make yourself admin
 
@@ -99,8 +113,11 @@ NEXT_PUBLIC_GITHUB_REPO=rexsystems/azalea
 ## Quick checklist
 
 - [ ] `schema.sql`
-- [ ] `admin.sql`
-- [ ] `account.sql` + `security-fixes.sql`
+- [ ] `profiles.sql`
+- [ ] `admin.sql` + `admin-approval-system.sql`
+- [ ] `plans.sql`
+- [ ] `account.sql` + `security-fixes.sql` + `security-advisor-plans.sql`
+- [ ] `admin-users-storage.sql`
 - [ ] `bootstrap-admin.sql` with your UUID
 - [ ] Deploy `delete-account` Edge Function
 - [ ] HIBP / captcha if you want them

@@ -26,11 +26,11 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 - [Rust](https://rustup.rs/) 1.77+
 - **Linux (Fedora / Nobara / RHEL):**
   ```bash
-  sudo dnf install webkit2gtk4.1-devel openssl-devel curl wget squashfs-tools librsvg2-devel rpm-build
+  sudo dnf install webkit2gtk4.1-devel openssl-devel dbus-devel curl wget squashfs-tools librsvg2-devel rpm-build
   ```
 - **Linux (Debian / Ubuntu):**
   ```bash
-  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libdbus-1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
   ```
 - **Windows:** [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with C++ workload and WebView2
 
@@ -95,10 +95,12 @@ azalea/
 
 ## Security
 
-- Private keys and host passwords are stored in the OS keychain, not plain text on disk
-- Cloud vault is encrypted client-side before upload
+- Private keys and host passwords live in the OS keychain (Secret Service, Keychain, Credential Manager). If no keychain is available, they are stored encrypted on disk instead of in plain text
+- Unknown server keys require confirmation on first connect, and key changes must be approved before the saved fingerprint is replaced
+- Cloud vault is encrypted client-side (Argon2id + AES-256-GCM) before upload
+- The webview runs under a restrictive CSP and cannot read or write arbitrary files
 - No telemetry
-- Host key changes are surfaced before you replace the saved fingerprint
+- Backup export files are **not** encrypted: they contain private keys and host passwords in plain text
 
 ## Contributing
 

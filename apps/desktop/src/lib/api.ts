@@ -150,12 +150,29 @@ export function closeLocalTerminal(sessionId: string): Promise<void> {
   return invoke("close_local_terminal", { sessionId });
 }
 
-export function readTextFile(path: string): Promise<string> {
-  return invoke("read_text_file", { path });
+export interface DialogFilter {
+  name: string;
+  extensions: string[];
 }
 
-export function writeTextFile(path: string, contents: string): Promise<void> {
-  return invoke("write_text_file", { path, contents });
+export interface PickedTextFile {
+  path: string;
+  name: string;
+  contents: string;
+}
+
+/// The native picker runs in the backend, so no filesystem path is ever
+/// accepted from the UI.
+export function pickTextFile(filters: DialogFilter[]): Promise<PickedTextFile | null> {
+  return invoke("pick_text_file", { filters });
+}
+
+export function saveTextFile(
+  defaultName: string,
+  filters: DialogFilter[],
+  contents: string,
+): Promise<string | null> {
+  return invoke("save_text_file", { defaultName, filters, contents });
 }
 
 export function hostHasPassword(id: string): Promise<boolean> {
@@ -240,14 +257,12 @@ export function listActiveForwards(sessionId: string): Promise<string[]> {
   return invoke("list_active_forwards", { sessionId });
 }
 
-export function trustHostKey(input: {
-  hostname: string;
-  port: number;
-  key_type: string;
-  public_key: string;
-  fingerprint: string;
-}): Promise<void> {
-  return invoke("trust_host_key", { input });
+export function trustHostKey(sessionId: string): Promise<void> {
+  return invoke("trust_host_key", { input: { session_id: sessionId } });
+}
+
+export function respondHostKey(sessionId: string, accept: boolean): Promise<void> {
+  return invoke("respond_host_key", { sessionId, accept });
 }
 
 // ---------- Cloud sync ----------
@@ -302,10 +317,6 @@ export type SyncPreview =
 
 export function syncStatus(): Promise<SyncStatus> {
   return invoke("sync_status");
-}
-
-export function syncLogin(email: string, password: string): Promise<void> {
-  return invoke("sync_login", { input: { email, password } });
 }
 
 /**
