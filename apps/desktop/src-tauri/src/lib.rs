@@ -78,6 +78,8 @@ pub fn run() {
             sftp::sftp_list,
             sftp::sftp_download,
             sftp::sftp_upload,
+            sftp::sftp_read_text,
+            sftp::sftp_write_text,
             snippets::list_snippets,
             snippets::create_snippet,
             snippets::update_snippet,

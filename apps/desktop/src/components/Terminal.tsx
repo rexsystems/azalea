@@ -1,13 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { readText as readClipboardText } from "@tauri-apps/plugin-clipboard-manager";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 import type { TerminalSettings } from "../lib/settings";
 import * as api from "../lib/api";
+
+const SEARCH_DECORATIONS = {
+  // SearchAddon requires opaque #RRGGBB (no alpha) for match backgrounds.
+  matchBackground: "#5b3a7a",
+  activeMatchBackground: "#a16207",
+  matchOverviewRuler: "#a855f7",
+  activeMatchColorOverviewRuler: "#facc15",
+  matchBorder: "#c084fc",
+  activeMatchBorder: "#fde047",
+};
 
 interface TerminalProps {
   sessionId: string;
@@ -269,6 +281,7 @@ export function TerminalView({
       allowTransparency: false,
       rightClickSelectsWord: !settingsRef.current.rightClickToPaste,
       theme: xtermPalette(),
+      overviewRuler: { width: 12 },
     });
 
     const fitAddon = new FitAddon();
@@ -276,6 +289,11 @@ export function TerminalView({
     const searchAddon = new SearchAddon();
     term.loadAddon(searchAddon);
     searchRef.current = searchAddon;
+    term.loadAddon(
+      new WebLinksAddon((_event, uri) => {
+        void openUrl(uri);
+      }),
+    );
     term.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
       const key = event.key.toLowerCase();
@@ -426,16 +444,16 @@ export function TerminalView({
     });
   }, [active, sessionId]);
 
-  const runSearch = (query: string, direction: "next" | "previous") => {
+  const runSearch = (query: string, direction: "next" | "previous", incremental = false) => {
     const search = searchRef.current;
-    if (!search || !query) return;
+    if (!search) return;
+    if (!query) {
+      search.clearDecorations();
+      return;
+    }
     const options = {
-      decorations: {
-        matchOverviewRuler: "#a855f7",
-        activeMatchColorOverviewRuler: "#facc15",
-        matchBackground: "#a855f755",
-        activeMatchBackground: "#facc1580",
-      },
+      incremental,
+      decorations: SEARCH_DECORATIONS,
     };
     if (direction === "next") search.findNext(query, options);
     else search.findPrevious(query, options);
@@ -463,7 +481,7 @@ export function TerminalView({
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              runSearch(e.target.value, "next");
+              runSearch(e.target.value, "next", true);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter") runSearch(searchQuery, e.shiftKey ? "previous" : "next");

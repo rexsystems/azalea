@@ -188,6 +188,18 @@ export function sftpUpload(
   return invoke("sftp_upload", { sessionId, localPath, remotePath });
 }
 
+export function sftpReadText(sessionId: string, remotePath: string): Promise<string> {
+  return invoke("sftp_read_text", { sessionId, remotePath });
+}
+
+export function sftpWriteText(
+  sessionId: string,
+  remotePath: string,
+  contents: string,
+): Promise<number> {
+  return invoke("sftp_write_text", { sessionId, remotePath, contents });
+}
+
 export function listSnippets(): Promise<Snippet[]> {
   return invoke("list_snippets");
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Host, HostGroup } from "@azalea/shared";
-import { ChevronRight, FolderPlus, Plus, Search, SquareTerminal } from "lucide-react";
+import { ChevronRight, Plus, Search, SquareTerminal } from "lucide-react";
 import { groupHostsByGroup } from "../lib/utils";
 import { EmptyHostsState, GroupSection } from "./HostTile";
 import { useContextMenu } from "./ui/ContextMenu";
@@ -212,102 +212,6 @@ export function HostsPage({
               />
             </div>
           ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-interface GroupsPageProps {
-  groups: HostGroup[];
-  hosts: Host[];
-  onAddGroup: () => void;
-  onAddServer: (groupId: string) => void;
-  onRenameGroup: (group: HostGroup) => void;
-  onDeleteGroup: (group: HostGroup) => void;
-}
-
-export function GroupsPage({
-  groups,
-  hosts,
-  onAddGroup,
-  onAddServer,
-  onRenameGroup,
-  onDeleteGroup,
-}: GroupsPageProps) {
-  const { openMenu, menuElement } = useContextMenu();
-
-  return (
-    <div className="flex h-full flex-col overflow-hidden" style={{ background: "var(--bg-base)" }}>
-      {menuElement}
-
-      <div
-        className="flex shrink-0 items-center justify-between border-b px-5 py-3"
-        style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
-      >
-        <h2 className="text-sm font-medium" style={{ color: "var(--text)" }}>
-          Groups
-        </h2>
-        <button
-          onClick={onAddGroup}
-          className="transition-ui flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm"
-          style={{ background: "var(--bg-card)", color: "var(--text-secondary)" }}
-        >
-          <FolderPlus size={14} />
-          New group
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-5">
-        {groups.length === 0 ? (
-          <p className="py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-            No groups yet. Create one to organize your servers.
-          </p>
-        ) : (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {groups.map((group) => {
-              const count = hosts.filter((h) => h.group_id === group.id).length;
-              return (
-                <div
-                  key={group.id}
-                  className="transition-ui group relative rounded-xl border p-4"
-                  style={{
-                    background: "var(--bg-card)",
-                    borderColor: "var(--border-subtle)",
-                  }}
-                  onContextMenu={(e) =>
-                    openMenu(e, [
-                      {
-                        items: [
-                          { id: "add", label: "Add server", onClick: () => onAddServer(group.id) },
-                          { id: "rename", label: "Rename", onClick: () => onRenameGroup(group) },
-                        ],
-                      },
-                      {
-                        items: [
-                          { id: "del", label: "Delete", danger: true, onClick: () => onDeleteGroup(group) },
-                        ],
-                      },
-                    ])
-                  }
-                >
-                  <div className="font-medium" style={{ color: "var(--text)" }}>
-                    {group.name}
-                  </div>
-                  <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                    {count} server{count === 1 ? "" : "s"}
-                  </div>
-                  <button
-                    onClick={() => onAddServer(group.id)}
-                    className="transition-ui mt-3 text-xs font-medium"
-                    style={{ color: "var(--accent)" }}
-                  >
-                    + Add server
-                  </button>
-                </div>
-              );
-            })}
-          </div>
         )}
       </div>
     </div>

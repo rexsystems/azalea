@@ -1,22 +1,22 @@
 # Azalea
 
-A modern, open-source SSH terminal client for Windows (and cross-platform). Local-first host and key management.
+Open-source SSH client for Linux, Windows, and macOS. Local-first host and key management, with optional encrypted cloud sync.
 
-![License](https://img.shields.io/badge/license-AGPL--3.0-purple)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-informational)
+![Version](https://img.shields.io/badge/version-0.1.1-brightgreen)
 
-## Features (v0.1)
+## Features
 
-- **SSH terminal** — multi-tab sessions with xterm.js
-- **Host manager** — save connections with groups, password or key auth
-- **SSH key manager** — generate ed25519 keys or import existing ones
-- **Secure storage** — passwords and private keys in OS keychain (Windows Credential Manager)
-- **Local-first** — SQLite database, no cloud sync (planned for v0.2)
-- **Keyboard shortcuts** — `Ctrl+T` new tab, `Ctrl+W` close tab
-
-## Screenshots
-
-> Run the app and add your first host to get started.
+- **SSH terminal** — multi-tab sessions, search, clickable links, local shell
+- **Hosts & groups** — password or key auth, reconnect, host key change warnings
+- **SSH keys** — generate ed25519 or import existing keys; secrets stay in the OS keychain
+- **SFTP** — browse, upload/download, drag-and-drop upload, edit remote text files
+- **Port forwarding** — manage and start local forwards from a session
+- **Snippets** — save and run common commands
+- **Import / export** — Azalea backups, OpenSSH `config`, and JSON host lists
+- **Cloud sync** (optional) — zero-knowledge encrypted vault; Free / Pro storage caps
+- **Themes & settings** — Midnight / Noir, font size, connect screen, auto-update
 
 ## Development
 
@@ -43,7 +43,7 @@ npm install
 npm run dev
 ```
 
-### Build installer & packages
+### Build
 
 ```bash
 # Local build (unsigned)
@@ -52,57 +52,53 @@ npm run build
 # CI / signed release build
 npm run build:ci
 
-# Linux packages only (deb + rpm)
-npm run build:linux
-
-# Or build specific Linux packages:
-npm run build:rpm   # Fedora / RHEL / openSUSE
-npm run build:deb   # Debian / Ubuntu
+# Linux packages
+npm run build:linux   # deb + rpm
+npm run build:rpm
+npm run build:deb
 ```
 
-Pushes to `master` build **Windows**, **deb** (Ubuntu/Debian), and **rpm** (Fedora/RHEL) via GitHub Actions.
+Pushes to `master` build Windows, deb, and rpm via GitHub Actions.
 
-Output:
-
-- Linux RPM: `apps/desktop/src-tauri/target/release/bundle/rpm/Azalea-*.rpm`
-- Linux DEB: `apps/desktop/src-tauri/target/release/bundle/deb/Azalea_*.deb`
-- Windows: `apps/desktop/src-tauri/target/release/bundle/nsis/*.exe` or `msi/*.msi`
+Output lives under `apps/desktop/src-tauri/target/release/bundle/`.
 
 ## Project structure
 
 ```
 azalea/
-├── apps/desktop/          # Tauri 2 + React app
-│   ├── src/               # React UI
-│   └── src-tauri/         # Rust backend (SSH, SQLite, keychain)
+├── apps/desktop/          # Tauri 2 + React desktop app
+│   ├── src/               # UI
+│   └── src-tauri/         # Rust (SSH, SFTP, SQLite, keychain, sync)
+├── apps/azalea-web/       # Marketing / account site (optional local link)
 ├── packages/shared/       # Shared TypeScript types
-└── .github/workflows/     # CI
+├── supabase/              # Schema and plan SQL
+└── docs/                  # Sync, updater, web notes
 ```
 
 ## Tech stack
 
 | Layer | Technology |
 |-------|------------|
-| Desktop | Tauri 2 |
+| Desktop shell | Tauri 2 |
 | UI | React, TypeScript, Tailwind CSS v4 |
 | Terminal | xterm.js |
-| SSH | russh (Rust) |
+| SSH / SFTP | russh |
 | Storage | SQLite + OS keychain |
+| Sync | Supabase + client-side encryption |
 
-## Roadmap
+## Docs
 
-- [ ] Cloud sync (self-hosted, E2E encrypted)
-- [ ] SFTP file browser
-- [ ] Port forwarding
-- [ ] Snippets and automation
-- [ ] Team sharing
+- [Cloud sync](docs/cloud-sync.md)
+- [Updater](docs/updater.md)
+- [Web app](docs/web.md)
+- [Supabase setup](supabase/SETUP.md)
 
 ## Security
 
-- Private keys never stored in plain text on disk
-- Host passwords stored in OS keychain
-- No telemetry or phone-home
-- Server host key verification accepts all keys in v0.1 (pinning planned)
+- Private keys and host passwords are stored in the OS keychain, not plain text on disk
+- Cloud vault is encrypted client-side before upload
+- No telemetry
+- Host key changes are surfaced before you replace the saved fingerprint
 
 ## Contributing
 
@@ -110,4 +106,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-AGPL-3.0 - see [LICENSE](LICENSE).
+[AGPL-3.0](LICENSE)

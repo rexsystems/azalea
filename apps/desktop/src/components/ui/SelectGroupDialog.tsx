@@ -51,7 +51,7 @@ export function SelectGroupDialog({
 
         {groups.length === 0 ? (
           <p className="mt-4 text-sm" style={{ color: "var(--text-muted)" }}>
-            No groups yet. Create one from the Groups page or the hosts context menu.
+            No groups yet. Create one from the hosts page context menu.
           </p>
         ) : (
           <div className="mt-4 max-h-64 space-y-2 overflow-y-auto">

@@ -463,6 +463,46 @@ pub async fn sftp_upload_file(
     Ok(bytes)
 }
 
+const SFTP_TEXT_MAX_BYTES: u64 = 2 * 1024 * 1024;
+
+pub async fn sftp_read_text_file(
+    manager: &SharedSshSessionManager,
+    session_id: &str,
+    remote_path: &str,
+) -> anyhow::Result<String> {
+    use tokio::io::AsyncReadExt;
+
+    let sftp = open_sftp(manager, session_id).await?;
+    let remote = sftp.open(remote_path).await?;
+    let mut buf = Vec::new();
+    remote
+        .take(SFTP_TEXT_MAX_BYTES + 1)
+        .read_to_end(&mut buf)
+        .await?;
+    if buf.len() as u64 > SFTP_TEXT_MAX_BYTES {
+        anyhow::bail!("File is larger than 2 MB — open it locally instead");
+    }
+    String::from_utf8(buf).map_err(|_| anyhow::anyhow!("File is not valid UTF-8 text"))
+}
+
+pub async fn sftp_write_text_file(
+    manager: &SharedSshSessionManager,
+    session_id: &str,
+    remote_path: &str,
+    contents: &str,
+) -> anyhow::Result<u64> {
+    use tokio::io::AsyncWriteExt;
+
+    if contents.len() as u64 > SFTP_TEXT_MAX_BYTES {
+        anyhow::bail!("Content exceeds 2 MB limit");
+    }
+    let sftp = open_sftp(manager, session_id).await?;
+    let mut remote = sftp.create(remote_path).await?;
+    remote.write_all(contents.as_bytes()).await?;
+    remote.shutdown().await?;
+    Ok(contents.len() as u64)
+}
+
 pub async fn start_port_forward(
     manager: &SharedSshSessionManager,
     session_id: &str,

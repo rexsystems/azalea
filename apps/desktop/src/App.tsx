@@ -26,7 +26,7 @@ import { AppShell, type NavPage } from "./components/AppShell";
 import { ConnectionScreen } from "./components/ConnectionScreen";
 import { FileBrowserPanel } from "./components/FileBrowserPanel";
 import { ForwardsPopover } from "./components/ForwardsPopover";
-import { GroupsPage, HostsPage } from "./components/HostsPage";
+import { HostsPage } from "./components/HostsPage";
 import { KeysPage } from "./components/KeysPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { SnippetsPopover } from "./components/SnippetsPopover";
@@ -119,6 +119,7 @@ function App() {
   const [pendingConfirm, setPendingConfirm] = useState<ConfirmState | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<PromptState | null>(null);
   const [connectionError, setConnectionError] = useState<ConnectionErrorState | null>(null);
+  const [focusSettingsSync, setFocusSettingsSync] = useState(false);
   const [keyPickerHost, setKeyPickerHost] = useState<Host | null>(null);
   const keyPickerResolver = useRef<((keyId: string | null) => void) | null>(null);
   const [backupBusy, setBackupBusy] = useState(false);
@@ -132,6 +133,10 @@ function App() {
   const [autoSyncPrompt, setAutoSyncPrompt] = useState<{ email: string | null } | null>(null);
   const [autoSyncPreview, setAutoSyncPreview] = useState<api.SyncPreview | null>(null);
   const [autoSyncBusy, setAutoSyncBusy] = useState(false);
+
+  useEffect(() => {
+    if (connectionError) setPendingConfirm(null);
+  }, [connectionError]);
   const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
   const autoSyncCheckedRef = useRef(false);
 
@@ -664,6 +669,22 @@ function App() {
     setViewingTerminal(false);
   };
 
+  const handleSignInForSync = useCallback(() => {
+    setNavPage("settings");
+    setViewingTerminal(false);
+    setFocusSettingsSync(true);
+    void (async () => {
+      try {
+        setStatusMessage("Opening browser to sign in…");
+        await api.syncBrowserLogin();
+        await refreshSyncStatus();
+        setStatusMessage("Signed in.");
+      } catch (err) {
+        setStatusMessage(`Sign in failed: ${String(err).replace(/^Error:\s*/, "")}`);
+      }
+    })();
+  }, [refreshSyncStatus]);
+
   const handleSelectTab = (tabId: string) => {
     setActiveTabId(tabId);
     setViewingTerminal(true);
@@ -972,20 +993,6 @@ function App() {
             onOpenLocalTerminal={() => void openLocalTerminal()}
           />
         );
-      case "groups":
-        return (
-          <GroupsPage
-            groups={groups}
-            hosts={hosts}
-            onAddGroup={handleAddGroup}
-            onAddServer={(groupId) => {
-              setNavPage("hosts");
-              openAddDrawer(groupId);
-            }}
-            onRenameGroup={handleRenameGroup}
-            onDeleteGroup={handleDeleteGroup}
-          />
-        );
       case "keys":
         return (
           <KeysPage
@@ -1021,6 +1028,8 @@ function App() {
               applyImportedSettings((settings ?? undefined) as Record<string, unknown> | undefined);
             }}
             onSyncDataRefresh={refreshSyncData}
+            focusSync={focusSettingsSync}
+            onFocusSyncHandled={() => setFocusSettingsSync(false)}
           />
         );
       default:
@@ -1171,6 +1180,7 @@ function App() {
       <AppShell
         activePage={navPage}
         onNavigate={handleNavigate}
+        onSignInForSync={handleSignInForSync}
         statusMessage={statusMessage}
         syncStatus={syncStatus}
         showTabs={hasTabs}
@@ -1345,7 +1355,11 @@ function App() {
       />
 
       <ConnectionErrorDialog
-        open={connectionError !== null}
+        open={
+          connectionError !== null &&
+          viewingTerminal &&
+          activeTabId === connectionError.sessionId
+        }
         title="Connection failed"
         hostName={connectionError?.hostName ?? ""}
         message={connectionError?.message ?? ""}

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEffect, useRef } from "react";
 import {
   Archive,
   EthernetPort,
@@ -40,6 +41,8 @@ interface SettingsPageProps {
   onSyncStatusChange: (status: SyncStatus) => void;
   onSyncVaultApplied: (settings: unknown) => void;
   onSyncDataRefresh: () => Promise<void>;
+  focusSync?: boolean;
+  onFocusSyncHandled?: () => void;
 }
 
 function Section({
@@ -91,7 +94,22 @@ export function SettingsPage({
   onSyncStatusChange,
   onSyncVaultApplied,
   onSyncDataRefresh,
+  focusSync = false,
+  onFocusSyncHandled,
 }: SettingsPageProps) {
+  const syncRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!focusSync) return;
+    const node = syncRef.current;
+    if (node) {
+      window.requestAnimationFrame(() => {
+        node.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+    onFocusSyncHandled?.();
+  }, [focusSync, onFocusSyncHandled]);
+
   return (
     <div
       className="flex h-full flex-col overflow-y-auto"
@@ -197,13 +215,15 @@ export function SettingsPage({
           </div>
         </Section>
 
-        <SyncSection
-          status={syncStatus}
-          onStatusChange={onSyncStatusChange}
-          getSettings={syncGetSettings}
-          onVaultApplied={onSyncVaultApplied}
-          onDataRefresh={onSyncDataRefresh}
-        />
+        <div ref={syncRef}>
+          <SyncSection
+            status={syncStatus}
+            onStatusChange={onSyncStatusChange}
+            getSettings={syncGetSettings}
+            onVaultApplied={onSyncVaultApplied}
+            onDataRefresh={onSyncDataRefresh}
+          />
+        </div>
 
         <Section
           icon={<Archive size={16} />}

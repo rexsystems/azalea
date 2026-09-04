@@ -1,18 +1,19 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Folder, KeyRound, Server, Settings } from "lucide-react";
+import { KeyRound, Server, Settings } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { SyncStatus } from "../lib/api";
 import { maskEmail } from "../lib/utils";
 import { PlanBadge } from "./PlanBadge";
 import { TitleBar } from "./TitleBar";
 
-export type NavPage = "hosts" | "groups" | "keys" | "settings";
+export type NavPage = "hosts" | "keys" | "settings";
 
 interface AppShellProps {
   children: ReactNode;
   activePage: NavPage;
   onNavigate: (page: NavPage) => void;
+  onSignInForSync?: () => void;
   statusMessage?: string;
   syncStatus?: SyncStatus | null;
   showTabs?: boolean;
@@ -24,7 +25,6 @@ interface AppShellProps {
 
 const navItems: { id: NavPage; label: string; icon: typeof Server }[] = [
   { id: "hosts", label: "Hosts", icon: Server },
-  { id: "groups", label: "Groups", icon: Folder },
   { id: "keys", label: "Keychain", icon: KeyRound },
   { id: "settings", label: "Settings", icon: Settings },
 ];
@@ -33,6 +33,7 @@ export function AppShell({
   children,
   activePage,
   onNavigate,
+  onSignInForSync,
   statusMessage,
   syncStatus,
   showTabs,
@@ -126,7 +127,10 @@ export function AppShell({
             ) : (
               <button
                 type="button"
-                onClick={() => onNavigate("settings")}
+                onClick={() => {
+                  if (onSignInForSync) onSignInForSync();
+                  else onNavigate("settings");
+                }}
                 className="mb-2 w-full rounded-lg border px-2.5 py-2 text-left text-xs transition-ui hover-subtle"
                 style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
               >

@@ -186,12 +186,12 @@ pub fn import_data_file(
         });
     }
 
-    let termius = import_termius_json(&db, &data, replace)?;
+    let imported = import_json_hosts(&db, &data, replace)?;
     Ok(ImportResult {
-        hosts_imported: termius.hosts,
-        keys_imported: termius.keys,
-        groups_imported: termius.groups,
-        format: "termius-json".to_string(),
+        hosts_imported: imported.hosts,
+        keys_imported: imported.keys,
+        groups_imported: imported.groups,
+        format: "json-hosts".to_string(),
     })
 }
 
@@ -312,17 +312,17 @@ pub fn import_azalea_backup_db(
     })
 }
 
-struct TermiusImportCounts {
+struct JsonHostImportCounts {
     hosts: usize,
     keys: usize,
     groups: usize,
 }
 
-fn import_termius_json(
+fn import_json_hosts(
     db: &tauri::State<'_, SharedDatabase>,
     data: &str,
     replace: bool,
-) -> Result<TermiusImportCounts, String> {
+) -> Result<JsonHostImportCounts, String> {
     let value: Value =
         serde_json::from_str(data).map_err(|_| "Could not parse JSON import file.".to_string())?;
 
@@ -335,7 +335,7 @@ fn import_termius_json(
         db.clear_all_hosts().map_err(|err| err.to_string())?;
     }
 
-    let entries = extract_termius_entries(&value);
+    let entries = extract_json_host_entries(&value);
     if entries.is_empty() {
         return Err(
             "No hosts found. Use a JSON host export or an OpenSSH config (Host blocks).".to_string(),
@@ -374,7 +374,7 @@ fn import_termius_json(
         hosts_imported += 1;
     }
 
-    Ok(TermiusImportCounts {
+    Ok(JsonHostImportCounts {
         hosts: hosts_imported,
         keys: 0,
         groups: 0,
@@ -389,18 +389,18 @@ struct ParsedHostEntry {
     password: Option<String>,
 }
 
-fn extract_termius_entries(value: &Value) -> Vec<ParsedHostEntry> {
+fn extract_json_host_entries(value: &Value) -> Vec<ParsedHostEntry> {
     match value {
-        Value::Array(items) => items.iter().filter_map(parse_termius_object).collect(),
+        Value::Array(items) => items.iter().filter_map(parse_json_host_object).collect(),
         Value::Object(map) => {
             if let Some(hosts) = map.get("hosts").and_then(|v| v.as_array()) {
-                return hosts.iter().filter_map(parse_termius_object).collect();
+                return hosts.iter().filter_map(parse_json_host_object).collect();
             }
             if let Some(hosts) = map.get("data").and_then(|v| v.as_array()) {
-                return hosts.iter().filter_map(parse_termius_object).collect();
+                return hosts.iter().filter_map(parse_json_host_object).collect();
             }
             map.get("host")
-                .and_then(parse_termius_object)
+                .and_then(parse_json_host_object)
                 .into_iter()
                 .collect()
         }
@@ -408,7 +408,7 @@ fn extract_termius_entries(value: &Value) -> Vec<ParsedHostEntry> {
     }
 }
 
-fn parse_termius_object(value: &Value) -> Option<ParsedHostEntry> {
+fn parse_json_host_object(value: &Value) -> Option<ParsedHostEntry> {
     let obj = value.as_object()?;
     let ssh = obj.get("ssh").and_then(|v| v.as_object());
 
