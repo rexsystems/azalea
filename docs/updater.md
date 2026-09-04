@@ -39,7 +39,7 @@ CI builds macOS with `--bundles app,dmg` — `app` is required so Tauri can emit
 
 ## After each master release
 
-1. CI builds Windows, Linux (deb/rpm/AppImage), and macOS (arm64 + x64 DMG).
+1. CI builds Windows, Linux (deb/rpm/AppImage), and macOS on `macos-14` (Apple Silicon natively + Intel via `--target x86_64-apple-darwin`).
 2. CI merges platform fragments into `latest.json` and uploads it with the installers to GitHub Releases.
 3. Copy `latest.json` to **azalea-web** `public/updates/` so azalea.rexsystems.me serves the manifest:
 

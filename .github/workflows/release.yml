@@ -144,15 +144,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
-            rust_target: aarch64-apple-darwin
+          - rust_target: aarch64-apple-darwin
             platform_key: darwin-aarch64
             artifact_name: macos-arm64
-          - os: macos-13
-            rust_target: x86_64-apple-darwin
+          - rust_target: x86_64-apple-darwin
             platform_key: darwin-x86_64
             artifact_name: macos-x64
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-14
 
     steps:
       - uses: actions/checkout@v5
