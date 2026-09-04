@@ -1,7 +1,45 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Copy, Minus, Square, X } from "./icons";
+import { Minus, X } from "./icons";
 import { Logo } from "./Logo";
+
+function MaximizeIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" aria-hidden>
+      <rect
+        x="1.5"
+        y="1.5"
+        width="9"
+        height="9"
+        rx="1"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+    </svg>
+  );
+}
+
+function RestoreIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" aria-hidden>
+      <rect
+        x="3.5"
+        y="1.5"
+        width="7"
+        height="7"
+        rx="0.8"
+        stroke="currentColor"
+        strokeWidth="1.35"
+      />
+      <path
+        d="M1.5 4.5h6.2c.44 0 .8.36.8.8V11.5H2.3c-.44 0-.8-.36-.8-.8V4.5Z"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        fill="none"
+      />
+    </svg>
+  );
+}
 
 export function TitleBar({ title }: { title?: string }) {
   const [maximized, setMaximized] = useState(false);
@@ -59,11 +97,7 @@ export function TitleBar({ title }: { title?: string }) {
           title={maximized ? "Restore" : "Maximize"}
           tabIndex={-1}
         >
-          {maximized ? (
-            <Copy size={13} style={{ transform: "scaleX(-1)" }} />
-          ) : (
-            <Square size={12} />
-          )}
+          {maximized ? <RestoreIcon size={12} /> : <MaximizeIcon size={12} />}
         </button>
         <button
           onClick={() => void appWindow.close()}

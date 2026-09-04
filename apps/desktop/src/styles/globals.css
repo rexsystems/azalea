@@ -259,6 +259,21 @@ textarea,
   background: var(--bg-card-hover) !important;
 }
 
+.home-action-primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, #000) !important;
+}
+
+.key-card-actions button {
+  background: var(--bg-panel) !important;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, var(--text-muted)) !important;
+  color: var(--text-secondary) !important;
+}
+
+.key-card-actions button:hover:not(:disabled) {
+  background: var(--bg-card-hover) !important;
+  color: var(--text) !important;
+}
+
 .titlebar-btn {
   display: flex;
   align-items: center;

@@ -206,22 +206,10 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
               Keychain
             </h2>
             <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
-              Generate, import, and install SSH identities
+              {keys.length === 0
+                ? "Generate, import, and install SSH identities"
+                : `${keys.length} key${keys.length === 1 ? "" : "s"}`}
             </p>
-          </div>
-          <div
-            className="rounded-xl border px-3 py-2 shrink-0"
-            style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
-          >
-            <div
-              className="text-[10px] uppercase tracking-wide"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Keys
-            </div>
-            <div className="mt-1 text-sm font-medium tabular-nums" style={{ color: "var(--text)" }}>
-              {keys.length}
-            </div>
           </div>
         </div>
 
@@ -420,7 +408,7 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                         </p>
 
                         <div
-                          className="mt-auto flex flex-wrap gap-1.5 border-t pt-3"
+                          className="key-card-actions mt-auto flex flex-wrap gap-1.5 border-t pt-3"
                           style={{ borderColor: "var(--border-subtle)", marginTop: "1rem" }}
                         >
                           <Button

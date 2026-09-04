@@ -56,38 +56,46 @@ export function Slider({
   const pct = max === min ? 0 : ((value - min) / (max - min)) * 100;
 
   return (
-    <div className="flex max-w-xs select-none flex-col gap-2">
+    <div className="flex max-w-md select-none flex-col gap-2">
       {label && (
         <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
-          {label} — {formatValue(value)}
+          {label}
         </span>
       )}
 
-      <div
-        ref={trackRef}
-        className="relative flex h-7 cursor-pointer touch-none items-center"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
+      <div className="flex items-center gap-3">
         <div
-          className="h-1.5 w-full rounded-full"
-          style={{ background: "var(--bg-card)" }}
+          ref={trackRef}
+          className="relative flex h-7 min-w-0 flex-1 cursor-pointer touch-none items-center"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
         >
           <div
-            className="h-full rounded-full"
-            style={{ width: `${pct}%`, background: "var(--accent)" }}
+            className="h-1.5 w-full rounded-full"
+            style={{ background: "var(--bg-card)" }}
+          >
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${pct}%`, background: "var(--accent)" }}
+            />
+          </div>
+          <div
+            className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              left: `${pct}%`,
+              background: "var(--text)",
+              boxShadow: "0 0 0 2px var(--accent)",
+            }}
           />
         </div>
-        <div
-          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
-          style={{
-            left: `${pct}%`,
-            background: "var(--text)",
-            boxShadow: "0 0 0 2px var(--accent)",
-          }}
-        />
+        <span
+          className="w-12 shrink-0 text-right text-sm font-medium tabular-nums"
+          style={{ color: "var(--text)" }}
+        >
+          {formatValue(value)}
+        </span>
       </div>
     </div>
   );

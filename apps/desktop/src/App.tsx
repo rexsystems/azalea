@@ -28,6 +28,7 @@ import { AppShell, type NavPage } from "./components/AppShell";
 import { ConnectionScreen } from "./components/ConnectionScreen";
 import { FileBrowserPanel } from "./components/FileBrowserPanel";
 import { ForwardsPopover } from "./components/ForwardsPopover";
+import { HomePage } from "./components/HomePage";
 import { HostsPage } from "./components/HostsPage";
 import { KeysPage } from "./components/KeysPage";
 import { SettingsPage } from "./components/SettingsPage";
@@ -111,7 +112,7 @@ function App() {
   const [connectingHostId, setConnectingHostId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready");
 
-  const [navPage, setNavPage] = useState<NavPage>("hosts");
+  const [navPage, setNavPage] = useState<NavPage>("home");
   const [viewingTerminal, setViewingTerminal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -970,7 +971,7 @@ function App() {
     });
   };
 
-  const showHostDrawer = drawerOpen && navPage === "hosts";
+  const showHostDrawer = drawerOpen && (navPage === "hosts" || navPage === "home");
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -1034,6 +1035,24 @@ function App() {
 
   const renderNavPage = () => {
     switch (navPage) {
+      case "home":
+        return (
+          <HomePage
+            hosts={hosts}
+            keys={keys}
+            openSessions={tabs.filter((t) => !t.poppedOut).length}
+            syncStatus={syncStatus}
+            connectingHostId={connectingHostId}
+            onConnect={(host) => void connectToHost(host)}
+            onAddServer={() => openAddDrawer()}
+            onOpenLocalTerminal={() => void openLocalTerminal()}
+            onOpenHosts={() => handleNavigate("hosts")}
+            onOpenKeys={() => handleNavigate("keys")}
+            onOpenSettings={() => handleNavigate("settings")}
+            onSignIn={handleSignInForSync}
+            isMobile={isMobile}
+          />
+        );
       case "hosts":
         return (
           <HostsPage

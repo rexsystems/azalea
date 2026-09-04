@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { ArrowLeft, X } from "./icons";
+import { ArrowLeft, SquareTerminal, X } from "./icons";
+import { isLocalSession } from "../lib/api";
 
 interface TabBarProps {
   tabs: { id: string; title: string; status: string }[];
@@ -44,6 +45,7 @@ export function TabBar({
 
       {tabs.map((tab) => {
         const active = tab.id === activeTabId;
+        const local = isLocalSession(tab.id);
         const dotColor =
           tab.status === "connected"
             ? "#4ade80"
@@ -70,7 +72,18 @@ export function TabBar({
               onClick={() => onSelectTab(tab.id)}
               className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-3 pr-1.5"
             >
-              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: dotColor }} />
+              {local ? (
+                <SquareTerminal
+                  size={14}
+                  strokeWidth={1.75}
+                  style={{ color: active ? "var(--accent)" : "var(--text-muted)" }}
+                />
+              ) : (
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ background: dotColor }}
+                />
+              )}
               <span
                 className={`truncate font-medium ${isMobile ? "max-w-[120px]" : "max-w-[220px]"}`}
               >

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { KeyRound, Server, Settings, type AppIcon } from "./icons";
+import { Home, KeyRound, Server, Settings, type AppIcon } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import type { SyncStatus } from "../lib/api";
 import { maskEmail } from "../lib/utils";
@@ -8,7 +8,7 @@ import { PlanBadge } from "./PlanBadge";
 import { TitleBar } from "./TitleBar";
 import { Logo } from "./Logo";
 
-export type NavPage = "hosts" | "keys" | "settings";
+export type NavPage = "home" | "hosts" | "keys" | "settings";
 
 interface AppShellProps {
   children: ReactNode;
@@ -25,11 +25,67 @@ interface AppShellProps {
   immersive?: boolean;
 }
 
-const navItems: { id: NavPage; label: string; icon: AppIcon }[] = [
+const primaryNav: { id: NavPage; label: string; icon: AppIcon }[] = [
+  { id: "home", label: "Home", icon: Home },
+];
+
+const secondaryNav: { id: NavPage; label: string; icon: AppIcon }[] = [
   { id: "hosts", label: "Hosts", icon: Server },
-  { id: "keys", label: "Keys", icon: KeyRound },
+  { id: "keys", label: "Keychain", icon: KeyRound },
   { id: "settings", label: "Settings", icon: Settings },
 ];
+
+const allNav = [...primaryNav, ...secondaryNav];
+
+function NavButton({
+  id,
+  label,
+  icon: Icon,
+  active,
+  onNavigate,
+  compact = false,
+}: {
+  id: NavPage;
+  label: string;
+  icon: AppIcon;
+  active: boolean;
+  onNavigate: (page: NavPage) => void;
+  compact?: boolean;
+}) {
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={() => onNavigate(id)}
+        className="transition-ui flex flex-col items-center gap-1 rounded-xl px-2 py-2"
+        style={{
+          background: active ? "var(--nav-active)" : "transparent",
+          color: active ? "var(--text)" : "var(--text-muted)",
+        }}
+      >
+        <Icon size={20} strokeWidth={active ? 2.25 : 1.75} />
+        <span className="text-[10px] font-medium">{label === "Keychain" ? "Keys" : label}</span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(id)}
+      className={`transition-ui flex w-full items-center gap-3 rounded-lg px-3.5 py-[0.65rem] text-sm ${
+        active ? "" : "hover-subtle"
+      }`}
+      style={{
+        background: active ? "var(--nav-active)" : "transparent",
+        color: active ? "var(--text)" : "var(--text-muted)",
+      }}
+    >
+      <Icon size={18} strokeWidth={active ? 2 : 1.5} />
+      {label}
+    </button>
+  );
+}
 
 export function AppShell({
   children,
@@ -115,30 +171,20 @@ export function AppShell({
             style={{
               background: "var(--bg-panel)",
               borderColor: "var(--border-subtle)",
-              // Extra lift above Android/iOS gesture bars (safe-area is often 0 in WebView).
               paddingBottom: "max(1.35rem, calc(env(safe-area-inset-bottom, 0px) + 0.85rem))",
               paddingTop: "0.35rem",
             }}
           >
-            <div className="grid grid-cols-3 gap-1 px-2 pt-1.5">
-              {navItems.map(({ id, label, icon: Icon }) => {
-                const active = activePage === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => onNavigate(id)}
-                    className="transition-ui flex flex-col items-center gap-1 rounded-xl px-2 py-2"
-                    style={{
-                      background: active ? "var(--nav-active)" : "transparent",
-                      color: active ? "var(--text)" : "var(--text-muted)",
-                    }}
-                  >
-                    <Icon size={20} strokeWidth={active ? 2.25 : 1.75} />
-                    <span className="text-[10px] font-medium">{label}</span>
-                  </button>
-                );
-              })}
+            <div className="grid grid-cols-4 gap-1 px-2 pt-1.5">
+              {allNav.map((item) => (
+                <NavButton
+                  key={item.id}
+                  {...item}
+                  active={activePage === item.id}
+                  onNavigate={onNavigate}
+                  compact
+                />
+              ))}
             </div>
           </nav>
         )}
@@ -161,26 +207,34 @@ export function AppShell({
             borderColor: "var(--border-subtle)",
           }}
         >
-          <div className="flex-1 space-y-0.5 px-2 py-2.5">
-            {navItems.map(({ id, label, icon: Icon }) => {
-              const active = activePage === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => onNavigate(id)}
-                  className={`transition-ui flex w-full items-center gap-3 rounded-lg px-3.5 py-[0.65rem] text-sm ${
-                    active ? "" : "hover-subtle"
-                  }`}
-                  style={{
-                    background: active ? "var(--nav-active)" : "transparent",
-                    color: active ? "var(--text)" : "var(--text-muted)",
-                  }}
-                >
-                  <Icon size={18} strokeWidth={active ? 2 : 1.5} />
-                  {id === "keys" ? "Keychain" : label}
-                </button>
-              );
-            })}
+          <div className="flex-1 px-2 py-2.5">
+            <div className="space-y-0.5">
+              {primaryNav.map((item) => (
+                <NavButton
+                  key={item.id}
+                  {...item}
+                  active={activePage === item.id}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </div>
+
+            <div
+              className="my-3 mx-2 border-t"
+              style={{ borderColor: "var(--border-subtle)" }}
+              aria-hidden
+            />
+
+            <div className="space-y-0.5">
+              {secondaryNav.map((item) => (
+                <NavButton
+                  key={item.id}
+                  {...item}
+                  active={activePage === item.id}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            </div>
           </div>
 
           <div className="border-t px-3 py-3" style={{ borderColor: "var(--border-subtle)" }}>
