@@ -20,10 +20,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -32,12 +32,14 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Ensure Tauri CLI native binding
-        # npm optional-deps bug: lockfile from Linux may omit darwin/win bindings
-        # https://github.com/npm/cli/issues/4828
-        run: npm install @tauri-apps/cli --workspace @azalea/desktop --force
+      - name: Reinstall platform-native bindings
+        # npm#4828 / workspaces: optional rollup/esbuild/cli binaries can be skipped
+        shell: bash
+        run: |
+          npm install --workspace @azalea/desktop --no-save --force \
+            rollup esbuild @tauri-apps/cli
 
       - name: Build Azalea (Windows)
         run: npm run build:ci
@@ -73,10 +75,10 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -101,10 +103,12 @@ jobs:
             libfuse2
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Ensure Tauri CLI native binding
-        run: npm install @tauri-apps/cli --workspace @azalea/desktop --force
+      - name: Reinstall platform-native bindings
+        run: |
+          npm install --workspace @azalea/desktop --no-save --force \
+            rollup esbuild @tauri-apps/cli
 
       - name: Build Azalea (deb + rpm + AppImage)
         run: npm run build:linux:ci
@@ -151,10 +155,10 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -165,10 +169,13 @@ jobs:
           targets: ${{ matrix.rust_target }}
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Ensure Tauri CLI native binding
-        run: npm install @tauri-apps/cli --workspace @azalea/desktop --force
+      - name: Reinstall platform-native bindings
+        run: |
+          npm install --workspace @azalea/desktop --no-save --force \
+            rollup esbuild @tauri-apps/cli
+          node -e "require('rollup'); require('@tauri-apps/cli'); console.log('native bindings ok')"
 
       - name: Build Azalea (macOS)
         run: npm run build:macos:ci -- --target ${{ matrix.rust_target }}
@@ -208,7 +215,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download artifacts
         uses: actions/download-artifact@v4

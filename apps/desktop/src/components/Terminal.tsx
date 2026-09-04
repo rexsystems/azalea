@@ -306,7 +306,6 @@ export function TerminalView({
       allowTransparency: false,
       rightClickSelectsWord: !settingsRef.current.rightClickToPaste,
       theme: xtermPalette(),
-      overviewRuler: { width: 12 },
     });
 
     const fitAddon = new FitAddon();
