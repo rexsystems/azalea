@@ -65,6 +65,10 @@ function pickArtifact() {
 const artifact = pickArtifact();
 if (!artifact) {
   console.error("No updater artifact found under", bundleDir);
+  console.error(
+    "Files present:",
+    basenames.map((f) => f.name).sort().join(", ") || "(none)",
+  );
   process.exit(1);
 }
 
