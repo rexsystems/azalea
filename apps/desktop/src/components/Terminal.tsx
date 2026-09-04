@@ -168,6 +168,31 @@ function xtermPalette() {
     };
   }
 
+  if (theme === "ember") {
+    return {
+      background: terminalBgColor(),
+      foreground: "#faf3eb",
+      cursor: "#e8913a",
+      selectionBackground: "#e8913a40",
+      black: "#1c1411",
+      red: "#f87171",
+      green: "#86efac",
+      yellow: "#fbbf24",
+      blue: "#93c5fd",
+      magenta: "#f0abfc",
+      cyan: "#67e8f9",
+      white: "#faf3eb",
+      brightBlack: "#9a7b66",
+      brightRed: "#fca5a5",
+      brightGreen: "#bbf7d0",
+      brightYellow: "#fde68a",
+      brightBlue: "#bfdbfe",
+      brightMagenta: "#f5d0fe",
+      brightCyan: "#a5f3fc",
+      brightWhite: "#ffffff",
+    };
+  }
+
   return {
     background: terminalBgColor(),
     foreground: "#eceef1",

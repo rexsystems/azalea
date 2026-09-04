@@ -11,9 +11,12 @@
     "dev": "npm run tauri dev --workspace @azalea/desktop",
     "build": "npm run tauri build --workspace @azalea/desktop -- --no-sign",
     "build:ci": "npm run tauri build --workspace @azalea/desktop",
-    "build:linux": "npm run tauri build --workspace @azalea/desktop -- --bundles deb,rpm --no-sign",
+    "build:linux": "npm run tauri build --workspace @azalea/desktop -- --bundles deb,rpm,appimage --no-sign",
+    "build:linux:ci": "npm run tauri build --workspace @azalea/desktop -- --bundles deb,rpm,appimage",
     "build:rpm": "npm run tauri build --workspace @azalea/desktop -- --bundles rpm --no-sign",
     "build:deb": "npm run tauri build --workspace @azalea/desktop -- --bundles deb --no-sign",
+    "build:macos": "npm run tauri build --workspace @azalea/desktop -- --bundles dmg --no-sign",
+    "build:macos:ci": "npm run tauri build --workspace @azalea/desktop -- --bundles dmg",
     "lint": "npm run build --workspace @azalea/desktop",
     "dev:web": "npm run dev --prefix apps/azalea-web"
   }

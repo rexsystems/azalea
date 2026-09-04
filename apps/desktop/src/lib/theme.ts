@@ -1,4 +1,4 @@
-export type ThemeId = "midnight" | "lilac" | "graphite" | "ocean" | "noir";
+export type ThemeId = "midnight" | "lilac" | "graphite" | "ocean" | "noir" | "ember";
 
 export interface ThemeDefinition {
   id: ThemeId;
@@ -12,6 +12,7 @@ export const themes: ThemeDefinition[] = [
   { id: "graphite", name: "Graphite", preview: "#52525b" },
   { id: "ocean", name: "Ocean", preview: "#0891b2" },
   { id: "noir", name: "Noir", preview: "#0a0a0a" },
+  { id: "ember", name: "Ember", preview: "#d97706" },
 ];
 
 const STORAGE_KEY = "azalea-theme";

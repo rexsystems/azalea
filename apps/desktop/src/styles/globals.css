@@ -96,7 +96,7 @@
   --shadow: none;
 }
 
-/* ── Theme: Noir (azalea-web style) ── */
+/* ── Theme: Noir ── */
 [data-theme="noir"] {
   --bg-base: #000000;
   --bg-panel: #0a0a0a;
@@ -114,6 +114,26 @@
   --accent-fg: #000000;
   --nav-active: #141414;
   --terminal-bg: #000000;
+  --shadow: none;
+}
+
+/* ── Theme: Ember ── */
+[data-theme="ember"] {
+  --bg-base: #140e0c;
+  --bg-panel: #1c1411;
+  --bg-card: #261c17;
+  --bg-card-hover: #32251e;
+  --bg-input: #1c1411;
+  --border: #3d2c24;
+  --border-subtle: #2a1e18;
+  --text: #faf3eb;
+  --text-secondary: #d4b8a0;
+  --text-muted: #9a7b66;
+  --accent: #e8913a;
+  --accent-hover: #f0a85a;
+  --accent-muted: rgba(232, 145, 58, 0.14);
+  --nav-active: #261c17;
+  --terminal-bg: #100b09;
   --shadow: none;
 }
 

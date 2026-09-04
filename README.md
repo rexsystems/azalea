@@ -52,15 +52,18 @@ npm run build
 # CI / signed release build
 npm run build:ci
 
-# Linux packages
-npm run build:linux   # deb + rpm
+# Linux packages (deb + rpm + AppImage)
+npm run build:linux
 npm run build:rpm
 npm run build:deb
+
+# macOS DMG (run on a Mac)
+npm run build:macos
 ```
 
-Pushes to `master` build Windows, deb, and rpm via GitHub Actions.
+Pushes to `master` build **Windows**, **Linux** (deb / rpm / AppImage), and **macOS** (Apple Silicon + Intel) via GitHub Actions. Signed updater manifests are published as `latest.json`.
 
-Output lives under `apps/desktop/src-tauri/target/release/bundle/`.
+Output lives under `apps/desktop/src-tauri/target/release/bundle/` (or `target/<triple>/release/bundle/` for cross-arch macOS). See [docs/updater.md](docs/updater.md).
 
 ## Project structure
 

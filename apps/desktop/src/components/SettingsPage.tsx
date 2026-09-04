@@ -251,7 +251,7 @@ export function SettingsPage({
         </Section>
 
         <Section icon={<Palette size={16} />} title="Theme" description="Pick a look for the app">
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             {themes.map((t) => {
               const selected = theme === t.id;
               return (
