@@ -137,6 +137,27 @@
   --shadow: none;
 }
 
+/* ── Theme: Snow (light) ── */
+[data-theme="snow"] {
+  --bg-base: #eef1f6;
+  --bg-panel: #ffffff;
+  --bg-card: #f5f7fb;
+  --bg-card-hover: #e8edf5;
+  --bg-input: #ffffff;
+  --border: #cfd7e4;
+  --border-subtle: #e2e8f0;
+  --text: #141820;
+  --text-secondary: #475569;
+  --text-muted: #748094;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-muted: rgba(37, 99, 235, 0.1);
+  --accent-fg: #ffffff;
+  --nav-active: #e8edf5;
+  --terminal-bg: #f8fafc;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -476,4 +497,49 @@ textarea,
   background: var(--accent-muted);
   color: var(--accent);
 }
+
+/* ── Mobile layout ── */
+html[data-mobile="true"],
+html[data-mobile="true"] body,
+html[data-mobile="true"] #root {
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+html[data-mobile="true"] .drawer-panel {
+  position: fixed;
+  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 80;
+  width: 100% !important;
+  max-width: none;
+  border-left: none;
+  box-shadow: none;
+  /* Lift header above status / gesture chrome; WebView often reports 0 safe-area. */
+  padding-top: max(2.75rem, calc(env(safe-area-inset-top, 0px) + 1rem));
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+html[data-mobile="true"] .file-browser-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  width: 100% !important;
+  border-left: none;
+}
+
+html[data-mobile="true"] .settings-shell {
+  max-width: none;
+  padding: 1rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+}
+
+html[data-mobile="true"] .app-shell-mobile {
+  /* Avoid 100vh keyboard jumps on Android WebView where possible */
+  height: 100%;
+  min-height: 100dvh;
+}
+
 

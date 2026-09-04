@@ -131,6 +131,16 @@ fn keyring_entry(account: &str) -> anyhow::Result<keyring::Entry> {
     Ok(keyring::Entry::new(SERVICE_NAME, account)?)
 }
 
+/// Android/iOS (and other unsupported targets) use keyring's in-memory mock
+/// store. `set_password` succeeds but the secret dies with the Entry, so we
+/// must never treat that as success or we skip writing the encrypted file.
+fn keyring_persists() -> bool {
+    matches!(
+        keyring::default::default_credential_builder().persistence(),
+        keyring::credential::CredentialPersistence::UntilDelete
+    )
+}
+
 fn keyring_set(account: &str, secret: &str) -> anyhow::Result<()> {
     keyring_entry(account)?.set_password(secret)?;
     Ok(())
@@ -157,35 +167,39 @@ fn remove_if_present(path: &Path) {
     }
 }
 
-/// Stores a secret in the OS keychain, falling back to an encrypted file only
-/// when the keychain is not usable on this machine.
+/// Stores a secret in the OS keychain when it actually persists; otherwise
+/// writes an encrypted file under the app data directory.
 fn store_secret(account: &str, encrypted_path: &Path, legacy_path: &Path, secret: &str) -> anyhow::Result<()> {
-    match keyring_set(account, secret) {
-        Ok(()) => {
-            remove_if_present(encrypted_path);
-            remove_if_present(legacy_path);
-            Ok(())
-        }
-        Err(_) => {
-            write_encrypted(encrypted_path, secret)?;
-            remove_if_present(legacy_path);
-            Ok(())
+    if keyring_persists() {
+        match keyring_set(account, secret) {
+            Ok(()) => {
+                remove_if_present(encrypted_path);
+                remove_if_present(legacy_path);
+                return Ok(());
+            }
+            Err(_) => {}
         }
     }
+
+    write_encrypted(encrypted_path, secret)?;
+    remove_if_present(legacy_path);
+    Ok(())
 }
 
-/// Reads a secret, preferring the keychain. Secrets found in the legacy
-/// plaintext files are migrated into the keychain and the plaintext removed.
+/// Reads a secret, preferring a persistent OS keychain. Secrets found in the
+/// legacy plaintext files are migrated into secure storage and removed.
 fn load_secret(account: &str, encrypted_path: &Path, legacy_path: &Path) -> anyhow::Result<Option<String>> {
-    if let Ok(Some(secret)) = keyring_get(account) {
-        remove_if_present(encrypted_path);
-        remove_if_present(legacy_path);
-        return Ok(Some(secret));
+    if keyring_persists() {
+        if let Ok(Some(secret)) = keyring_get(account) {
+            remove_if_present(encrypted_path);
+            remove_if_present(legacy_path);
+            return Ok(Some(secret));
+        }
     }
 
     if encrypted_path.exists() {
         let secret = read_encrypted(encrypted_path)?;
-        if keyring_set(account, &secret).is_ok() {
+        if keyring_persists() && keyring_set(account, &secret).is_ok() {
             remove_if_present(encrypted_path);
         }
         return Ok(Some(secret));
@@ -203,7 +217,10 @@ fn load_secret(account: &str, encrypted_path: &Path, legacy_path: &Path) -> anyh
 fn delete_secret(account: &str, encrypted_path: &Path, legacy_path: &Path) -> anyhow::Result<()> {
     remove_if_present(encrypted_path);
     remove_if_present(legacy_path);
-    keyring_delete(account)
+    if keyring_persists() {
+        keyring_delete(account)?;
+    }
+    Ok(())
 }
 
 pub fn store_host_password(host_id: &str, password: &str) -> anyhow::Result<()> {

@@ -8,6 +8,7 @@ interface HostTileProps {
   onConnect: (host: Host) => void;
   onEdit: (host: Host) => void;
   onContextMenu?: (e: React.MouseEvent, host: Host) => void;
+  compact?: boolean;
 }
 
 export function HostTile({
@@ -16,6 +17,7 @@ export function HostTile({
   onConnect,
   onEdit,
   onContextMenu,
+  compact = false,
 }: HostTileProps) {
   return (
     <div
@@ -27,22 +29,26 @@ export function HostTile({
         type="button"
         disabled={connecting}
         onClick={() => onConnect(host)}
-        className="hover-subtle transition-ui flex w-full items-center gap-3.5 rounded-xl border px-3.5 py-3.5 text-left disabled:opacity-50"
+        className={`hover-subtle transition-ui flex w-full items-center text-left disabled:opacity-50 ${
+          compact
+            ? "gap-3 rounded-xl border px-3 py-3"
+            : "gap-3.5 rounded-xl border px-3.5 py-3.5"
+        }`}
         style={{
           background: "var(--bg-card)",
           borderColor: "var(--border-subtle)",
         }}
       >
-        <HostMark seed={host.id || host.name} size={48} rounded={10} />
+        <HostMark seed={host.id || host.name} size={compact ? 40 : 48} rounded={10} />
         <div className="min-w-0 flex-1">
           <div
-            className="truncate text-base font-medium"
+            className={`truncate font-medium ${compact ? "text-sm" : "text-base"}`}
             style={{ color: "var(--text)" }}
           >
             {host.name}
           </div>
           <div className="truncate text-sm" style={{ color: "var(--text-muted)" }}>
-            ssh, {host.username}
+            {host.username}@{host.hostname}
           </div>
         </div>
         {connecting && (
@@ -52,26 +58,19 @@ export function HostTile({
         )}
       </button>
 
-      {/* Edit pencil on hover */}
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
           onEdit(host);
         }}
-        className="transition-ui absolute right-2 top-2 rounded-md p-1.5 opacity-0 group-hover:opacity-100"
+        className={`transition-ui absolute right-2 top-2 rounded-md p-1.5 ${
+          compact ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
         style={{
           background: "var(--bg-panel)",
           color: "var(--text-secondary)",
           border: "1px solid var(--border-subtle)",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.color = "var(--text)";
-          e.currentTarget.style.borderColor = "var(--border)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.color = "var(--text-secondary)";
-          e.currentTarget.style.borderColor = "var(--border-subtle)";
         }}
         aria-label="Edit server"
       >
@@ -89,6 +88,7 @@ interface GroupSectionProps {
   onEditHost: (host: Host) => void;
   onGroupContextMenu: (e: React.MouseEvent, group: HostGroup | null) => void;
   onHostContextMenu: (e: React.MouseEvent, host: Host) => void;
+  compact?: boolean;
 }
 
 export function GroupSection({
@@ -99,6 +99,7 @@ export function GroupSection({
   onEditHost,
   onGroupContextMenu,
   onHostContextMenu,
+  compact = false,
 }: GroupSectionProps) {
   const title = group?.name ?? "Ungrouped";
 
@@ -134,10 +135,16 @@ export function GroupSection({
             color: "var(--text-muted)",
           }}
         >
-          Empty group — right-click to add a server
+          Empty group — add a server
         </div>
       ) : (
-        <div className="grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
+        <div
+          className={
+            compact
+              ? "flex flex-col gap-2"
+              : "grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2"
+          }
+        >
           {hosts.map((host) => (
             <HostTile
               key={host.id}
@@ -146,6 +153,7 @@ export function GroupSection({
               onConnect={onConnect}
               onEdit={onEditHost}
               onContextMenu={onHostContextMenu}
+              compact={compact}
             />
           ))}
         </div>

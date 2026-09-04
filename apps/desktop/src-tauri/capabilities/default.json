@@ -17,7 +17,9 @@
     "core:window:allow-start-dragging",
     "core:webview:allow-create-webview-window",
     "opener:default",
-    "clipboard-manager:default",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
+
     "dialog:default",
     "updater:default",
     "process:allow-restart"

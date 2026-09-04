@@ -14,6 +14,7 @@ permissions:
 env:
   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+  VITE_AZALEA_BUILD: ${{ github.run_number }}
 
 jobs:
   build-windows:
@@ -175,7 +176,9 @@ jobs:
             rollup esbuild @tauri-apps/cli
           node -e "require('rollup'); require('@tauri-apps/cli'); console.log('native bindings ok')"
 
-      - name: Build Azalea (macOS)
+      - name: Build Azalea (macOS .app)
+        env:
+          CI: "true"
         run: npm run build:macos:ci -- --target ${{ matrix.rust_target }}
 
       - name: Read version
@@ -183,14 +186,29 @@ jobs:
         run: |
           VERSION=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          ARCH_SUFFIX="${{ matrix.rust_target }}"
+          ARCH_SUFFIX="${ARCH_SUFFIX/-apple-darwin/}"
+          echo "arch_suffix=$ARCH_SUFFIX" >> "$GITHUB_OUTPUT"
+
+      - name: Create DMG
+        id: dmg
+        run: |
+          BUNDLE="apps/desktop/src-tauri/target/${{ matrix.rust_target }}/release/bundle"
+          if [ ! -d "$BUNDLE/macos" ]; then
+            BUNDLE="apps/desktop/src-tauri/target/release/bundle"
+          fi
+          APP="$BUNDLE/macos/Azalea.app"
+          DMG_DIR="$BUNDLE/dmg"
+          mkdir -p "$DMG_DIR"
+          DMG="$DMG_DIR/Azalea_${{ steps.meta.outputs.version }}_${{ steps.meta.outputs.arch_suffix }}.dmg"
+          chmod +x .github/create-macos-dmg.sh
+          .github/create-macos-dmg.sh "$APP" "$DMG" "Azalea"
+          echo "bundle_dir=$BUNDLE" >> "$GITHUB_OUTPUT"
 
       - name: Write updater fragment
         id: fragment
         run: |
-          BUNDLE="apps/desktop/src-tauri/target/${{ matrix.rust_target }}/release/bundle"
-          if [ ! -d "$BUNDLE" ]; then
-            BUNDLE="apps/desktop/src-tauri/target/release/bundle"
-          fi
+          BUNDLE="${{ steps.dmg.outputs.bundle_dir }}"
           node .github/write-latest-json.mjs \
             ${{ steps.meta.outputs.version }} \
             "$BUNDLE" \

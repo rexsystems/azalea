@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import * as api from "../lib/api";
+import { copyText } from "../lib/clipboard";
 import { maskEmail } from "../lib/utils";
 import { getStoredAutoSync, setStoredAutoSync } from "../lib/settings";
 import { Button } from "./ui/Button";
@@ -281,7 +282,7 @@ export function SyncSection({
 
   const copyRecovery = async () => {
     if (!recoveryKey) return;
-    await navigator.clipboard.writeText(recoveryKey);
+    await copyText(recoveryKey);
     setRecoveryCopied(true);
     setTimeout(() => setRecoveryCopied(false), 1500);
   };

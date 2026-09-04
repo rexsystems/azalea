@@ -1,5 +1,6 @@
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { isMobileRuntime } from "../hooks/useIsMobile";
 
 export type UpdateCheckResult =
   | { status: "current" }
@@ -7,7 +8,10 @@ export type UpdateCheckResult =
   | { status: "unavailable"; message: string };
 
 export function isUpdaterSupported(): boolean {
-  return !import.meta.env.DEV;
+  if (import.meta.env.DEV) return false;
+  // Desktop-only: updater targets Win/Linux/macOS installers, not Android APKs.
+  if (isMobileRuntime()) return false;
+  return true;
 }
 
 export function formatUpdateError(error: unknown): string {
@@ -25,6 +29,10 @@ export function formatUpdateError(error: unknown): string {
     return "Could not reach the update server. Check your internet connection and try again.";
   }
 
+  if (/unexpected\s+os|unsupported\s+os|unknown\s+os/i.test(message)) {
+    return "Auto-updates are not available on this platform.";
+  }
+
   return message.replace(/^Error:\s*/i, "");
 }
 
@@ -38,7 +46,9 @@ export async function checkForUpdate(): Promise<UpdateCheckResult> {
   if (!isUpdaterSupported()) {
     return {
       status: "unavailable",
-      message: "Auto-updates work in release builds only, not in dev mode.",
+      message: isMobileRuntime()
+        ? "Auto-updates are for desktop builds. Install a new APK when a mobile release is ready."
+        : "Auto-updates work in release builds only, not in dev mode.",
     };
   }
 

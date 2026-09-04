@@ -8,6 +8,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
+import { copyText } from "../lib/clipboard";
 import type { TerminalSettings } from "../lib/settings";
 import * as api from "../lib/api";
 
@@ -193,6 +194,31 @@ function xtermPalette() {
     };
   }
 
+  if (theme === "snow") {
+    return {
+      background: terminalBgColor(),
+      foreground: "#1e293b",
+      cursor: "#2563eb",
+      selectionBackground: "#2563eb33",
+      black: "#0f172a",
+      red: "#dc2626",
+      green: "#16a34a",
+      yellow: "#ca8a04",
+      blue: "#2563eb",
+      magenta: "#9333ea",
+      cyan: "#0891b2",
+      white: "#334155",
+      brightBlack: "#64748b",
+      brightRed: "#ef4444",
+      brightGreen: "#22c55e",
+      brightYellow: "#eab308",
+      brightBlue: "#3b82f6",
+      brightMagenta: "#a855f7",
+      brightCyan: "#06b6d4",
+      brightWhite: "#0f172a",
+    };
+  }
+
   return {
     background: terminalBgColor(),
     foreground: "#eceef1",
@@ -339,7 +365,7 @@ export function TerminalView({
     const copySelection = () => {
       if (!settingsRef.current.selectToCopy || !term.hasSelection()) return;
       const text = term.getSelection();
-      if (text) void navigator.clipboard.writeText(text);
+      if (text) void copyText(text);
     };
 
     const onMouseUp = (e: MouseEvent) => {

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Archive,
   EthernetPort,
@@ -9,6 +9,7 @@ import {
   Download,
   Upload,
 } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
 import type { ThemeId } from "../lib/theme";
 import { themes } from "../lib/theme";
 import {
@@ -98,6 +99,11 @@ export function SettingsPage({
   onFocusSyncHandled,
 }: SettingsPageProps) {
   const syncRef = useRef<HTMLDivElement>(null);
+  const [appVersion, setAppVersion] = useState("…");
+
+  useEffect(() => {
+    void getVersion().then(setAppVersion).catch(() => setAppVersion("—"));
+  }, []);
 
   useEffect(() => {
     if (!focusSync) return;
@@ -251,7 +257,7 @@ export function SettingsPage({
         </Section>
 
         <Section icon={<Palette size={16} />} title="Theme" description="Pick a look for the app">
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-7">
             {themes.map((t) => {
               const selected = theme === t.id;
               return (
@@ -269,7 +275,8 @@ export function SettingsPage({
                     className="mb-2 h-7 w-7 rounded-md border"
                     style={{
                       background: t.preview,
-                      borderColor: t.id === "noir" ? "var(--border)" : "transparent",
+                      borderColor:
+                        t.id === "noir" || t.id === "snow" ? "var(--border)" : "transparent",
                     }}
                   />
                   <div className="text-xs font-medium" style={{ color: "var(--text)" }}>
@@ -293,6 +300,11 @@ export function SettingsPage({
           >
             <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
               Azalea
+            </div>
+            <div className="mt-1 text-xs tabular-nums" style={{ color: "var(--text-secondary)" }}>
+              Version {appVersion}
+              <span style={{ color: "var(--text-muted)" }}> · </span>
+              Build {__AZALEA_BUILD__}
             </div>
             <div className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
               Rexsystems

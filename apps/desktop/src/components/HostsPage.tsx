@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Host, HostGroup } from "@azalea/shared";
-import { ChevronRight, Plus, Search, SquareTerminal } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { groupHostsByGroup } from "../lib/utils";
 import { EmptyHostsState, GroupSection } from "./HostTile";
 import { useContextMenu } from "./ui/ContextMenu";
@@ -23,6 +23,7 @@ interface HostsPageProps {
   onSearchChange: (q: string) => void;
   onQuickConnect: () => void;
   onOpenLocalTerminal: () => void;
+  isMobile?: boolean;
 }
 
 export function HostsPage({
@@ -42,6 +43,7 @@ export function HostsPage({
   onSearchChange,
   onQuickConnect,
   onOpenLocalTerminal,
+  isMobile = false,
 }: HostsPageProps) {
   const { openMenu, menuElement } = useContextMenu();
   const [groupPickHost, setGroupPickHost] = useState<Host | null>(null);
@@ -66,7 +68,7 @@ export function HostsPage({
     {
       items: [
         { id: "connect", label: "Connect", onClick: () => onConnect(host) },
-        ...(host.mac_address
+        ...(!isMobile && host.mac_address
           ? [{ id: "wake", label: "Wake up", onClick: () => onWakeHost(host) }]
           : []),
         { id: "edit", label: "Edit", onClick: () => onEditHost(host) },
@@ -136,18 +138,13 @@ export function HostsPage({
         onCancel={() => setGroupPickHost(null)}
       />
 
-      {/* Toolbar */}
       <div
-        className="flex shrink-0 items-center gap-3 border-b px-5 py-3.5"
+        className={`flex shrink-0 gap-3 border-b px-4 py-3 ${
+          isMobile ? "flex-col" : "items-center px-5 py-3.5"
+        }`}
         style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
       >
-        <div className="flex items-center gap-1 text-sm" style={{ color: "var(--text-muted)" }}>
-          <span>Personal</span>
-          <ChevronRight size={16} />
-          <span style={{ color: "var(--text)" }}>Hosts</span>
-        </div>
-
-        <div className="relative mx-4 min-w-0 flex-1">
+        <div className="relative min-w-0 flex-1">
           <Search
             size={17}
             className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2"
@@ -159,7 +156,7 @@ export function HostsPage({
             onKeyDown={(e) => {
               if (e.key === "Enter") onQuickConnect();
             }}
-            placeholder="Find a host or ssh user@hostname..."
+            placeholder={isMobile ? "Search hosts…" : "Find a host or ssh user@hostname..."}
             className="transition-ui w-full rounded-lg border py-2.5 pl-10 pr-3.5 text-sm outline-none"
             style={{
               background: "var(--bg-input)",
@@ -169,34 +166,31 @@ export function HostsPage({
           />
         </div>
 
-        <button
-          onClick={onOpenLocalTerminal}
-          className="hover-subtle transition-ui inline-flex shrink-0 items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium"
-          style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-          title="Open a local terminal"
-        >
-          <SquareTerminal size={16} />
-          Terminal
-        </button>
-
-        <button
-          onClick={() => onAddServer()}
-          className="transition-ui inline-flex shrink-0 items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium"
-          style={{ background: "var(--accent)", color: "var(--accent-fg, #fff)" }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--accent-hover)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "var(--accent)";
-          }}
-        >
-          <Plus size={16} />
-          New Host
-        </button>
+        <div className={`flex shrink-0 gap-2 ${isMobile ? "w-full" : ""}`}>
+          {!isMobile && (
+            <button
+              onClick={onOpenLocalTerminal}
+              className="hover-subtle transition-ui inline-flex shrink-0 items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium"
+              style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+              title="Open a local terminal"
+            >
+              Terminal
+            </button>
+          )}
+          <button
+            onClick={() => onAddServer()}
+            className={`transition-ui inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium ${
+              isMobile ? "flex-1" : "shrink-0"
+            }`}
+            style={{ background: "var(--accent)", color: "var(--accent-fg, #fff)" }}
+          >
+            <Plus size={16} />
+            New Host
+          </button>
+        </div>
       </div>
 
-      {/* Grid */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className={`flex-1 overflow-y-auto ${isMobile ? "px-3 py-3" : "px-5 py-4"}`}>
         {hosts.length === 0 && groups.length === 0 ? (
           <EmptyHostsState onAddServer={() => onAddServer()} />
         ) : grouped.length === 0 ? (
@@ -214,6 +208,7 @@ export function HostsPage({
                 onEditHost={onEditHost}
                 onGroupContextMenu={(e, g) => openMenu(e, groupMenu(g))}
                 onHostContextMenu={(e, host) => openMenu(e, hostMenu(host))}
+                compact={isMobile}
               />
             </div>
           ))

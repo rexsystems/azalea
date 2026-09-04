@@ -10,13 +10,13 @@ interface DrawerProps {
   footer?: ReactNode;
 }
 
-/** Right panel overlay — does not shrink or reflow main content. */
+/** Right panel on desktop; full-screen sheet on mobile (`data-mobile="true"`). */
 export function Drawer({ open, title, subtitle, onClose, children, footer }: DrawerProps) {
   if (!open) return null;
 
   return (
     <aside
-      className="animate-drawer-in absolute right-0 top-0 z-20 flex h-full w-[min(100%,28rem)] flex-col border-l"
+      className="drawer-panel animate-drawer-in absolute right-0 top-0 z-20 flex h-full w-[min(100%,28rem)] flex-col border-l"
       style={{
         background: "var(--bg-panel)",
         borderColor: "var(--border-subtle)",

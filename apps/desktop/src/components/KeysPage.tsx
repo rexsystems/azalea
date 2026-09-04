@@ -11,11 +11,12 @@ import {
   Trash2,
 } from "lucide-react";
 import * as api from "../lib/api";
+import { copyText } from "../lib/clipboard";
 import { filenameToKeyName } from "../lib/utils";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 import { Select } from "./ui/Select";
-import { SelectHostDialog } from "./ui/SelectHostDialog";
+import { SelectHostDialog, type SelectHostResult } from "./ui/SelectHostDialog";
 
 interface KeysPageProps {
   keys: SshKey[];
@@ -62,6 +63,8 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
   const [passphrase, setPassphrase] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [installKeyId, setInstallKeyId] = useState<string | null>(null);
+  const [installBusy, setInstallBusy] = useState(false);
+  const [installResult, setInstallResult] = useState<SelectHostResult | null>(null);
 
   const handleGenerate = async () => {
     const name = newKeyName.trim() || "My Key";
@@ -131,7 +134,7 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
 
   const copyPublicKey = async (key: SshKey) => {
     try {
-      await navigator.clipboard.writeText(key.public_key.trim() + "\n");
+      await copyText(key.public_key.trim() + "\n");
       setCopiedId(key.id);
       setTimeout(() => setCopiedId((id) => (id === key.id ? null : id)), 1500);
     } catch (err) {
@@ -156,19 +159,28 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
     }
   };
 
+  const closeInstallDialog = () => {
+    if (installBusy) return;
+    setInstallKeyId(null);
+    setInstallResult(null);
+  };
+
   const installToHost = async (host: Host) => {
-    if (!installKeyId) return;
+    if (!installKeyId || installBusy) return;
     try {
-      setBusy(true);
+      setInstallBusy(true);
+      setInstallResult(null);
       setError(null);
       setNotice(null);
       const result = await api.installPublicKey(installKeyId, host.id);
+      setInstallResult({ ok: true, message: result.message });
       setNotice(result.message);
-      setInstallKeyId(null);
     } catch (err) {
-      setError(String(err).replace(/^Error:\s*/, ""));
+      const message = String(err).replace(/^Error:\s*/, "");
+      setInstallResult({ ok: false, message });
+      setError(message);
     } finally {
-      setBusy(false);
+      setInstallBusy(false);
     }
   };
 
@@ -240,6 +252,13 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
             </p>
           </div>
 
+          {notice && !error && (
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+              {notice}
+            </p>
+          )}
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
           {pendingImport && (
             <div
               className="space-y-2 rounded-xl border p-4"
@@ -308,13 +327,20 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                     >
                       <Fingerprint size={16} />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                      <div className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
                         {key.name}
                       </div>
                       <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                        {formatKeyType(key.key_type)} · {key.fingerprint}
+                        {formatKeyType(key.key_type)}
                       </div>
+                      <p
+                        className="mt-1 break-all font-mono text-[10px] leading-relaxed"
+                        style={{ color: "var(--text-muted)" }}
+                        title={key.fingerprint}
+                      >
+                        {key.fingerprint}
+                      </p>
                       <p
                         className="mt-2 break-all font-mono text-[10px] leading-relaxed"
                         style={{ color: "var(--text-secondary)" }}
@@ -357,7 +383,10 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                       variant="secondary"
                       size="sm"
                       disabled={busy || hosts.length === 0}
-                      onClick={() => setInstallKeyId(key.id)}
+                      onClick={() => {
+                        setInstallResult(null);
+                        setInstallKeyId(key.id);
+                      }}
                     >
                       <HardDriveUpload size={14} />
                       Add to host
@@ -367,13 +396,6 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
               ))
             )}
           </div>
-
-          {notice && !error && (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              {notice}
-            </p>
-          )}
-          {error && <p className="text-sm text-red-400">{error}</p>}
         </div>
       </div>
 
@@ -382,8 +404,10 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
         title="Install public key on host"
         message="Connects with the host's saved password or key, then appends this public key to ~/.ssh/authorized_keys if it isn't already there."
         hosts={hosts}
+        busy={installBusy}
+        result={installResult}
         onSelect={(host) => void installToHost(host)}
-        onCancel={() => setInstallKeyId(null)}
+        onCancel={closeInstallDialog}
       />
     </div>
   );

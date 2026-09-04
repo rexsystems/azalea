@@ -35,7 +35,7 @@ The **public** key is already in `apps/desktop/src-tauri/tauri.conf.json`. If yo
 
 macOS builds from CI are **not** Apple Developer ID signed (Gatekeeper may warn). Users can right-click → Open the first time, or clear quarantine. Auto-update still works via Tauri’s own signatures.
 
-CI builds macOS with `--bundles app,dmg` — `app` is required so Tauri can emit the signed `.app.tar.gz` updater payload (DMG alone is not an updater target).
+CI builds macOS with `--bundles app` (signed `.app.tar.gz` for the updater), then packs a DMG via `.github/create-macos-dmg.sh` (plain `hdiutil`, no Finder AppleScript — that step is what usually breaks on GitHub Actions).
 
 ## After each master release
 

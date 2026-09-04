@@ -291,7 +291,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
   return (
     <div
       ref={panelRef}
-      className="relative flex h-full w-[280px] shrink-0 flex-col border-l"
+      className="file-browser-panel relative flex h-full w-[280px] shrink-0 flex-col border-l"
       style={{ background: "var(--bg-panel)", borderColor: "var(--border-subtle)" }}
     >
       {dragOver && (

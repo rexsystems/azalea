@@ -46,6 +46,7 @@ import {
 } from "./lib/backup";
 import { checkForUpdateSilent } from "./lib/updater";
 import { getStoredAutoSync, setStoredAutoSync } from "./lib/settings";
+import { useIsMobile } from "./hooks/useIsMobile";
 
 interface TabSession {
   id: string;
@@ -142,10 +143,12 @@ function App() {
   }, [connectionError]);
   const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
   const autoSyncCheckedRef = useRef(false);
+  const isMobile = useIsMobile();
 
   const hasTabs = tabs.some((t) => !t.poppedOut);
 
   useEffect(() => {
+    if (isMobile) return;
     void checkForUpdateSilent().then((result) => {
       if (result) {
         setStatusMessage(
@@ -153,7 +156,7 @@ function App() {
         );
       }
     });
-  }, []);
+  }, [isMobile]);
 
   const DEFAULT_COLS = 120;
   const DEFAULT_ROWS = 30;
@@ -1042,6 +1045,7 @@ function App() {
             onSearchChange={setSearchQuery}
             onQuickConnect={handleQuickConnect}
             onOpenLocalTerminal={() => void openLocalTerminal()}
+            isMobile={isMobile}
           />
         );
       case "keys":
@@ -1105,7 +1109,7 @@ function App() {
               if (tab.poppedOut) return null;
               const isActive = tab.id === activeTabId;
               const isSplitPartner =
-                !isActive && activeTab?.splitWithId === tab.id;
+                !isMobile && !isActive && activeTab?.splitWithId === tab.id;
               const isLocalConnecting =
                 api.isLocalSession(tab.id) && tab.status === "connecting";
               const keepTerminal =
@@ -1232,24 +1236,40 @@ function App() {
         activePage={navPage}
         onNavigate={handleNavigate}
         onSignInForSync={handleSignInForSync}
-        statusMessage={statusMessage}
+        statusMessage={isMobile ? undefined : statusMessage}
         syncStatus={syncStatus}
-        showTabs={hasTabs}
+        showTabs={hasTabs && (viewingTerminal || !isMobile)}
         hostCount={hosts.length}
         keyCount={keys.length}
+        isMobile={isMobile}
+        immersive={isMobile && viewingTerminal}
         tabBar={
           <TabBar
             tabs={displayTabs}
             activeTabId={viewingTerminal ? activeTabId : null}
             onSelectTab={handleSelectTab}
             onCloseTab={requestCloseTab}
+            isMobile={isMobile}
+            onBack={
+              isMobile
+                ? () => {
+                    setViewingTerminal(false);
+                    setFilesPanelOpen(false);
+                    setNavPage("hosts");
+                  }
+                : undefined
+            }
             actions={[
-              {
-                icon: SquareTerminal,
-                title: "New local terminal",
-                active: false,
-                onClick: () => void openLocalTerminal(),
-              },
+              ...(!isMobile
+                ? [
+                    {
+                      icon: SquareTerminal,
+                      title: "New local terminal",
+                      active: false,
+                      onClick: () => void openLocalTerminal(),
+                    },
+                  ]
+                : []),
               ...(viewingTerminal && activeTab
                 ? [
                     ...(!api.isLocalSession(activeTab.id)
@@ -1260,38 +1280,46 @@ function App() {
                             active: filesPanelOpen,
                             onClick: () => setFilesPanelOpen((v) => !v),
                           },
+                          ...(!isMobile
+                            ? [
+                                {
+                                  icon: ArrowLeftRight,
+                                  title: "Port forwarding",
+                                  active: forwardsOpen,
+                                  onClick: () => {
+                                    setSnippetsOpen(false);
+                                    setForwardsOpen((v) => !v);
+                                  },
+                                },
+                              ]
+                            : []),
+                        ]
+                      : []),
+                    ...(!isMobile
+                      ? [
                           {
-                            icon: ArrowLeftRight,
-                            title: "Port forwarding",
-                            active: forwardsOpen,
+                            icon: Zap,
+                            title: "Snippets",
+                            active: snippetsOpen,
                             onClick: () => {
-                              setSnippetsOpen(false);
-                              setForwardsOpen((v) => !v);
+                              setForwardsOpen(false);
+                              setSnippetsOpen((v) => !v);
                             },
+                          },
+                          {
+                            icon: Columns2,
+                            title: activeTab.splitWithId ? "Unsplit" : "Split view",
+                            active: Boolean(activeTab.splitWithId),
+                            onClick: () => splitActiveTab(),
+                          },
+                          {
+                            icon: ExternalLink,
+                            title: "Pop out terminal",
+                            active: false,
+                            onClick: () => popOutActiveTab(),
                           },
                         ]
                       : []),
-                    {
-                      icon: Zap,
-                      title: "Snippets",
-                      active: snippetsOpen,
-                      onClick: () => {
-                        setForwardsOpen(false);
-                        setSnippetsOpen((v) => !v);
-                      },
-                    },
-                    {
-                      icon: Columns2,
-                      title: activeTab.splitWithId ? "Unsplit" : "Split view",
-                      active: Boolean(activeTab.splitWithId),
-                      onClick: () => splitActiveTab(),
-                    },
-                    {
-                      icon: ExternalLink,
-                      title: "Pop out terminal",
-                      active: false,
-                      onClick: () => popOutActiveTab(),
-                    },
                   ]
                 : []),
             ].map(({ icon: Icon, title, active, onClick }) => (

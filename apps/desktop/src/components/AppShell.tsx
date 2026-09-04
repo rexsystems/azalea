@@ -6,6 +6,7 @@ import type { SyncStatus } from "../lib/api";
 import { maskEmail } from "../lib/utils";
 import { PlanBadge } from "./PlanBadge";
 import { TitleBar } from "./TitleBar";
+import { Logo } from "./Logo";
 
 export type NavPage = "hosts" | "keys" | "settings";
 
@@ -21,11 +22,14 @@ interface AppShellProps {
   sidePanel?: ReactNode;
   hostCount?: number;
   keyCount?: number;
+  isMobile?: boolean;
+  /** When true on mobile, hide bottom nav for a full-bleed terminal. */
+  immersive?: boolean;
 }
 
 const navItems: { id: NavPage; label: string; icon: typeof Server }[] = [
   { id: "hosts", label: "Hosts", icon: Server },
-  { id: "keys", label: "Keychain", icon: KeyRound },
+  { id: "keys", label: "Keys", icon: KeyRound },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -41,12 +45,110 @@ export function AppShell({
   sidePanel,
   hostCount = 0,
   keyCount = 0,
+  isMobile = false,
+  immersive = false,
 }: AppShellProps) {
   const [appVersion, setAppVersion] = useState("…");
 
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => setAppVersion("—"));
   }, []);
+
+  if (isMobile) {
+    return (
+      <div
+        className="app-shell-root app-shell-mobile flex h-full select-none flex-col overflow-hidden"
+        style={{ background: "var(--bg-base)" }}
+      >
+        {!immersive && (
+          <header
+            className="mobile-topbar flex shrink-0 items-center justify-between gap-3 border-b px-4"
+            style={{
+              background: "var(--bg-panel)",
+              borderColor: "var(--border-subtle)",
+              paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+              paddingBottom: "0.75rem",
+            }}
+          >
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Logo size={20} style={{ color: "var(--accent)", flexShrink: 0 }} />
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold" style={{ color: "var(--text)" }}>
+                  Azalea
+                </div>
+                <div className="truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  {syncStatus?.logged_in
+                    ? syncStatus.email
+                      ? maskEmail(syncStatus.email)
+                      : "Signed in"
+                    : `v${appVersion}`}
+                </div>
+              </div>
+            </div>
+            {syncStatus?.logged_in ? (
+              <button type="button" onClick={() => onNavigate("settings")}>
+                <PlanBadge plan={syncStatus.plan} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSignInForSync) onSignInForSync();
+                  else onNavigate("settings");
+                }}
+                className="rounded-lg border px-2.5 py-1.5 text-[11px] font-medium"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+              >
+                Sign in
+              </button>
+            )}
+          </header>
+        )}
+
+        <div className="flex min-h-0 flex-1 flex-col">
+          {showTabs && tabBar}
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+            {sidePanel}
+          </div>
+        </div>
+
+        {!immersive && (
+          <nav
+            className="mobile-bottom-nav shrink-0 border-t"
+            style={{
+              background: "var(--bg-panel)",
+              borderColor: "var(--border-subtle)",
+              // Extra lift above Android/iOS gesture bars (safe-area is often 0 in WebView).
+              paddingBottom: "max(1.35rem, calc(env(safe-area-inset-bottom, 0px) + 0.85rem))",
+              paddingTop: "0.35rem",
+            }}
+          >
+            <div className="grid grid-cols-3 gap-1 px-2 pt-1.5">
+              {navItems.map(({ id, label, icon: Icon }) => {
+                const active = activePage === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onNavigate(id)}
+                    className="transition-ui flex flex-col items-center gap-1 rounded-xl px-2 py-2"
+                    style={{
+                      background: active ? "var(--nav-active)" : "transparent",
+                      color: active ? "var(--text)" : "var(--text-muted)",
+                    }}
+                  >
+                    <Icon size={20} strokeWidth={active ? 2.25 : 1.75} />
+                    <span className="text-[10px] font-medium">{label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -79,7 +181,7 @@ export function AppShell({
                   }}
                 >
                   <Icon size={18} strokeWidth={active ? 2 : 1.5} />
-                  {label}
+                  {id === "keys" ? "Keychain" : label}
                 </button>
               );
             })}
