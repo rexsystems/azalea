@@ -7,6 +7,7 @@ export interface HostFormValues {
   key_id: string | null;
   group_id: string | null;
   password: string;
+  mac_address: string;
 }
 
 export function parseQuickConnect(input: string): Partial<HostFormValues> {
@@ -136,7 +137,7 @@ export function isValidHostname(hostname: string): boolean {
   });
 }
 
-export function validateHostForm(values: HostFormValues, isEdit: boolean): string | null {
+export function validateHostForm(values: HostFormValues): string | null {
   const hostname = values.hostname.trim();
   if (!hostname) return "Address is required.";
   if (!isValidHostname(hostname)) {
@@ -150,17 +151,43 @@ export function validateHostForm(values: HostFormValues, isEdit: boolean): strin
   const username = values.username.trim();
   if (!username) return "Username is required.";
 
-  if (values.auth_type === "password") {
-    if (!isEdit && !values.password.trim()) {
-      return "Password is required for password login.";
+  const mac = values.mac_address.trim();
+  if (mac) {
+    const hex = mac.replace(/[^0-9a-fA-F]/g, "");
+    if (hex.length !== 12) {
+      return "MAC address must look like AA:BB:CC:DD:EE:FF.";
     }
   }
 
-  if (values.auth_type === "key" && values.key_id && !values.key_id.trim()) {
-    return "Choose an SSH key or switch to password login.";
-  }
-
   return null;
+}
+
+export function looksLikeUnreachableError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("timed out") ||
+    m.includes("timeout") ||
+    m.includes("connection refused") ||
+    m.includes("network unreachable") ||
+    m.includes("no route to host") ||
+    m.includes("host is down") ||
+    m.includes("failed to connect") ||
+    m.includes("could not connect") ||
+    m.includes("unreachable") ||
+    m.includes("connection reset") ||
+    m.includes("os error 101") ||
+    m.includes("os error 110") ||
+    m.includes("os error 111") ||
+    m.includes("os error 113")
+  );
+}
+
+export function wolBroadcastForHost(hostname: string): string | undefined {
+  const value = hostname.trim();
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)) return undefined;
+  const parts = value.split(".");
+  // Prefer the /24 subnet broadcast; global 255.255.255.255 is also sent by the backend.
+  return `${parts[0]}.${parts[1]}.${parts[2]}.255`;
 }
 
 export function maskEmail(email: string): string {

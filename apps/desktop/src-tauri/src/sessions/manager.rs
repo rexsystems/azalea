@@ -678,17 +678,19 @@ async fn run_session(
         }
     };
 
+    let auth_label = match (
+        host.key_id.is_some(),
+        get_host_password(&host.id).ok().flatten().is_some(),
+    ) {
+        (true, true) => "SSH key, password fallback",
+        (true, false) => "SSH key",
+        (false, true) => "password",
+        (false, false) => "no credentials",
+    };
     emit_log(
         &app,
         &session_id,
-        &format!(
-            "Authenticating ({})...",
-            if host.auth_type == "key" {
-                "SSH key"
-            } else {
-                "password"
-            }
-        ),
+        &format!("Authenticating ({auth_label})..."),
     );
     if let Err(err) = authenticate(&mut session, &host).await {
         emit_log(&app, &session_id, &format!("Authentication failed: {err}"));
@@ -777,35 +779,37 @@ async fn authenticate(
     session: &mut client::Handle<SshClientHandler>,
     host: &Host,
 ) -> anyhow::Result<()> {
-    match host.auth_type.as_str() {
-        "password" => {
-            let password = get_host_password(&host.id)?
-                .ok_or_else(|| anyhow::anyhow!("Password not found for host"))?;
-            let ok = session
-                .authenticate_password(&host.username, &password)
-                .await?;
-            if !ok {
-                anyhow::bail!("Password authentication failed");
+    let mut errors: Vec<String> = Vec::new();
+
+    if let Some(key_id) = host.key_id.as_ref() {
+        match load_key_pair(key_id) {
+            Ok(key_pair) => {
+                let ok = session
+                    .authenticate_publickey(&host.username, Arc::new(key_pair))
+                    .await?;
+                if ok {
+                    return Ok(());
+                }
+                errors.push("Public key authentication failed".to_string());
             }
+            Err(err) => errors.push(format!("Could not load SSH key: {err}")),
         }
-        "key" => {
-            let key_id = host
-                .key_id
-                .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("No key configured for host"))?;
-            let key_pair = load_key_pair(key_id)?;
-            let ok = session
-                .authenticate_publickey(&host.username, Arc::new(key_pair))
-                .await?;
-            if !ok {
-                anyhow::bail!("Public key authentication failed");
-            }
-        }
-        "none" => anyhow::bail!("No credentials configured for host"),
-        other => anyhow::bail!("Unsupported auth type: {other}"),
     }
 
-    Ok(())
+    if let Some(password) = get_host_password(&host.id)? {
+        let ok = session
+            .authenticate_password(&host.username, &password)
+            .await?;
+        if ok {
+            return Ok(());
+        }
+        errors.push("Password authentication failed".to_string());
+    }
+
+    if errors.is_empty() {
+        anyhow::bail!("No credentials configured for host");
+    }
+    anyhow::bail!(errors.join("; "));
 }
 
 async fn request_pty(

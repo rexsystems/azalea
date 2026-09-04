@@ -15,6 +15,7 @@ export interface Host {
   auth_type: AuthType;
   key_id: string | null;
   group_id: string | null;
+  mac_address: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -28,6 +29,7 @@ export interface CreateHostInput {
   key_id?: string | null;
   group_id?: string | null;
   password?: string | null;
+  mac_address?: string | null;
 }
 
 export interface UpdateHostInput {
@@ -39,6 +41,7 @@ export interface UpdateHostInput {
   key_id?: string | null;
   group_id?: string | null;
   password?: string | null;
+  mac_address?: string | null;
 }
 
 export interface CreateGroupInput {

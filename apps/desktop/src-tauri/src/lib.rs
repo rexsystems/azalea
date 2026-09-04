@@ -5,9 +5,9 @@ mod sessions;
 mod store;
 mod sync;
 
-use commands::{
+use crate::commands::{
     backup, files, forwards, groups, hosts, keys as key_commands, known_hosts,
-    local_terminal, sftp, snippets, ssh as ssh_commands, sync as sync_commands,
+    local_terminal, sftp, snippets, ssh as ssh_commands, sync as sync_commands, wol,
 };
 use sessions::{init_local_terminal_manager, init_session_manager};
 use store::init_database;
@@ -54,6 +54,7 @@ pub fn run() {
             hosts::update_host,
             hosts::host_has_password,
             hosts::delete_host,
+            wol::wake_on_lan,
             groups::list_groups,
             groups::create_group,
             groups::update_group,

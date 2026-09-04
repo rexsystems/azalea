@@ -9,6 +9,9 @@ interface ConnectionErrorDialogProps {
   logs: string[];
   onClose: () => void;
   onRetry?: () => void;
+  canWake?: boolean;
+  wakeBusy?: boolean;
+  onWake?: () => void;
 }
 
 export function ConnectionErrorDialog({
@@ -19,6 +22,9 @@ export function ConnectionErrorDialog({
   logs,
   onClose,
   onRetry,
+  canWake = false,
+  wakeBusy = false,
+  onWake,
 }: ConnectionErrorDialogProps) {
   if (!open) return null;
 
@@ -42,6 +48,12 @@ export function ConnectionErrorDialog({
           <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
             {message}
           </p>
+          {canWake && (
+            <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
+              Looks like the machine may be offline. You can send a Wake-on-LAN packet if WoL is
+              enabled on the NIC.
+            </p>
+          )}
         </div>
 
         {logs.length > 0 && (
@@ -62,10 +74,15 @@ export function ConnectionErrorDialog({
           </div>
         )}
 
-        <div className="flex justify-end gap-2 border-t px-5 py-3" style={{ borderColor: "var(--border-subtle)" }}>
+        <div className="flex flex-wrap justify-end gap-2 border-t px-5 py-3" style={{ borderColor: "var(--border-subtle)" }}>
           <Button variant="secondary" onClick={onClose}>
             Close
           </Button>
+          {canWake && onWake && (
+            <Button variant="secondary" disabled={wakeBusy} onClick={onWake}>
+              {wakeBusy ? "Waking…" : "Wake up"}
+            </Button>
+          )}
           {onRetry && (
             <Button variant="primary" onClick={onRetry}>
               Retry

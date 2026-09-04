@@ -1,6 +1,18 @@
 import { useEffect, useState } from "react";
 import type { Host, HostGroup, SshKey } from "@azalea/shared";
-import { ChevronDown, EthernetPort, Folder, KeyRound, Lock, Save, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  EthernetPort,
+  Folder,
+  KeyRound,
+  Lock,
+  Network,
+  Save,
+  Server,
+  Tag,
+  Trash2,
+  User,
+} from "lucide-react";
 import type { HostFormValues } from "../lib/utils";
 import { parsePortInput, validateHostForm } from "../lib/utils";
 import { Button } from "./ui/Button";
@@ -29,6 +41,7 @@ const defaultValues: HostFormValues = {
   key_id: null,
   group_id: null,
   password: "",
+  mac_address: "",
 };
 
 export function AddServerDrawer({
@@ -60,6 +73,7 @@ export function AddServerDrawer({
         key_id: host.key_id,
         group_id: host.group_id,
         password: "",
+        mac_address: host.mac_address ?? "",
       });
     } else {
       setValues({
@@ -84,24 +98,24 @@ export function AddServerDrawer({
   const isEdit = Boolean(host);
 
   const handleSubmit = async (connectAfter: boolean) => {
-    const validationError = validateHostForm(values, isEdit);
+    const validationError = validateHostForm(values);
     if (validationError) {
       setError(validationError);
       return;
     }
 
-    let authType: HostFormValues["auth_type"] = "none";
-    if (values.auth_type === "password") {
-      authType = "password";
-    } else if (values.auth_type === "key" && values.key_id) {
-      authType = "key";
-    } else if (isEdit && host) {
-      authType = host.auth_type;
-    }
+    const keyId = values.key_id?.trim() || null;
+    const hasPasswordInput = Boolean(values.password.trim());
+    const authType: HostFormValues["auth_type"] = keyId
+      ? "key"
+      : hasPasswordInput
+        ? "password"
+        : "none";
 
     const finalValues: HostFormValues = {
       ...values,
       auth_type: authType,
+      key_id: keyId,
       hostname: values.hostname.trim(),
       username: values.username.trim(),
       name: values.name.trim() || values.hostname.trim().split(".")[0] || values.hostname.trim(),
@@ -153,10 +167,22 @@ export function AddServerDrawer({
       }
     >
       <div className="space-y-5">
+        <Input
+          label="Display name"
+          hint="Shown in your host list"
+          placeholder="My server"
+          icon={<Tag size={15} />}
+          value={values.name}
+          onChange={(e) =>
+            setValues((prev) => ({ ...prev, name: e.target.value }))
+          }
+        />
+
         <div className="grid grid-cols-[1fr_80px] gap-3">
           <Input
             label="Address"
             placeholder="192.168.1.10 or server.example.com"
+            icon={<Server size={15} />}
             value={values.hostname}
             onChange={(e) =>
               setValues((prev) => ({ ...prev, hostname: e.target.value }))
@@ -181,6 +207,7 @@ export function AddServerDrawer({
 
         <Input
           label="Username"
+          icon={<User size={15} />}
           value={values.username}
           onChange={(e) =>
             setValues((prev) => ({ ...prev, username: e.target.value }))
@@ -190,6 +217,7 @@ export function AddServerDrawer({
         {groups.length > 0 && (
           <Select
             label="Group"
+            icon={<Folder size={15} />}
             value={values.group_id ?? ""}
             onChange={(groupId) =>
               setValues((prev) => ({
@@ -204,69 +232,19 @@ export function AddServerDrawer({
           />
         )}
 
-        <div>
-          <span className="mb-2 block text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-            Login method
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                setValues((prev) => ({ ...prev, auth_type: "password" }))
-              }
-              className="transition-ui flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium"
-              style={
-                values.auth_type === "password"
-                  ? {
-                      borderColor: "var(--accent)",
-                      background: "var(--accent-muted)",
-                      color: "var(--text)",
-                    }
-                  : {
-                      borderColor: "var(--border-subtle)",
-                      color: "var(--text-muted)",
-                    }
-              }
-            >
-              <Lock size={16} />
-              Password
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setValues((prev) => ({ ...prev, auth_type: "key" }))
-              }
-              className="transition-ui flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium"
-              style={
-                values.auth_type === "key"
-                  ? {
-                      borderColor: "var(--accent)",
-                      background: "var(--accent-muted)",
-                      color: "var(--text)",
-                    }
-                  : {
-                      borderColor: "var(--border-subtle)",
-                      color: "var(--text-muted)",
-                    }
-              }
-            >
-              <KeyRound size={16} />
-              SSH Key
-            </button>
-          </div>
-        </div>
+        <Input
+          label="Password"
+          type="password"
+          placeholder={isEdit ? "Leave blank to keep current" : "Optional"}
+          hint={isEdit ? undefined : "Optional — you can also use an SSH key"}
+          icon={<Lock size={15} />}
+          value={values.password}
+          onChange={(e) =>
+            setValues((prev) => ({ ...prev, password: e.target.value }))
+          }
+        />
 
-        {values.auth_type === "password" ? (
-          <Input
-            label="Password"
-            type="password"
-            placeholder={isEdit ? "Leave blank to keep current" : "Required for password login"}
-            value={values.password}
-            onChange={(e) =>
-              setValues((prev) => ({ ...prev, password: e.target.value }))
-            }
-          />
-        ) : keys.length === 0 ? (
+        {keys.length === 0 ? (
           <div
             className="rounded-xl border px-4 py-3 text-sm"
             style={{
@@ -275,11 +253,16 @@ export function AddServerDrawer({
               background: "var(--bg-card)",
             }}
           >
+            <span className="mb-1 flex items-center gap-2 font-medium" style={{ color: "var(--text-secondary)" }}>
+              <KeyRound size={15} />
+              SSH Key
+            </span>
             No SSH keys yet. You can save this host and pick a key when connecting.
           </div>
         ) : (
           <Select
             label="SSH Key"
+            icon={<KeyRound size={15} />}
             value={values.key_id ?? ""}
             placeholder="Optional — choose when connecting"
             onChange={(keyId) =>
@@ -288,7 +271,10 @@ export function AddServerDrawer({
                 key_id: keyId || null,
               }))
             }
-            options={[{ value: "", label: "None — choose when connecting" }, ...keys.map((key) => ({ value: key.id, label: key.name }))]}
+            options={[
+              { value: "", label: "None — choose when connecting" },
+              ...keys.map((key) => ({ value: key.id, label: key.name })),
+            ]}
           />
         )}
 
@@ -302,16 +288,18 @@ export function AddServerDrawer({
             size={16}
             className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`}
           />
-          Display name
+          Advanced
         </button>
 
         {showAdvanced && (
           <Input
-            label="Display name"
-            hint="Auto-filled from address if empty"
-            value={values.name}
+            label="MAC address"
+            hint="For Wake-on-LAN when the server is offline"
+            placeholder="AA:BB:CC:DD:EE:FF"
+            icon={<Network size={15} />}
+            value={values.mac_address}
             onChange={(e) =>
-              setValues((prev) => ({ ...prev, name: e.target.value }))
+              setValues((prev) => ({ ...prev, mac_address: e.target.value }))
             }
           />
         )}

@@ -29,6 +29,8 @@ pub struct Host {
     pub auth_type: String,
     pub key_id: Option<String>,
     pub group_id: Option<String>,
+    #[serde(default)]
+    pub mac_address: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -43,6 +45,8 @@ pub struct CreateHostInput {
     pub key_id: Option<String>,
     pub group_id: Option<String>,
     pub password: Option<String>,
+    #[serde(default)]
+    pub mac_address: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,9 +56,17 @@ pub struct UpdateHostInput {
     pub port: Option<i64>,
     pub username: Option<String>,
     pub auth_type: Option<String>,
-    pub key_id: Option<String>,
+    pub key_id: Option<Option<String>>,
     pub group_id: Option<Option<String>>,
     pub password: Option<String>,
+    pub mac_address: Option<Option<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WakeOnLanInput {
+    pub mac_address: String,
+    #[serde(default)]
+    pub broadcast: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

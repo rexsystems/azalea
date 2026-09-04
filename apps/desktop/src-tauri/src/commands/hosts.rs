@@ -19,11 +19,13 @@ pub fn create_host(
     let now = chrono::Utc::now().timestamp();
     let id = Uuid::new_v4().to_string();
 
-    if input.auth_type == "password" {
-        if let Some(password) = input.password.as_ref() {
-            store_host_password(&id, password).map_err(|err| err.to_string())?;
-        }
+    if let Some(password) = input.password.as_ref().filter(|p| !p.is_empty()) {
+        store_host_password(&id, password).map_err(|err| err.to_string())?;
     }
+
+    let key_id = input.key_id.filter(|value| !value.is_empty());
+    let has_password = input.password.as_ref().is_some_and(|p| !p.is_empty());
+    let auth_type = resolve_auth_type(&input.auth_type, key_id.is_some(), has_password);
 
     let host = Host {
         id: id.clone(),
@@ -31,9 +33,10 @@ pub fn create_host(
         hostname: input.hostname,
         port: input.port,
         username: input.username,
-        auth_type: input.auth_type,
-        key_id: input.key_id,
+        auth_type,
+        key_id,
         group_id: input.group_id,
+        mac_address: normalize_mac(input.mac_address),
         created_at: now,
         updated_at: now,
     };
@@ -69,21 +72,26 @@ pub fn update_host(
     if let Some(username) = input.username {
         host.username = username;
     }
-    if let Some(auth_type) = input.auth_type {
-        if auth_type == "password" || auth_type == "none" {
-            host.key_id = None;
-        }
-        host.auth_type = auth_type;
-    }
     if let Some(key_id) = input.key_id {
-        host.key_id = Some(key_id);
+        host.key_id = key_id.filter(|value| !value.is_empty());
     }
     if let Some(group_id) = input.group_id {
         host.group_id = group_id;
     }
-    if let Some(password) = input.password {
-        store_host_password(&id, &password).map_err(|err| err.to_string())?;
+    if let Some(mac_address) = input.mac_address {
+        host.mac_address = normalize_mac(mac_address);
     }
+    if let Some(password) = input.password {
+        if !password.is_empty() {
+            store_host_password(&id, &password).map_err(|err| err.to_string())?;
+        }
+    }
+
+    let has_password = crate::keys::get_host_password(&id)
+        .map(|p| p.is_some())
+        .unwrap_or(false);
+    let preferred = input.auth_type.unwrap_or_else(|| host.auth_type.clone());
+    host.auth_type = resolve_auth_type(&preferred, host.key_id.is_some(), has_password);
 
     host.updated_at = chrono::Utc::now().timestamp();
 
@@ -92,6 +100,27 @@ pub fn update_host(
         .map_err(|err| err.to_string())?;
 
     Ok(host)
+}
+
+fn resolve_auth_type(preferred: &str, has_key: bool, has_password: bool) -> String {
+    match preferred {
+        "key" if has_key => "key".to_string(),
+        "password" if has_password => "password".to_string(),
+        _ if has_key => "key".to_string(),
+        _ if has_password => "password".to_string(),
+        _ => "none".to_string(),
+    }
+}
+
+fn normalize_mac(mac: Option<String>) -> Option<String> {
+    mac.and_then(|raw| {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
 }
 
 #[tauri::command]

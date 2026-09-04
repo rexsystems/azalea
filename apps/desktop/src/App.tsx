@@ -12,7 +12,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ArrowLeftRight, Columns2, ExternalLink, FolderTree, SquareTerminal, Zap } from "lucide-react";
 import * as api from "./lib/api";
 import type { HostFormValues } from "./lib/utils";
-import { parseQuickConnect } from "./lib/utils";
+import { looksLikeUnreachableError, parseQuickConnect, wolBroadcastForHost } from "./lib/utils";
 import { useGroups } from "./hooks/useGroups";
 import { useHosts } from "./hooks/useHosts";
 import { useKeys } from "./hooks/useKeys";
@@ -120,6 +120,7 @@ function App() {
   const [pendingConfirm, setPendingConfirm] = useState<ConfirmState | null>(null);
   const [pendingPrompt, setPendingPrompt] = useState<PromptState | null>(null);
   const [connectionError, setConnectionError] = useState<ConnectionErrorState | null>(null);
+  const [wakeBusy, setWakeBusy] = useState(false);
   const [focusSettingsSync, setFocusSettingsSync] = useState(false);
   const [keyPickerHost, setKeyPickerHost] = useState<Host | null>(null);
   const keyPickerResolver = useRef<((keyId: string | null) => void) | null>(null);
@@ -158,12 +159,9 @@ function App() {
   const DEFAULT_ROWS = 30;
 
   const hostNeedsKey = useCallback(async (host: Host) => {
-    if (host.auth_type === "none") return true;
-    if (host.auth_type === "key" && !host.key_id) return true;
-    if (host.auth_type === "password") {
-      return !(await api.hostHasPassword(host.id));
-    }
-    return false;
+    if (host.key_id) return false;
+    if (await api.hostHasPassword(host.id)) return false;
+    return true;
   }, []);
 
   const pickKeyForHost = useCallback(
@@ -607,10 +605,10 @@ function App() {
       port: values.port,
       username: values.username,
       auth_type: values.auth_type,
-      key_id: values.auth_type === "key" ? values.key_id : null,
+      key_id: values.key_id,
       group_id: values.group_id,
-      password:
-        values.auth_type === "password" && values.password ? values.password : undefined,
+      password: values.password ? values.password : undefined,
+      mac_address: values.mac_address.trim() || null,
     };
 
     if (editingHost) {
@@ -743,6 +741,7 @@ function App() {
   const dismissConnectionError = () => {
     const err = connectionError;
     setConnectionError(null);
+    setWakeBusy(false);
     if (err?.sessionId) {
       void closeTab(err.sessionId);
     }
@@ -753,6 +752,7 @@ function App() {
     if (!err) return;
     const host = hosts.find((h) => h.id === err.hostId);
     setConnectionError(null);
+    setWakeBusy(false);
     if (err.sessionId) {
       void closeTab(err.sessionId).then(() => {
         if (host) void connectToHost(host);
@@ -761,6 +761,49 @@ function App() {
       void connectToHost(host);
     }
   };
+
+  const wakeAndRetry = async () => {
+    const err = connectionError;
+    if (!err || wakeBusy) return;
+    const host = hosts.find((h) => h.id === err.hostId);
+    if (!host?.mac_address) return;
+
+    setWakeBusy(true);
+    setStatusMessage(`Sending wake packet to ${host.name}…`);
+    try {
+      await api.wakeOnLan(host.mac_address, wolBroadcastForHost(host.hostname));
+      setStatusMessage(`Wake sent. Waiting for ${host.name} to come up…`);
+      await new Promise((resolve) => setTimeout(resolve, 4500));
+      setConnectionError(null);
+      if (err.sessionId) {
+        await closeTab(err.sessionId);
+      }
+      await connectToHost(host);
+    } catch (e) {
+      setStatusMessage(`Wake failed: ${String(e)}`);
+    } finally {
+      setWakeBusy(false);
+    }
+  };
+
+  const wakeHost = async (host: Host) => {
+    if (!host.mac_address) return;
+    try {
+      await api.wakeOnLan(host.mac_address, wolBroadcastForHost(host.hostname));
+      setStatusMessage(`Wake packet sent to ${host.name}`);
+    } catch (e) {
+      setStatusMessage(`Wake failed: ${String(e)}`);
+    }
+  };
+
+  const connectionErrorHost = useMemo(
+    () =>
+      connectionError ? (hosts.find((h) => h.id === connectionError.hostId) ?? null) : null,
+    [connectionError, hosts],
+  );
+  const canWakeFailedHost =
+    Boolean(connectionErrorHost?.mac_address) &&
+    looksLikeUnreachableError(connectionError?.message ?? "");
 
   const applyImportedSettings = (settings?: Record<string, unknown>) => {
     if (!settings) return;
@@ -987,6 +1030,7 @@ function App() {
             groups={groups}
             connectingHostId={connectingHostId}
             onConnect={(host) => void connectToHost(host)}
+            onWakeHost={(host) => void wakeHost(host)}
             onAddServer={(groupId) => openAddDrawer(groupId)}
             onAddGroup={handleAddGroup}
             onEditHost={openEditDrawer}
@@ -1373,6 +1417,9 @@ function App() {
         logs={connectionError?.logs ?? []}
         onClose={dismissConnectionError}
         onRetry={connectionError?.hostId ? retryConnection : undefined}
+        canWake={canWakeFailedHost}
+        wakeBusy={wakeBusy}
+        onWake={() => void wakeAndRetry()}
       />
 
       <ConfirmDialog

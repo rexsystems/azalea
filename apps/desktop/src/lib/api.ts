@@ -179,6 +179,12 @@ export function hostHasPassword(id: string): Promise<boolean> {
   return invoke("host_has_password", { id });
 }
 
+export function wakeOnLan(macAddress: string, broadcast?: string | null): Promise<void> {
+  return invoke("wake_on_lan", {
+    input: { mac_address: macAddress, broadcast: broadcast ?? null },
+  });
+}
+
 export function disconnectSsh(sessionId: string): Promise<void> {
   return invoke("disconnect_ssh", { sessionId });
 }

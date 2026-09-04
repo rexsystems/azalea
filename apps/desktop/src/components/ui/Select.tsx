@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 
 export interface SelectOption {
@@ -11,10 +11,11 @@ interface SelectProps {
   value: string;
   options: SelectOption[];
   placeholder?: string;
+  icon?: ReactNode;
   onChange: (value: string) => void;
 }
 
-export function Select({ label, value, options, placeholder, onChange }: SelectProps) {
+export function Select({ label, value, options, placeholder, icon, onChange }: SelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -51,23 +52,35 @@ export function Select({ label, value, options, placeholder, onChange }: SelectP
         </span>
       )}
 
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="transition-ui flex w-full items-center justify-between gap-2 rounded-lg border px-3.5 py-3 text-left text-sm outline-none focus:border-[var(--accent)]"
-        style={{
-          background: "var(--bg-input)",
-          borderColor: open ? "var(--accent)" : "var(--border-subtle)",
-          color: selected ? "var(--text)" : "var(--text-muted)",
-        }}
-      >
-        <span className="min-w-0 truncate">{display}</span>
-        <ChevronDown
-          size={16}
-          className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
-          style={{ color: "var(--text-muted)" }}
-        />
-      </button>
+      <div className="relative">
+        {icon && (
+          <span
+            className="pointer-events-none absolute left-3.5 top-1/2 z-10 -translate-y-1/2"
+            style={{ color: "var(--text-muted)" }}
+            aria-hidden
+          >
+            {icon}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="transition-ui flex w-full items-center justify-between gap-2 rounded-lg border py-3 pr-3.5 text-left text-sm outline-none focus:border-[var(--accent)]"
+          style={{
+            paddingLeft: icon ? "2.5rem" : "0.875rem",
+            background: "var(--bg-input)",
+            borderColor: open ? "var(--accent)" : "var(--border-subtle)",
+            color: selected ? "var(--text)" : "var(--text-muted)",
+          }}
+        >
+          <span className="min-w-0 truncate">{display}</span>
+          <ChevronDown
+            size={16}
+            className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+            style={{ color: "var(--text-muted)" }}
+          />
+        </button>
+      </div>
 
       {open && (
         <div

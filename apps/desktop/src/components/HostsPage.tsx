@@ -11,6 +11,7 @@ interface HostsPageProps {
   groups: HostGroup[];
   connectingHostId: string | null;
   onConnect: (host: Host) => void;
+  onWakeHost: (host: Host) => void;
   onAddServer: (groupId?: string | null) => void;
   onAddGroup: () => void;
   onEditHost: (host: Host) => void;
@@ -29,6 +30,7 @@ export function HostsPage({
   groups,
   connectingHostId,
   onConnect,
+  onWakeHost,
   onAddServer,
   onAddGroup,
   onEditHost,
@@ -64,6 +66,9 @@ export function HostsPage({
     {
       items: [
         { id: "connect", label: "Connect", onClick: () => onConnect(host) },
+        ...(host.mac_address
+          ? [{ id: "wake", label: "Wake up", onClick: () => onWakeHost(host) }]
+          : []),
         { id: "edit", label: "Edit", onClick: () => onEditHost(host) },
         {
           id: "add-to-group",

@@ -10,3 +10,4 @@ pub mod sftp;
 pub mod snippets;
 pub mod ssh;
 pub mod sync;
+pub mod wol;
