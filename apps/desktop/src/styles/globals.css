@@ -259,8 +259,38 @@ textarea,
   background: var(--bg-card-hover) !important;
 }
 
+.home-action-primary {
+  background: color-mix(in srgb, var(--accent) 78%, #000) !important;
+  color: var(--accent-fg, #fff);
+}
+
 .home-action-primary:hover {
-  background: color-mix(in srgb, var(--accent) 88%, #000) !important;
+  background: color-mix(in srgb, var(--accent) 90%, #000) !important;
+}
+
+.home-action-primary-icon {
+  background: color-mix(in srgb, var(--accent-fg, #fff) 14%, transparent);
+}
+
+.home-action-primary-desc {
+  color: color-mix(in srgb, var(--accent-fg, #fff) 72%, transparent);
+}
+
+[data-theme="noir"] .home-action-primary {
+  background: #f4f4f5 !important;
+  color: #000000;
+}
+
+[data-theme="noir"] .home-action-primary:hover {
+  background: #e4e4e7 !important;
+}
+
+[data-theme="noir"] .home-action-primary-icon {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="noir"] .home-action-primary-desc {
+  color: rgba(0, 0, 0, 0.58);
 }
 
 .key-card-actions button {

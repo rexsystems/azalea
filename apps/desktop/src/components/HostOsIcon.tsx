@@ -1,4 +1,4 @@
-import { HostMark } from "./HostMark";
+import { HostMark, hostMarkAccent } from "./HostMark";
 
 interface HostOsIconProps {
   osId?: string | null;
@@ -91,11 +91,52 @@ const OS_BG: Record<string, string> = {
   proxmox: "#3a1808",
 };
 
+/** Bright brand accent for glows (matches logo hue). */
+const OS_ACCENT: Record<string, string> = {
+  ubuntu: "#E95420",
+  debian: "#A80030",
+  fedora: "#51A2DA",
+  arch: "#1793D1",
+  centos: "#9CD023",
+  rhel: "#EE0000",
+  rocky: "#10B981",
+  alma: "#0F6CBD",
+  opensuse: "#73BA25",
+  alpine: "#0D597F",
+  pop: "#48B9C7",
+  mint: "#87CF3E",
+  kali: "#367BF0",
+  amazon: "#FF9900",
+  raspberry: "#C51A4A",
+  gentoo: "#54487A",
+  void: "#478061",
+  nixos: "#5277C3",
+  linux: "#FCC624",
+  macos: "#8E8E93",
+  windows: "#0078D4",
+  freebsd: "#AB2B28",
+  openbsd: "#F2CA30",
+  nobara: "#A855F7",
+  proxmox: "#E57000",
+};
+
 function resolveIcon(osId: string): { key: string; src: string } | null {
   const key = OS_ALIAS[osId] ?? osId;
   const src = OS_ICONS[key];
   if (!src) return null;
   return { key, src };
+}
+
+/** Accent that matches the connect-screen avatar (OS brand or HostMark). */
+export function hostConnectAccent(osId: string | null | undefined, seed: string): string {
+  const raw = (osId || "").toLowerCase();
+  if (raw) {
+    const resolved = resolveIcon(raw);
+    if (resolved) {
+      return OS_ACCENT[resolved.key] ?? hostMarkAccent(seed);
+    }
+  }
+  return hostMarkAccent(seed);
 }
 
 export function HostOsIcon({ osId, seed, size = 48, rounded = 10 }: HostOsIconProps) {

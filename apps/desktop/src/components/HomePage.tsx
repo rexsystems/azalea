@@ -225,16 +225,15 @@ export function HomePage({
                 }`}
                 style={{
                   borderColor: primary ? "transparent" : "var(--border-subtle)",
-                  background: primary
-                    ? "color-mix(in srgb, var(--accent) 72%, #000)"
-                    : "var(--bg-card)",
                   color: primary ? "var(--accent-fg, #fff)" : "var(--text)",
                 }}
               >
                 <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                    primary ? "home-action-primary-icon" : ""
+                  }`}
                   style={{
-                    background: primary ? "rgba(255,255,255,0.16)" : "var(--accent-muted)",
+                    background: primary ? undefined : "var(--accent-muted)",
                     color: primary ? "inherit" : "var(--accent)",
                   }}
                 >
@@ -243,8 +242,8 @@ export function HomePage({
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{label}</span>
                   <span
-                    className="block truncate text-[11px]"
-                    style={{ color: primary ? "rgba(255,255,255,0.75)" : "var(--text-muted)" }}
+                    className={`block truncate text-[11px] ${primary ? "home-action-primary-desc" : ""}`}
+                    style={{ color: primary ? undefined : "var(--text-muted)" }}
                   >
                     {description}
                   </span>

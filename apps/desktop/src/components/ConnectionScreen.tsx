@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { hostConnectAccent, HostOsIcon } from "./HostOsIcon";
 import {
   Check,
   KeyRound,
@@ -8,8 +9,6 @@ import {
   X,
   type AppIcon,
 } from "./icons";
-import { hostMarkAccent } from "./HostMark";
-import { HostOsIcon } from "./HostOsIcon";
 
 interface ConnectionScreenProps {
   hostName: string;
@@ -136,7 +135,7 @@ export function ConnectionScreen({
   onExitComplete,
 }: ConnectionScreenProps) {
   const seed = markSeed || `${username}@${hostname}:${port}` || hostName;
-  const accent = hostMarkAccent(seed);
+  const accent = hostConnectAccent(osId, seed);
   const portSuffix = port === 22 ? "" : `:${port}`;
   const steps = useMemo(() => buildSteps(logs, status), [logs, status]);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -235,7 +234,7 @@ export function ConnectionScreen({
       <div
         className="connect-wash"
         style={{
-          background: `radial-gradient(ellipse 80% 60% at 50% 28%, ${accent}28 0%, transparent 68%)`,
+          background: `radial-gradient(ellipse 80% 60% at 50% 28%, color-mix(in srgb, ${accent} 32%, transparent) 0%, transparent 68%)`,
         }}
         aria-hidden
       />
