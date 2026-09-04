@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyRound, Loader2, X } from "lucide-react";
+import { KeyRound, Loader2, X } from "./icons";
 import { maskEmail } from "../lib/utils";
 import { Button } from "./ui/Button";
 

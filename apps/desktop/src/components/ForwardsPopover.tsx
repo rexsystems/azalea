@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PortForward } from "@azalea/shared";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X } from "./icons";
 import * as api from "../lib/api";
 
 interface ForwardsPopoverProps {

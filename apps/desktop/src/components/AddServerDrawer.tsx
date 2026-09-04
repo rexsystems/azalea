@@ -12,7 +12,7 @@ import {
   Tag,
   Trash2,
   User,
-} from "lucide-react";
+} from "./icons";
 import type { HostFormValues } from "../lib/utils";
 import { parsePortInput, validateHostForm } from "../lib/utils";
 import { Button } from "./ui/Button";

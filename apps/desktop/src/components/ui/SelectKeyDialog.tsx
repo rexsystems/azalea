@@ -1,5 +1,5 @@
 import type { SshKey } from "@azalea/shared";
-import { KeyRound } from "lucide-react";
+import { KeyRound } from "../icons";
 import { Button } from "./Button";
 
 interface SelectKeyDialogProps {

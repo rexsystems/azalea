@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, X } from "./icons";
 
 interface TabBarProps {
   tabs: { id: string; title: string; status: string }[];

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { KeyRound, Server, Settings } from "lucide-react";
+import { KeyRound, Server, Settings, type AppIcon } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import type { SyncStatus } from "../lib/api";
 import { maskEmail } from "../lib/utils";
@@ -20,14 +20,12 @@ interface AppShellProps {
   showTabs?: boolean;
   tabBar?: ReactNode;
   sidePanel?: ReactNode;
-  hostCount?: number;
-  keyCount?: number;
   isMobile?: boolean;
   /** When true on mobile, hide bottom nav for a full-bleed terminal. */
   immersive?: boolean;
 }
 
-const navItems: { id: NavPage; label: string; icon: typeof Server }[] = [
+const navItems: { id: NavPage; label: string; icon: AppIcon }[] = [
   { id: "hosts", label: "Hosts", icon: Server },
   { id: "keys", label: "Keys", icon: KeyRound },
   { id: "settings", label: "Settings", icon: Settings },
@@ -43,8 +41,6 @@ export function AppShell({
   showTabs,
   tabBar,
   sidePanel,
-  hostCount = 0,
-  keyCount = 0,
   isMobile = false,
   immersive = false,
 }: AppShellProps) {
@@ -185,27 +181,6 @@ export function AppShell({
                 </button>
               );
             })}
-
-            <div
-              className="mt-4 space-y-1.5 rounded-lg border px-3 py-2.5"
-              style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
-            >
-              <div className="text-[10px] font-medium uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
-                Library
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span style={{ color: "var(--text-secondary)" }}>Hosts</span>
-                <span className="font-medium tabular-nums" style={{ color: "var(--text)" }}>
-                  {hostCount}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span style={{ color: "var(--text-secondary)" }}>Keys</span>
-                <span className="font-medium tabular-nums" style={{ color: "var(--text)" }}>
-                  {keyCount}
-                </span>
-              </div>
-            </div>
           </div>
 
           <div className="border-t px-3 py-3" style={{ borderColor: "var(--border-subtle)" }}>

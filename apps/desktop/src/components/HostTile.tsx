@@ -1,6 +1,7 @@
 import type { Host, HostGroup } from "@azalea/shared";
-import { Pencil, Server } from "lucide-react";
-import { HostMark } from "./HostMark";
+import { Pencil, Server } from "./icons";
+import { formatHostEndpoint } from "../lib/utils";
+import { HostOsIcon } from "./HostOsIcon";
 
 interface HostTileProps {
   host: Host;
@@ -31,15 +32,20 @@ export function HostTile({
         onClick={() => onConnect(host)}
         className={`hover-subtle transition-ui flex w-full items-center text-left disabled:opacity-50 ${
           compact
-            ? "gap-3 rounded-xl border px-3 py-3"
-            : "gap-3.5 rounded-xl border px-3.5 py-3.5"
+            ? "gap-3 rounded-xl border px-3.5 py-3.5"
+            : "gap-4 rounded-2xl border px-4 py-4"
         }`}
         style={{
           background: "var(--bg-card)",
           borderColor: "var(--border-subtle)",
         }}
       >
-        <HostMark seed={host.id || host.name} size={compact ? 40 : 48} rounded={10} />
+        <HostOsIcon
+          osId={host.os_id}
+          seed={host.id || host.name}
+          size={compact ? 42 : 52}
+          rounded={compact ? 11 : 14}
+        />
         <div className="min-w-0 flex-1">
           <div
             className={`truncate font-medium ${compact ? "text-sm" : "text-base"}`}
@@ -48,7 +54,7 @@ export function HostTile({
             {host.name}
           </div>
           <div className="truncate text-sm" style={{ color: "var(--text-muted)" }}>
-            {host.username}@{host.hostname}
+            {formatHostEndpoint(host.username, host.hostname)}
           </div>
         </div>
         {connecting && (
@@ -64,7 +70,7 @@ export function HostTile({
           e.stopPropagation();
           onEdit(host);
         }}
-        className={`transition-ui absolute right-2 top-2 rounded-md p-1.5 ${
+        className={`transition-ui absolute right-2.5 top-2.5 rounded-md p-1.5 ${
           compact ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         }`}
         style={{
@@ -142,7 +148,7 @@ export function GroupSection({
           className={
             compact
               ? "flex flex-col gap-2"
-              : "grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2"
+              : "grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-3"
           }
         >
           {hosts.map((host) => (

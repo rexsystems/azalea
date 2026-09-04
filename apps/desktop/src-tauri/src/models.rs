@@ -31,6 +31,8 @@ pub struct Host {
     pub group_id: Option<String>,
     #[serde(default)]
     pub mac_address: Option<String>,
+    #[serde(default)]
+    pub os_id: Option<String>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -187,6 +189,12 @@ pub struct HostKeyUnknownEvent {
     pub key_type: String,
     pub fingerprint: String,
     pub public_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HostOsUpdatedEvent {
+    pub host_id: String,
+    pub os_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Host, HostGroup } from "@azalea/shared";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search } from "./icons";
 import { groupHostsByGroup } from "../lib/utils";
 import { EmptyHostsState, GroupSection } from "./HostTile";
 import { useContextMenu } from "./ui/ContextMenu";

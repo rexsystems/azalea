@@ -7,9 +7,8 @@ import {
   FileKey2,
   Fingerprint,
   HardDriveUpload,
-  KeyRound,
   Trash2,
-} from "lucide-react";
+} from "./icons";
 import * as api from "../lib/api";
 import { copyText } from "../lib/clipboard";
 import { filenameToKeyName } from "../lib/utils";
@@ -53,6 +52,12 @@ function formatKeyType(type: string): string {
   }
 }
 
+function shortFingerprint(fp: string): string {
+  const clean = fp.replace(/^SHA256:/i, "").trim();
+  if (clean.length <= 20) return fp;
+  return `${clean.slice(0, 10)}…${clean.slice(-8)}`;
+}
+
 export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPageProps) {
   const [newKeyName, setNewKeyName] = useState("");
   const [algorithm, setAlgorithm] = useState<string>("ed25519");
@@ -77,7 +82,9 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
         algorithm: algorithm as CreateKeyInput["algorithm"],
       });
       setNewKeyName("");
-      setNotice(`Generated ${ALGORITHM_OPTIONS.find((o) => o.value === algorithm)?.label ?? algorithm} key.`);
+      setNotice(
+        `Generated ${ALGORITHM_OPTIONS.find((o) => o.value === algorithm)?.label ?? algorithm} key.`,
+      );
     } catch (err) {
       setError(String(err));
     } finally {
@@ -185,216 +192,274 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden" style={{ background: "var(--bg-base)" }}>
-      <div
-        className="flex shrink-0 items-center gap-3 border-b px-5 py-3.5"
-        style={{
-          borderColor: "var(--border-subtle)",
-          background: "var(--bg-panel)",
-        }}
-      >
-        <div
-          className="flex h-8 w-8 items-center justify-center rounded-lg"
-          style={{ background: "var(--accent-muted)", color: "var(--accent)" }}
-          aria-hidden
-        >
-          <KeyRound size={16} />
-        </div>
-        <div>
-          <h2 className="text-sm font-medium" style={{ color: "var(--text)" }}>
-            Keychain
-          </h2>
-          <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-            Generate, import, and install SSH identities
-          </p>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-5">
-        <div className="mx-auto max-w-md space-y-4">
-          <div
-            className="space-y-3 rounded-lg border p-3.5"
-            style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
-          >
-            <Input
-              label="Key name (optional for import)"
-              placeholder="My Laptop — or leave empty to use filename"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-            />
-
-            <Select
-              label="Generate algorithm"
-              value={algorithm}
-              options={ALGORITHM_OPTIONS}
-              onChange={setAlgorithm}
-            />
-
-            <div className="flex gap-2">
-              <Button className="flex-1" disabled={busy} onClick={() => void handleGenerate()}>
-                <Fingerprint size={16} />
-                Generate
-              </Button>
-              <Button
-                variant="secondary"
-                className="flex-1"
-                disabled={busy}
-                onClick={() => void handleImport()}
-              >
-                <FileKey size={16} />
-                Import file
-              </Button>
-            </div>
-
-            <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-              OpenSSH / PKCS#1 / PKCS#8: Ed25519, RSA, ECDSA, DSA. Passphrases supported. Export
-              .pub or append to a host&apos;s authorized_keys.
+    <div
+      className="flex h-full min-h-0 flex-col overflow-hidden"
+      style={{ background: "var(--bg-base)" }}
+    >
+      <div className="settings-shell keys-shell flex h-full min-h-0 flex-1 flex-col !pb-0">
+        <div className="mb-5 flex shrink-0 flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h2
+              className="text-2xl font-semibold tracking-tight sm:text-3xl"
+              style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
+            >
+              Keychain
+            </h2>
+            <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
+              Generate, import, and install SSH identities
             </p>
           </div>
-
-          {notice && !error && (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              {notice}
-            </p>
-          )}
-          {error && <p className="text-sm text-red-400">{error}</p>}
-
-          {pendingImport && (
+          <div
+            className="rounded-xl border px-3 py-2 shrink-0"
+            style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+          >
             <div
-              className="space-y-2 rounded-xl border p-4"
-              style={{ background: "var(--bg-card)", borderColor: "var(--border-subtle)" }}
+              className="text-[10px] uppercase tracking-wide"
+              style={{ color: "var(--text-muted)" }}
             >
-              <p className="text-sm" style={{ color: "var(--text)" }}>
-                <span className="font-medium">{pendingImport.name}</span> is protected by a
-                passphrase.
-              </p>
-              <Input
-                type="password"
-                placeholder="Passphrase"
-                value={passphrase}
-                onChange={(e) => setPassphrase(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && passphrase) {
-                    void finishImport(pendingImport.name, pendingImport.pem, passphrase);
-                  }
-                }}
-                autoFocus
-              />
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1"
-                  disabled={busy || !passphrase}
-                  onClick={() =>
-                    void finishImport(pendingImport.name, pendingImport.pem, passphrase)
-                  }
-                >
-                  Unlock & import
+              Keys
+            </div>
+            <div className="mt-1 text-sm font-medium tabular-nums" style={{ color: "var(--text)" }}>
+              {keys.length}
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-2xl border"
+          style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+        >
+          <div className="space-y-8 p-5 pb-8 sm:p-6 sm:pb-10">
+            <section>
+              <div
+                className="mb-5 flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-start sm:justify-between"
+                style={{ borderColor: "var(--border-subtle)" }}
+              >
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>
+                    New key
+                  </h3>
+                  <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    Create an Ed25519/RSA/ECDSA key or import an existing private key file.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-end">
+                <Input
+                  label="Name"
+                  placeholder="My Laptop — or leave empty to use filename"
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                />
+                <Select
+                  label="Algorithm"
+                  value={algorithm}
+                  options={ALGORITHM_OPTIONS}
+                  onChange={setAlgorithm}
+                />
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button disabled={busy} onClick={() => void handleGenerate()}>
+                  <Fingerprint size={16} />
+                  Generate
                 </Button>
                 <Button
                   variant="secondary"
                   disabled={busy}
-                  onClick={() => {
-                    setPendingImport(null);
-                    setPassphrase("");
-                  }}
+                  onClick={() => void handleImport()}
                 >
-                  Cancel
+                  <FileKey size={16} />
+                  Import file
                 </Button>
               </div>
-            </div>
-          )}
 
-          <div className="space-y-2">
-            {keys.length === 0 ? (
-              <p className="py-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-                No keys yet.
-              </p>
-            ) : (
-              keys.map((key) => (
-                <div
-                  key={key.id}
-                  className="space-y-3 rounded-xl border p-4"
-                  style={{
-                    background: "var(--bg-card)",
-                    borderColor: "var(--border-subtle)",
-                  }}
+              {(notice || error) && (
+                <p
+                  className="mt-4 text-sm"
+                  style={{ color: error ? "#f87171" : "var(--text-muted)" }}
                 >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="rounded-lg p-2"
-                      style={{ background: "var(--accent-muted)", color: "var(--accent)" }}
-                      aria-hidden
-                    >
-                      <Fingerprint size={16} />
-                    </div>
-                    <div className="min-w-0 flex-1 overflow-hidden">
-                      <div className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
-                        {key.name}
-                      </div>
-                      <div className="mt-0.5 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                        {formatKeyType(key.key_type)}
-                      </div>
-                      <p
-                        className="mt-1 break-all font-mono text-[10px] leading-relaxed"
-                        style={{ color: "var(--text-muted)" }}
-                        title={key.fingerprint}
-                      >
-                        {key.fingerprint}
-                      </p>
-                      <p
-                        className="mt-2 break-all font-mono text-[10px] leading-relaxed"
-                        style={{ color: "var(--text-secondary)" }}
-                      >
-                        {key.public_key}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="!p-2"
-                      style={{ color: "#f87171" }}
-                      disabled={busy}
-                      onClick={() => void onDelete(key.id)}
-                    >
-                      <Trash2 size={15} />
-                    </Button>
-                  </div>
+                  {error ?? notice}
+                </p>
+              )}
 
-                  <div className="flex flex-wrap gap-1.5">
+              {pendingImport && (
+                <div
+                  className="mt-5 space-y-3 rounded-xl border p-4"
+                  style={{ background: "var(--bg-card)", borderColor: "var(--border-subtle)" }}
+                >
+                  <p className="text-sm" style={{ color: "var(--text)" }}>
+                    <span className="font-medium">{pendingImport.name}</span> is protected by a
+                    passphrase.
+                  </p>
+                  <Input
+                    type="password"
+                    placeholder="Passphrase"
+                    value={passphrase}
+                    onChange={(e) => setPassphrase(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && passphrase) {
+                        void finishImport(pendingImport.name, pendingImport.pem, passphrase);
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
                     <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => void copyPublicKey(key)}
+                      disabled={busy || !passphrase}
+                      onClick={() =>
+                        void finishImport(pendingImport.name, pendingImport.pem, passphrase)
+                      }
                     >
-                      {copiedId === key.id ? <Check size={14} /> : <Copy size={14} />}
-                      {copiedId === key.id ? "Copied" : "Copy public"}
+                      Unlock & import
                     </Button>
                     <Button
                       variant="secondary"
-                      size="sm"
                       disabled={busy}
-                      onClick={() => void exportPublicKey(key)}
-                    >
-                      <FileKey2 size={14} />
-                      Export .pub
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={busy || hosts.length === 0}
                       onClick={() => {
-                        setInstallResult(null);
-                        setInstallKeyId(key.id);
+                        setPendingImport(null);
+                        setPassphrase("");
                       }}
                     >
-                      <HardDriveUpload size={14} />
-                      Add to host
+                      Cancel
                     </Button>
                   </div>
                 </div>
-              ))
-            )}
+              )}
+            </section>
+
+            <section>
+              <div
+                className="mb-5 flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-start sm:justify-between"
+                style={{ borderColor: "var(--border-subtle)" }}
+              >
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>
+                    Your keys
+                  </h3>
+                  <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                    Copy the public key, export a `.pub` file, or install it on a host.
+                  </p>
+                </div>
+              </div>
+
+              {keys.length === 0 ? (
+                <div
+                  className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-14 text-center"
+                  style={{ borderColor: "var(--border-subtle)" }}
+                >
+                  <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                    No keys yet
+                  </p>
+                  <p className="mt-1 max-w-sm text-sm" style={{ color: "var(--text-muted)" }}>
+                    Generate a new identity above, or import an existing OpenSSH private key.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+                  {keys.map((key) => {
+                    const copied = copiedId === key.id;
+                    return (
+                      <article
+                        key={key.id}
+                        className="flex min-w-0 flex-col overflow-hidden rounded-xl border p-4"
+                        style={{
+                          background: "var(--bg-card)",
+                          borderColor: "var(--border-subtle)",
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div
+                              className="truncate text-sm font-semibold"
+                              style={{ color: "var(--text)" }}
+                            >
+                              {key.name}
+                            </div>
+                            <div
+                              className="mt-1 flex flex-wrap items-center gap-2 text-[11px]"
+                              style={{ color: "var(--text-muted)" }}
+                            >
+                              <span
+                                className="rounded-md px-1.5 py-0.5 font-medium"
+                                style={{
+                                  background: "var(--accent-muted)",
+                                  color: "var(--accent)",
+                                }}
+                              >
+                                {formatKeyType(key.key_type)}
+                              </span>
+                              <span
+                                className="font-mono"
+                                title={key.fingerprint}
+                              >
+                                {shortFingerprint(key.fingerprint)}
+                              </span>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="!p-2 shrink-0"
+                            style={{ color: "#f87171" }}
+                            disabled={busy}
+                            onClick={() => void onDelete(key.id)}
+                            title="Delete key"
+                          >
+                            <Trash2 size={15} />
+                          </Button>
+                        </div>
+
+                        <p
+                          className="mt-3 line-clamp-2 overflow-hidden break-all font-mono text-[10px] leading-relaxed"
+                          style={{ color: "var(--text-secondary)" }}
+                          title={key.public_key}
+                        >
+                          {key.public_key}
+                        </p>
+
+                        <div
+                          className="mt-auto flex flex-wrap gap-1.5 border-t pt-3"
+                          style={{ borderColor: "var(--border-subtle)", marginTop: "1rem" }}
+                        >
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => void copyPublicKey(key)}
+                          >
+                            {copied ? <Check size={14} /> : <Copy size={14} />}
+                            {copied ? "Copied" : "Copy"}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => void exportPublicKey(key)}
+                          >
+                            <FileKey2 size={14} />
+                            Export
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busy || hosts.length === 0}
+                            onClick={() => {
+                              setInstallResult(null);
+                              setInstallKeyId(key.id);
+                            }}
+                          >
+                            <HardDriveUpload size={14} />
+                            Install
+                          </Button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
           </div>
         </div>
       </div>

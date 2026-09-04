@@ -9,7 +9,7 @@ import {
   Lock,
   LogOut,
   RefreshCw,
-} from "lucide-react";
+} from "./icons";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import * as api from "../lib/api";
 import { copyText } from "../lib/clipboard";
@@ -26,6 +26,8 @@ interface SyncSectionProps {
   getSettings: () => unknown;
   onVaultApplied: (settings: unknown) => void;
   onDataRefresh: () => Promise<void>;
+  /** Skip outer section chrome when rendered inside a parent settings panel. */
+  embedded?: boolean;
 }
 
 type Busy = null | "status" | "auth" | "setup" | "unlock" | "sync";
@@ -129,6 +131,7 @@ export function SyncSection({
   getSettings,
   onVaultApplied,
   onDataRefresh,
+  embedded = false,
 }: SyncSectionProps) {
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
@@ -460,28 +463,11 @@ export function SyncSection({
     );
   };
 
-  return (
-    <section className="settings-section">
-      <div className="mb-3 flex items-start gap-3">
-        <div className="settings-section-icon" aria-hidden>
-          <Globe size={16} />
-        </div>
-        <div className="min-w-0 pt-0.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-medium" style={{ color: "var(--text)" }}>
-              Account &amp; Sync
-            </h3>
-            {status?.logged_in && <PlanBadge plan={status.plan} size="md" />}
-          </div>
-          <p className="mt-0.5 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-            Encrypted cloud backup for hosts, keys, and settings. Free includes sync — you only pay
-            for more cloud space.
-          </p>
-        </div>
-      </div>
+  const body = (
+    <>
       <div
-        className="space-y-3 rounded-lg border p-3"
-        style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+        className="space-y-3 rounded-xl border p-3 sm:p-4"
+        style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
       >
         {status?.configured && status.logged_in && (
           <SettingToggle
@@ -552,6 +538,34 @@ export function SyncSection({
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <section
+      className="settings-section rounded-2xl border p-4 sm:p-5"
+      style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+    >
+      <div className="mb-4 flex items-start gap-3">
+        <div className="settings-section-icon" aria-hidden>
+          <Globe size={16} />
+        </div>
+        <div className="min-w-0 pt-0.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-[15px] font-medium" style={{ color: "var(--text)" }}>
+              Account &amp; Sync
+            </h3>
+            {status?.logged_in && <PlanBadge plan={status.plan} size="md" />}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+            Encrypted cloud backup for hosts, keys, and settings. Free includes sync — you only pay
+            for more cloud space.
+          </p>
+        </div>
+      </div>
+      {body}
     </section>
   );
 }

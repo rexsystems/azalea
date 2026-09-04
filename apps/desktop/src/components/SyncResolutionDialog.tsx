@@ -1,4 +1,4 @@
-import { Loader2, X } from "lucide-react";
+import { Loader2, X } from "./icons";
 import type { SyncPreview, VaultDiff } from "../lib/api";
 import { Button } from "./ui/Button";
 

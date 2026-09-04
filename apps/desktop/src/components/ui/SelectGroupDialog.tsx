@@ -1,5 +1,5 @@
 import type { HostGroup } from "@azalea/shared";
-import { Folder, FolderX } from "lucide-react";
+import { Folder, FolderX } from "../icons";
 import { Button } from "./Button";
 
 interface SelectGroupDialogProps {

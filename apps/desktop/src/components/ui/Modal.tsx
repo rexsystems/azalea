@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { X } from "lucide-react";
+import { X } from "../icons";
 import { Button } from "./Button";
 
 interface ModalProps {

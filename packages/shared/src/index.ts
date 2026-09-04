@@ -16,6 +16,8 @@ export interface Host {
   key_id: string | null;
   group_id: string | null;
   mac_address: string | null;
+  /** Detected remote OS id after a successful connect (ubuntu, debian, …). */
+  os_id: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -173,4 +175,9 @@ export interface HostKeyUnknownEvent {
   key_type: string;
   fingerprint: string;
   public_key: string;
+}
+
+export interface HostOsUpdatedEvent {
+  host_id: string;
+  os_id: string;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Snippet } from "@azalea/shared";
-import { Play, Plus, Trash2, X } from "lucide-react";
+import { Play, Plus, Trash2, X } from "./icons";
 import * as api from "../lib/api";
 
 interface SnippetsPopoverProps {

@@ -10,6 +10,26 @@ export interface HostFormValues {
   mac_address: string;
 }
 
+/** Short connection label for host cards — never show a full IP. */
+export function formatHostEndpoint(username: string, hostname: string): string {
+  return `${username}@${shortenHostForCard(hostname)}`;
+}
+
+function shortenHostForCard(hostname: string): string {
+  const host = hostname.trim();
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) return `${ipv4[1]}.${ipv4[2]}.…`;
+
+  if (host.includes(":") && /^[0-9a-fA-F:]+$/.test(host)) {
+    return `${host.slice(0, 8)}…`;
+  }
+
+  if (host.length <= 18) return host;
+  const dot = host.indexOf(".");
+  if (dot > 0 && dot <= 14) return `${host.slice(0, dot)}…`;
+  return `${host.slice(0, 16)}…`;
+}
+
 export function parseQuickConnect(input: string): Partial<HostFormValues> {
   const trimmed = input.trim();
   if (!trimmed) return {};

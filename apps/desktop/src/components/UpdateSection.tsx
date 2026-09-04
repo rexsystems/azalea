@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { Download, Loader2, RefreshCw } from "lucide-react";
+import { Download, Loader2, RefreshCw } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import { Button } from "./ui/Button";
 import { checkForUpdate, installUpdate, isUpdaterSupported } from "../lib/updater";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { isMobileRuntime } from "../hooks/useIsMobile";
 
-export function UpdateSection() {
+interface UpdateSectionProps {
+  embedded?: boolean;
+}
+
+export function UpdateSection({ embedded = false }: UpdateSectionProps) {
   const [appVersion, setAppVersion] = useState("…");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -91,62 +95,72 @@ export function UpdateSection() {
     }
   }, [pendingUpdate, pendingVersion]);
 
+  const controls = mobile ? (
+    <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+      Installed version {appVersion}. Mobile builds are updated by installing a new APK.
+    </p>
+  ) : (
+    <div
+      className="rounded-xl border px-3.5 py-3"
+      style={{
+        background: "var(--bg-card)",
+        borderColor: "var(--border-subtle)",
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="secondary" disabled={busy} onClick={() => void handleCheck()}>
+          {busy && !pendingVersion ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <RefreshCw size={14} />
+          )}
+          Check for updates
+        </Button>
+
+        {pendingVersion && (
+          <Button disabled={busy} onClick={() => void handleInstall()}>
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            Install {pendingVersion}
+          </Button>
+        )}
+      </div>
+
+      {status && (
+        <p className="mt-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+          {status}
+        </p>
+      )}
+      {error && (
+        <p className="mt-3 text-xs" style={{ color: "#f87171" }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+
+  if (embedded) return controls;
+
   return (
-    <section className="settings-section">
-      <div className="mb-3 flex items-start gap-3">
+    <section
+      className="settings-section rounded-2xl border p-4 sm:p-5"
+      style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+    >
+      <div className="mb-4 flex items-start gap-3">
         <div className="settings-section-icon" aria-hidden>
           <RefreshCw size={16} />
         </div>
         <div className="min-w-0 pt-0.5">
-          <h3 className="text-sm font-medium" style={{ color: "var(--text)" }}>
+          <h3 className="text-[15px] font-medium" style={{ color: "var(--text)" }}>
             Updates
           </h3>
-          <p className="mt-0.5 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
             {mobile
               ? `Installed version ${appVersion}. Mobile builds are updated by installing a new APK.`
               : `Installed version ${appVersion}. Release builds check azalea.rexsystems.me and GitHub for signed updates.`}
           </p>
         </div>
       </div>
-
-      {!mobile && (
-        <div
-          className="rounded-lg border px-3 py-2.5"
-          style={{
-            background: "var(--bg-card)",
-            borderColor: "var(--border-subtle)",
-          }}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" disabled={busy} onClick={() => void handleCheck()}>
-              {busy && !pendingVersion ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <RefreshCw size={14} />
-              )}
-              Check for updates
-            </Button>
-
-            {pendingVersion && (
-              <Button disabled={busy} onClick={() => void handleInstall()}>
-                {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                Install {pendingVersion}
-              </Button>
-            )}
-          </div>
-
-          {status && (
-            <p className="mt-3 text-xs" style={{ color: "var(--text-secondary)" }}>
-              {status}
-            </p>
-          )}
-          {error && (
-            <p className="mt-3 text-xs" style={{ color: "#f87171" }}>
-              {error}
-            </p>
-          )}
-        </div>
-      )}
+      {controls}
     </section>
   );
 }

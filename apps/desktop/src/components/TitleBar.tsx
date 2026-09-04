@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Copy, Minus, Square, X } from "lucide-react";
+import { Copy, Minus, Square, X } from "./icons";
 import { Logo } from "./Logo";
 
 export function TitleBar({ title }: { title?: string }) {

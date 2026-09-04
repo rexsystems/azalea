@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "../icons";
 
 export interface SelectOption {
   value: string;

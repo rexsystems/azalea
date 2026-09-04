@@ -15,7 +15,7 @@ import {
   TerminalSquare,
   Upload,
   X,
-} from "lucide-react";
+} from "./icons";
 import * as api from "../lib/api";
 
 interface FileBrowserPanelProps {

@@ -330,53 +330,49 @@ textarea,
 
 .connect-stage {
   opacity: 0;
-  transform: translateY(10px);
-  transition:
-    opacity 380ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 320ms ease;
 }
 
 .connect-screen.entered .connect-stage {
   opacity: 1;
-  transform: none;
 }
 
 .connect-screen.exiting .connect-stage {
   opacity: 0;
-  transform: translateY(-8px);
-  transition:
-    opacity 340ms ease,
-    transform 340ms ease;
+  transition: opacity 280ms ease;
 }
 
 .connect-avatar {
-  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 280ms ease;
 }
 
 .connect-screen.entered .connect-avatar {
-  transform: none;
+  opacity: 1;
 }
 
 .connect-step-col {
   opacity: 0;
-  transform: translateY(6px);
-  transition:
-    opacity 280ms ease,
-    transform 280ms ease;
+  transition: opacity 260ms ease;
 }
 
 .connect-screen.entered .connect-step-col {
   opacity: 1;
-  transform: none;
 }
 
-.connect-step-track {
-  position: relative;
-  height: 2px;
-  flex: 1 1 auto;
+.connect-stepper {
+  --connect-node-size: 2.75rem;
+}
+
+.connect-step-separator {
+  position: absolute;
+  top: calc(var(--connect-node-size) / 2 - 1.5px);
+  left: calc(50% + var(--connect-node-size) / 2 + 6px);
+  right: calc(-50% + var(--connect-node-size) / 2 + 6px);
+  height: 3px;
   overflow: hidden;
   border-radius: 9999px;
   background: var(--border-subtle);
+  pointer-events: none;
 }
 
 .connect-step-fill {
@@ -385,8 +381,8 @@ textarea,
   transform: scaleX(0);
   transform-origin: left center;
   border-radius: inherit;
-  background: color-mix(in srgb, #34d399 75%, var(--border-subtle));
-  transition: transform 480ms cubic-bezier(0.22, 1, 0.36, 1);
+  background: color-mix(in srgb, #34d399 80%, var(--accent));
+  transition: transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .connect-step-fill.filled {
@@ -411,20 +407,24 @@ textarea,
 }
 
 .connect-node {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
-  height: 1.5rem;
-  width: 1.5rem;
+  height: var(--connect-node-size);
+  width: var(--connect-node-size);
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  border: 1px solid var(--border-subtle);
+  border: 1.5px solid var(--border-subtle);
   background: var(--bg-panel);
   color: var(--text-muted);
+  box-shadow: 0 0 0 4px var(--bg-base);
   transition:
     border-color 320ms ease,
     background 320ms ease,
     color 320ms ease,
+    box-shadow 320ms ease,
     transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -433,32 +433,35 @@ textarea,
 }
 
 .connect-node.active {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-subtle));
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--border-subtle));
   background: var(--accent-muted);
   color: var(--accent);
-  transform: scale(1.06);
+  box-shadow:
+    0 0 0 4px var(--bg-base),
+    0 0 0 7px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .connect-node.done {
   border-color: transparent;
-  background: rgba(52, 211, 153, 0.18);
+  background: rgba(52, 211, 153, 0.2);
   color: #34d399;
 }
 
 .connect-node.failed {
   border-color: transparent;
-  background: rgba(248, 113, 113, 0.18);
+  background: rgba(248, 113, 113, 0.2);
   color: #f87171;
 }
 
 .connect-session {
   transition: border-color 280ms ease, opacity 280ms ease;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .connect-live-dot {
   display: inline-block;
-  height: 0.35rem;
-  width: 0.35rem;
+  height: 0.45rem;
+  width: 0.45rem;
   border-radius: 9999px;
   background: var(--accent);
   animation: connect-live 1.4s ease-in-out infinite;
@@ -477,23 +480,40 @@ textarea,
 
 .settings-shell {
   width: 100%;
-  max-width: 36rem;
-  margin: 0 auto;
-  padding: 1.25rem 1.25rem 2.5rem;
+  max-width: none;
+  margin: 0;
+  min-height: 0;
+  padding: 1.5rem 1.5rem 3rem;
+}
+
+.keys-shell {
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 1.25rem !important;
+}
+
+.settings-tabs {
+  scrollbar-width: none;
+}
+
+.settings-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .settings-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: 0;
 }
 
 .settings-section-icon {
   display: flex;
-  height: 2rem;
-  width: 2rem;
+  height: 2.25rem;
+  width: 2.25rem;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  border-radius: 0.55rem;
+  border-radius: 0.65rem;
   background: var(--accent-muted);
   color: var(--accent);
 }
@@ -534,6 +554,10 @@ html[data-mobile="true"] .file-browser-panel {
 html[data-mobile="true"] .settings-shell {
   max-width: none;
   padding: 1rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
+}
+
+html[data-mobile="true"] .keys-shell {
+  max-width: none;
 }
 
 html[data-mobile="true"] .app-shell-mobile {

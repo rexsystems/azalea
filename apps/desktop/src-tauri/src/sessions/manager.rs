@@ -15,8 +15,8 @@ use uuid::Uuid;
 use crate::keys::{get_host_password, load_key_pair, public_key_identity};
 use crate::models::{
     ConnectionLogEvent, FileEntry, Host, HostKeyMismatchEvent, HostKeyUnknownEvent,
-    InstallPublicKeyResult, KnownHostRecord, PortForward, SftpListResult, TerminalOutputEvent,
-    TerminalStatusEvent,
+    HostOsUpdatedEvent, InstallPublicKeyResult, KnownHostRecord, PortForward, SftpListResult,
+    TerminalOutputEvent, TerminalStatusEvent,
 };
 use crate::store::SharedDatabase;
 
@@ -658,7 +658,7 @@ async fn run_session(
     emit_log(&app, &session_id, &format!("Connecting to {addr} as {}...", host.username));
 
     let handler = SshClientHandler {
-        db,
+        db: db.clone(),
         app: app.clone(),
         session_id: session_id.clone(),
         hostname: host.hostname.clone(),
@@ -699,6 +699,20 @@ async fn run_session(
     emit_log(&app, &session_id, "Authentication successful");
 
     let session = Arc::new(session);
+
+    if let Some(os_id) = detect_remote_os(&session).await {
+        if host.os_id.as_deref() != Some(os_id.as_str()) {
+            if db.lock().set_host_os_id(&host.id, &os_id).is_ok() {
+                let _ = app.emit(
+                    "host-os-updated",
+                    HostOsUpdatedEvent {
+                        host_id: host.id.clone(),
+                        os_id,
+                    },
+                );
+            }
+        }
+    }
 
     emit_log(&app, &session_id, "Opening shell...");
     let mut channel = session.channel_open_session().await?;
@@ -821,6 +835,122 @@ async fn request_pty(
         .request_pty(false, "xterm-256color", cols, rows, 0, 0, &[])
         .await?;
     Ok(())
+}
+
+async fn detect_remote_os(session: &client::Handle<SshClientHandler>) -> Option<String> {
+    let mut channel = session.channel_open_session().await.ok()?;
+    channel
+        .exec(
+            true,
+            "if [ -d /etc/pve ] || command -v pveversion >/dev/null 2>&1; then echo 'ID=proxmox'; fi; cat /etc/os-release 2>/dev/null; sw_vers -productName 2>/dev/null; uname -s",
+        )
+        .await
+        .ok()?;
+
+    let mut buf = Vec::new();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(4);
+    loop {
+        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        match tokio::time::timeout(remaining, channel.wait()).await {
+            Ok(Some(ChannelMsg::Data { ref data })) => buf.extend_from_slice(data),
+            Ok(Some(ChannelMsg::ExtendedData { ref data, .. })) => buf.extend_from_slice(data),
+            Ok(Some(ChannelMsg::Eof))
+            | Ok(Some(ChannelMsg::Close))
+            | Ok(Some(ChannelMsg::ExitStatus { .. }))
+            | Ok(None) => break,
+            Ok(Some(_)) => {}
+            Err(_) => break,
+        }
+    }
+
+    if buf.is_empty() {
+        return None;
+    }
+    parse_os_id(&String::from_utf8_lossy(&buf))
+}
+
+fn parse_os_id(raw: &str) -> Option<String> {
+    let lower = raw.to_ascii_lowercase();
+    // Proxmox VE is Debian-based; detect before falling through to ID=debian.
+    if lower.contains("id=proxmox")
+        || lower.lines().any(|l| {
+            let t = l.trim_start();
+            t.starts_with("pretty_name=") && t.contains("proxmox")
+        })
+    {
+        return Some("proxmox".into());
+    }
+
+    let mut id: Option<String> = None;
+    let mut id_like: Option<String> = None;
+
+    for line in raw.lines() {
+        let line = line.trim();
+        if let Some(value) = line.strip_prefix("ID=") {
+            id = Some(value.trim_matches('"').trim().to_ascii_lowercase());
+        } else if let Some(value) = line.strip_prefix("ID_LIKE=") {
+            id_like = Some(value.trim_matches('"').trim().to_ascii_lowercase());
+        }
+    }
+
+    if let Some(id) = id {
+        return Some(normalize_os_id(&id));
+    }
+    if let Some(id_like) = id_like {
+        for token in id_like.split_whitespace() {
+            let normalized = normalize_os_id(token);
+            if normalized != "linux" {
+                return Some(normalized);
+            }
+        }
+    }
+
+    if lower.contains("mac os") || lower.contains("macos") || lower.contains("darwin") {
+        return Some("macos".into());
+    }
+    if lower.contains("freebsd") {
+        return Some("freebsd".into());
+    }
+    if lower.contains("openbsd") {
+        return Some("openbsd".into());
+    }
+    if lower.contains("windows") || lower.contains("mingw") || lower.contains("msys") {
+        return Some("windows".into());
+    }
+    if lower.contains("linux") {
+        return Some("linux".into());
+    }
+    None
+}
+
+fn normalize_os_id(id: &str) -> String {
+    match id {
+        "ubuntu" => "ubuntu",
+        "debian" => "debian",
+        "fedora" => "fedora",
+        "arch" | "archarm" | "endeavouros" | "manjaro" | "garuda" => "arch",
+        "centos" => "centos",
+        "rhel" | "redhat" => "rhel",
+        "rocky" => "rocky",
+        "almalinux" | "alma" => "alma",
+        "opensuse" | "opensuse-leap" | "opensuse-tumbleweed" | "sles" | "suse" => "opensuse",
+        "alpine" => "alpine",
+        "pop" | "pop-os" => "pop",
+        "linuxmint" | "mint" => "mint",
+        "kali" => "kali",
+        "amzn" | "amazon" | "amazonlinux" => "amazon",
+        "raspbian" | "raspberrypi" | "raspios" => "raspberry",
+        "gentoo" => "gentoo",
+        "void" => "void",
+        "nixos" => "nixos",
+        "nobara" => "nobara",
+        "proxmox" | "pve" => "proxmox",
+        other => other,
+    }
+    .to_string()
 }
 
 fn emit_log(app: &AppHandle, session_id: &str, message: &str) {

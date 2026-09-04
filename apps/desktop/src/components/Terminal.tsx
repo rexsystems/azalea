@@ -6,7 +6,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal as XTerm } from "@xterm/xterm";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { ChevronDown, ChevronUp, X } from "./icons";
 import "@xterm/xterm/css/xterm.css";
 import { copyText } from "../lib/clipboard";
 import type { TerminalSettings } from "../lib/settings";

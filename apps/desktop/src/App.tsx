@@ -4,12 +4,13 @@ import type {
   HostGroup,
   HostKeyMismatchEvent,
   HostKeyUnknownEvent,
+  HostOsUpdatedEvent,
   ImportBackupResult,
   ImportResult,
 } from "@azalea/shared";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { ArrowLeftRight, Columns2, ExternalLink, FolderTree, SquareTerminal, Zap } from "lucide-react";
+import { ArrowLeftRight, Columns2, ExternalLink, FolderTree, SquareTerminal, Zap } from "./components/icons";
 import * as api from "./lib/api";
 import type { HostFormValues } from "./lib/utils";
 import { looksLikeUnreachableError, parseQuickConnect, wolBroadcastForHost } from "./lib/utils";
@@ -250,12 +251,12 @@ function App() {
         username: "",
         status: "connecting",
         logs: [],
-        hadConnected: false,
+        hadConnected: true,
       },
     ]);
     setActiveTabId(sessionId);
     setViewingTerminal(true);
-    setStatusMessage("Opening local terminal...");
+    setStatusMessage("Local terminal");
   }, []);
 
   const popOutActiveTab = useCallback(() => {
@@ -533,13 +534,18 @@ function App() {
       setUnknownHostKey(event.payload);
     });
 
+    const unlistenOs = listen<HostOsUpdatedEvent>("host-os-updated", () => {
+      void refreshHosts();
+    });
+
     return () => {
       void unlistenStatus.then((unlisten) => unlisten());
       void unlistenLog.then((unlisten) => unlisten());
       void unlistenMismatch.then((unlisten) => unlisten());
       void unlistenUnknown.then((unlisten) => unlisten());
+      void unlistenOs.then((unlisten) => unlisten());
     };
-  }, [scheduleReconnect, clearReconnectTimer, removeTab]);
+  }, [scheduleReconnect, clearReconnectTimer, removeTab, refreshHosts]);
 
   const openAddDrawer = (groupId?: string | null, initial?: Partial<HostFormValues>) => {
     setEditingHost(null);
@@ -986,6 +992,7 @@ function App() {
     activeTab &&
       useFancyConnect &&
       viewingTerminal &&
+      !api.isLocalSession(activeTab.id) &&
       (activeTab.status === "connecting" || activeTab.status === "error") &&
       !activeTab.hadConnected,
   );
@@ -1011,6 +1018,7 @@ function App() {
     viewingTerminal &&
     useFancyConnect &&
     overlayTab != null &&
+    !api.isLocalSession(overlayTab.id) &&
     (activeTabId === overlayTab.id || activeNeedsConnectOverlay);
 
   const connectOverlayStatus: "connecting" | "connected" | "error" =
@@ -1190,6 +1198,7 @@ function App() {
                 error={overlayTab.error}
                 logs={overlayTab.logs}
                 markSeed={overlayTab.hostId || overlayTab.id}
+                osId={hosts.find((h) => h.id === overlayTab.hostId)?.os_id}
                 onExitComplete={clearConnectOverlay}
               />
             )}
@@ -1239,8 +1248,6 @@ function App() {
         statusMessage={isMobile ? undefined : statusMessage}
         syncStatus={syncStatus}
         showTabs={hasTabs && (viewingTerminal || !isMobile)}
-        hostCount={hosts.length}
-        keyCount={keys.length}
         isMobile={isMobile}
         immersive={isMobile && viewingTerminal}
         tabBar={

@@ -1,5 +1,5 @@
 import type { Host } from "@azalea/shared";
-import { Loader2, Server } from "lucide-react";
+import { Loader2, Server } from "../icons";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 

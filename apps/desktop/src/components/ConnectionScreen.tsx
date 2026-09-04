@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   KeyRound,
+  Loader2,
   Network,
   SquareTerminal,
   X,
-} from "lucide-react";
-import { HostMark, hostMarkAccent } from "./HostMark";
+  type AppIcon,
+} from "./icons";
+import { hostMarkAccent } from "./HostMark";
+import { HostOsIcon } from "./HostOsIcon";
 
 interface ConnectionScreenProps {
   hostName: string;
@@ -17,6 +20,7 @@ interface ConnectionScreenProps {
   error?: string;
   logs: string[];
   markSeed?: string;
+  osId?: string | null;
   onExitComplete?: () => void;
 }
 
@@ -25,8 +29,9 @@ type StepState = "pending" | "active" | "done" | "failed";
 interface Step {
   id: string;
   label: string;
+  description: string;
   state: StepState;
-  Icon: typeof Network;
+  Icon: AppIcon;
 }
 
 function buildSteps(
@@ -35,9 +40,9 @@ function buildSteps(
 ): Step[] {
   if (status === "connected") {
     return [
-      { id: "reach", label: "Reach", Icon: Network, state: "done" },
-      { id: "auth", label: "Auth", Icon: KeyRound, state: "done" },
-      { id: "shell", label: "Shell", Icon: SquareTerminal, state: "done" },
+      { id: "reach", label: "Reach", description: "TCP open", Icon: Network, state: "done" },
+      { id: "auth", label: "Auth", description: "Credentials", Icon: KeyRound, state: "done" },
+      { id: "shell", label: "Shell", description: "Session", Icon: SquareTerminal, state: "done" },
     ];
   }
 
@@ -68,42 +73,52 @@ function buildSteps(
     {
       id: "reach",
       label: "Reach",
+      description: "TCP open",
       Icon: Network,
       state: mark(tcp, true, !tcp),
     },
     {
       id: "auth",
       label: "Auth",
+      description: "Credentials",
       Icon: KeyRound,
       state: mark(authOk, authStarted || tcp, authStarted && !authOk),
     },
     {
       id: "shell",
       label: "Shell",
+      description: "Session",
       Icon: SquareTerminal,
       state: mark(shellOk, shellStarted || authOk, shellStarted && !shellOk),
     },
   ];
 }
 
-function StepNode({ state, Icon }: { state: StepState; Icon: typeof Network }) {
+function StepNode({ state, Icon }: { state: StepState; Icon: AppIcon }) {
   if (state === "done") {
     return (
       <span className="connect-node done">
-        <Check size={12} strokeWidth={3} />
+        <Check size={18} strokeWidth={2.75} />
       </span>
     );
   }
   if (state === "failed") {
     return (
       <span className="connect-node failed">
-        <X size={12} strokeWidth={3} />
+        <X size={18} strokeWidth={2.75} />
+      </span>
+    );
+  }
+  if (state === "active") {
+    return (
+      <span className="connect-node active">
+        <Loader2 size={18} strokeWidth={2.25} className="animate-spin" />
       </span>
     );
   }
   return (
-    <span className={`connect-node ${state === "active" ? "active" : "pending"}`}>
-      <Icon size={12} strokeWidth={state === "active" ? 2.25 : 2} />
+    <span className="connect-node pending">
+      <Icon size={18} strokeWidth={2} />
     </span>
   );
 }
@@ -117,6 +132,7 @@ export function ConnectionScreen({
   error,
   logs,
   markSeed,
+  osId,
   onExitComplete,
 }: ConnectionScreenProps) {
   const seed = markSeed || `${username}@${hostname}:${port}` || hostName;
@@ -124,11 +140,39 @@ export function ConnectionScreen({
   const portSuffix = port === 22 ? "" : `:${port}`;
   const steps = useMemo(() => buildSteps(logs, status), [logs, status]);
   const logEndRef = useRef<HTMLDivElement>(null);
-  const visibleLogs = logs.slice(-5);
+  const visibleLogs = logs.slice(-8);
   const latestLog = visibleLogs[visibleLogs.length - 1];
   const [entered, setEntered] = useState(false);
   const [exiting, setExiting] = useState(false);
   const exitStarted = useRef(false);
+  const [shownDone, setShownDone] = useState(0);
+
+  const targetDone = useMemo(() => {
+    if (status === "connected") return steps.length;
+    if (status === "error") {
+      const failedAt = steps.findIndex((s) => s.state === "failed");
+      if (failedAt >= 0) return failedAt;
+      return steps.filter((s) => s.state === "done").length;
+    }
+    return steps.filter((s) => s.state === "done").length;
+  }, [steps, status]);
+
+  const visualSteps = useMemo(() => {
+    return steps.map((step, index) => {
+      if (status === "error" && step.state === "failed" && index === targetDone) {
+        return { ...step, state: "failed" as const };
+      }
+      if (index < shownDone) return { ...step, state: "done" as const };
+      if (
+        index === shownDone &&
+        shownDone < steps.length &&
+        !(status === "error" && index === targetDone)
+      ) {
+        return { ...step, state: "active" as const };
+      }
+      return { ...step, state: "pending" as const };
+    });
+  }, [steps, shownDone, status, targetDone]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setEntered(true));
@@ -140,146 +184,169 @@ export function ConnectionScreen({
   }, [logs.length]);
 
   useEffect(() => {
+    if (shownDone >= targetDone) return;
+    const id = window.setTimeout(() => {
+      setShownDone((n) => Math.min(n + 1, targetDone));
+    }, 260);
+    return () => window.clearTimeout(id);
+  }, [shownDone, targetDone]);
+
+  useEffect(() => {
     if (status !== "connected" || exitStarted.current) return;
+    if (shownDone < steps.length) return;
     exitStarted.current = true;
 
-    const hold = window.setTimeout(() => setExiting(true), 420);
-    const done = window.setTimeout(() => onExitComplete?.(), 420 + 380);
+    const hold = window.setTimeout(() => setExiting(true), 320);
+    const done = window.setTimeout(() => onExitComplete?.(), 320 + 360);
     return () => {
       window.clearTimeout(hold);
       window.clearTimeout(done);
     };
-  }, [status, onExitComplete]);
+  }, [status, shownDone, steps.length, onExitComplete]);
 
+  const activeVisual = visualSteps.find((s) => s.state === "active");
+  const allVisualDone = shownDone >= steps.length;
   const headline =
     status === "error"
       ? "Could not connect"
-      : status === "connected"
+      : status === "connected" && allVisualDone
         ? "Connected"
-        : steps.find((s) => s.state === "active")?.label === "Reach"
+        : activeVisual?.label === "Reach"
           ? "Reaching host"
-          : steps.find((s) => s.state === "active")?.label === "Auth"
+          : activeVisual?.label === "Auth"
             ? "Authenticating"
-            : steps.find((s) => s.state === "active")?.label === "Shell"
+            : activeVisual?.label === "Shell"
               ? "Opening shell"
               : "Connecting";
 
+  const headlineTone =
+    status === "error"
+      ? "#f87171"
+      : status === "connected" && allVisualDone
+        ? "#86efac"
+        : "var(--text-secondary)";
+
   return (
     <div
-      className={`connect-screen absolute inset-0 z-10 flex flex-col items-center justify-center px-6 ${
+      className={`connect-screen absolute inset-0 z-10 flex flex-col items-center justify-center px-5 py-8 sm:px-8 ${
         entered ? "entered" : ""
       } ${exiting ? "exiting" : ""}`}
     >
       <div
         className="connect-wash"
         style={{
-          background: `radial-gradient(ellipse 70% 55% at 50% 35%, ${accent}22 0%, transparent 70%)`,
+          background: `radial-gradient(ellipse 80% 60% at 50% 28%, ${accent}28 0%, transparent 68%)`,
         }}
         aria-hidden
       />
 
-      <div className="connect-stage relative z-10 flex w-full max-w-sm flex-col items-center text-center">
-        <div className="connect-avatar mb-5">
-          <HostMark seed={seed} size={64} rounded={16} />
+      <div className="connect-stage relative z-10 flex w-full max-w-xl flex-col items-center text-center">
+        <div className="connect-avatar mb-6 sm:mb-7">
+          <HostOsIcon osId={osId} seed={seed} size={88} rounded={22} />
         </div>
 
-        <h2 className="text-xl font-semibold tracking-tight" style={{ color: "var(--text)" }}>
+        <h2
+          className="max-w-full truncate px-2 text-2xl font-semibold tracking-tight sm:text-3xl"
+          style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
+        >
           {hostName}
         </h2>
-        <p className="mt-1.5 font-mono text-[13px]" style={{ color: "var(--text-muted)" }}>
+        <p
+          className="mt-2 max-w-full truncate px-2 font-mono text-sm sm:text-[15px]"
+          style={{ color: "var(--text-muted)" }}
+        >
           {username}@{hostname}
           {portSuffix}
         </p>
 
-        <p
-          className="mt-5 text-sm font-medium"
-          style={{
-            color:
-              status === "error"
-                ? "#f87171"
-                : status === "connected"
-                  ? "#86efac"
-                  : "var(--text-secondary)",
-          }}
-        >
+        <p className="mt-6 text-base font-medium sm:text-lg" style={{ color: headlineTone }}>
           {status === "error"
             ? (error ?? headline)
-            : status === "connected"
+            : status === "connected" && allVisualDone
               ? headline
               : `${headline}…`}
         </p>
 
-        <div className="mt-6 w-full">
-          <div className="flex items-start justify-between gap-2">
-            {steps.map((step, index) => (
-              <div
+        <nav className="connect-stepper mt-8 w-full px-1 sm:mt-10 sm:px-2" aria-label="Connection progress">
+          <ol className="flex w-full items-start">
+            {visualSteps.map((step, index) => (
+              <li
                 key={step.id}
-                className="connect-step-col flex min-w-0 flex-1 flex-col items-center gap-2"
-                style={{ transitionDelay: `${80 + index * 70}ms` }}
+                className="connect-step-col relative flex min-w-0 flex-1 flex-col items-center"
               >
-                <div className="flex w-full items-center">
-                  {index > 0 && (
-                    <div className="connect-step-track flex-1">
-                      <div
-                        className={`connect-step-fill ${
-                          steps[index - 1].state === "done" ? "filled" : ""
-                        }`}
-                      />
-                    </div>
-                  )}
-                  <StepNode state={step.state} Icon={step.Icon} />
-                  {index < steps.length - 1 && (
-                    <div className="connect-step-track flex-1">
-                      <div
-                        className={`connect-step-fill ${
-                          step.state === "done" ? "filled" : ""
-                        }`}
-                      />
-                    </div>
-                  )}
+                {index < visualSteps.length - 1 && (
+                  <div className="connect-step-separator" aria-hidden>
+                    <div
+                      className={`connect-step-fill ${
+                        step.state === "done" ? "filled" : ""
+                      }`}
+                    />
+                  </div>
+                )}
+
+                <StepNode state={step.state} Icon={step.Icon} />
+
+                <div className="mt-3 flex flex-col items-center gap-0.5 px-1">
+                  <span
+                    className={`connect-step-label text-sm font-semibold sm:text-[15px] ${step.state}`}
+                  >
+                    {step.label}
+                  </span>
+                  <span
+                    className="hidden text-[11px] sm:block"
+                    style={{
+                      color:
+                        step.state === "active"
+                          ? "var(--text-secondary)"
+                          : step.state === "done"
+                            ? "color-mix(in srgb, #86efac 70%, var(--text-muted))"
+                            : "var(--text-muted)",
+                    }}
+                  >
+                    {step.description}
+                  </span>
                 </div>
-                <span
-                  className={`text-[11px] font-medium connect-step-label ${step.state}`}
-                >
-                  {step.label}
-                </span>
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
+          </ol>
+        </nav>
 
         <div
-          className="connect-session mt-7 w-full rounded-xl border px-3.5 py-3 text-left"
+          className="connect-session mt-8 w-full rounded-2xl border px-4 py-4 text-left sm:mt-10 sm:px-5 sm:py-5"
           style={{
             borderColor: "var(--border-subtle)",
             background: "var(--terminal-bg)",
           }}
         >
-          <div className="mb-2 flex items-center gap-2">
+          <div className="mb-3 flex items-center gap-2.5">
             <span
-              className="text-[10px] font-medium uppercase tracking-[0.12em]"
+              className="text-[11px] font-medium uppercase tracking-[0.14em]"
               style={{ color: "var(--text-muted)" }}
             >
               Session
             </span>
-            {status === "connecting" && <span className="connect-live-dot" aria-hidden />}
+            {(status === "connecting" || (status === "connected" && !allVisualDone)) && (
+              <span className="connect-live-dot" aria-hidden />
+            )}
           </div>
           <div
-            className="font-mono text-[11px] leading-relaxed"
+            className="min-h-[7.5rem] font-mono text-[12px] leading-relaxed sm:min-h-[8.5rem] sm:text-[13px]"
             style={{ color: "var(--text-secondary)" }}
           >
             {status === "error" && error ? (
-              <span style={{ color: "#fca5a5" }}>{error}</span>
-            ) : status === "connected" ? (
+              <span className="break-words whitespace-pre-wrap" style={{ color: "#fca5a5" }}>
+                {error}
+              </span>
+            ) : status === "connected" && allVisualDone ? (
               <span style={{ color: "#86efac" }}>Shell ready</span>
             ) : latestLog ? (
               visibleLogs.map((line, i) => (
                 <div
                   key={`${logs.length - visibleLogs.length + i}-${line}`}
-                  className="truncate py-px"
+                  className="break-words py-0.5"
                   style={{
                     color: i === visibleLogs.length - 1 ? "var(--text)" : "var(--text-muted)",
-                    opacity: i === visibleLogs.length - 1 ? 1 : 0.75,
+                    opacity: i === visibleLogs.length - 1 ? 1 : 0.72,
                   }}
                 >
                   {line}
