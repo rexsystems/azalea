@@ -234,7 +234,14 @@ export function ConnectionScreen({
       <div
         className="connect-wash"
         style={{
-          background: `radial-gradient(ellipse 80% 60% at 50% 28%, color-mix(in srgb, ${accent} 32%, transparent) 0%, transparent 68%)`,
+          background: `
+            radial-gradient(
+              ellipse 52% 42% at 50% 32%,
+              color-mix(in srgb, ${accent} 34%, transparent) 0%,
+              color-mix(in srgb, ${accent} 14%, transparent) 38%,
+              transparent 72%
+            )
+          `,
         }}
         aria-hidden
       />

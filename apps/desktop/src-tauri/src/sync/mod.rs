@@ -81,10 +81,30 @@ async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
         return AccountPlanRow::default();
     }
 
-    serde_json::from_value::<Vec<AccountPlanRow>>(body)
-        .ok()
-        .and_then(|rows| rows.into_iter().next())
-        .unwrap_or_default()
+    if let Ok(rows) = serde_json::from_value::<Vec<AccountPlanRow>>(body.clone()) {
+        if let Some(row) = rows.into_iter().next() {
+            return normalize_plan_row(row);
+        }
+    }
+
+    if let Ok(row) = serde_json::from_value::<AccountPlanRow>(body) {
+        return normalize_plan_row(row);
+    }
+
+    AccountPlanRow::default()
+}
+
+fn normalize_plan_row(mut row: AccountPlanRow) -> AccountPlanRow {
+    let plan = row.plan.trim().to_ascii_lowercase();
+    row.plan = if plan == "pro" { "pro".into() } else { "free".into() };
+    if row.limit_bytes <= 0 {
+        row.limit_bytes = if row.plan == "pro" {
+            10 * 1024 * 1024
+        } else {
+            FREE_VAULT_LIMIT_BYTES
+        };
+    }
+    row
 }
 
 pub struct SyncState {

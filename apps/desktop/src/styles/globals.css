@@ -16,6 +16,48 @@
   --text-xl: 1.3125rem;
 }
 
+/* ── Theme: Noir (default) ── */
+[data-theme="noir"] {
+  --bg-base: #000000;
+  --bg-panel: #0a0a0a;
+  --bg-card: #111111;
+  --bg-card-hover: #1a1a1a;
+  --bg-input: #141414;
+  --border: #262626;
+  --border-subtle: #1a1a1a;
+  --text: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --text-muted: rgba(255, 255, 255, 0.42);
+  --accent: #ffffff;
+  --accent-hover: #e5e5e5;
+  --accent-muted: rgba(255, 255, 255, 0.08);
+  --accent-fg: #000000;
+  --nav-active: #141414;
+  --terminal-bg: #000000;
+  --shadow: none;
+}
+
+/* ── Theme: Dark ── */
+[data-theme="dark"] {
+  --bg-base: #121214;
+  --bg-panel: #1c1c1e;
+  --bg-card: #242426;
+  --bg-card-hover: #2e2e32;
+  --bg-input: #1c1c1e;
+  --border: #3a3a3e;
+  --border-subtle: #2a2a2e;
+  --text: #f5f5f7;
+  --text-secondary: #c7c7cc;
+  --text-muted: #8e8e93;
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-muted: rgba(10, 132, 255, 0.14);
+  --accent-fg: #ffffff;
+  --nav-active: #242426;
+  --terminal-bg: #0e0e10;
+  --shadow: none;
+}
+
 /* ── Theme: Midnight ── */
 [data-theme="midnight"] {
   --bg-base: #171a21;
@@ -100,27 +142,6 @@
   --shadow: none;
 }
 
-/* ── Theme: Noir ── */
-[data-theme="noir"] {
-  --bg-base: #000000;
-  --bg-panel: #0a0a0a;
-  --bg-card: #111111;
-  --bg-card-hover: #1a1a1a;
-  --bg-input: #141414;
-  --border: #262626;
-  --border-subtle: #1a1a1a;
-  --text: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.72);
-  --text-muted: rgba(255, 255, 255, 0.42);
-  --accent: #ffffff;
-  --accent-hover: #e5e5e5;
-  --accent-muted: rgba(255, 255, 255, 0.08);
-  --accent-fg: #000000;
-  --nav-active: #141414;
-  --terminal-bg: #000000;
-  --shadow: none;
-}
-
 /* ── Theme: Ember ── */
 [data-theme="ember"] {
   --bg-base: #140e0c;
@@ -142,25 +163,109 @@
   --shadow: none;
 }
 
-/* ── Theme: Snow (light) ── */
-[data-theme="snow"] {
-  --bg-base: #eef1f6;
+/* ── Theme: Forest ── */
+[data-theme="forest"] {
+  --bg-base: #0b120e;
+  --bg-panel: #121a15;
+  --bg-card: #1a2420;
+  --bg-card-hover: #24302a;
+  --bg-input: #121a15;
+  --border: #2d3d34;
+  --border-subtle: #1e2a24;
+  --text: #ecfdf3;
+  --text-secondary: #a7f3c0;
+  --text-muted: #6b9b7c;
+  --accent: #22c55e;
+  --accent-hover: #4ade80;
+  --accent-muted: rgba(34, 197, 94, 0.14);
+  --accent-fg: #052e16;
+  --nav-active: #1a2420;
+  --terminal-bg: #080e0b;
+  --shadow: none;
+}
+
+/* ── Theme: Rose ── */
+[data-theme="rose"] {
+  --bg-base: #140a0e;
+  --bg-panel: #1c1014;
+  --bg-card: #27161c;
+  --bg-card-hover: #342028;
+  --bg-input: #1c1014;
+  --border: #4a2834;
+  --border-subtle: #2e1a22;
+  --text: #fff1f5;
+  --text-secondary: #fda4af;
+  --text-muted: #9f6b76;
+  --accent: #fb7185;
+  --accent-hover: #fda4af;
+  --accent-muted: rgba(251, 113, 133, 0.14);
+  --accent-fg: #4c0519;
+  --nav-active: #27161c;
+  --terminal-bg: #10080b;
+  --shadow: none;
+}
+
+/* ── Theme: White (stark monochrome light) ── */
+[data-theme="white"] {
+  --bg-base: #ffffff;
   --bg-panel: #ffffff;
-  --bg-card: #f5f7fb;
-  --bg-card-hover: #e8edf5;
+  --bg-card: #f4f4f4;
+  --bg-card-hover: #ebebeb;
   --bg-input: #ffffff;
-  --border: #cfd7e4;
-  --border-subtle: #e2e8f0;
-  --text: #141820;
-  --text-secondary: #475569;
-  --text-muted: #748094;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-muted: rgba(37, 99, 235, 0.1);
+  --border: #111111;
+  --border-subtle: #d6d6d6;
+  --text: #000000;
+  --text-secondary: #2a2a2a;
+  --text-muted: #6a6a6a;
+  --accent: #000000;
+  --accent-hover: #333333;
+  --accent-muted: rgba(0, 0, 0, 0.06);
   --accent-fg: #ffffff;
-  --nav-active: #e8edf5;
-  --terminal-bg: #f8fafc;
-  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --nav-active: #f0f0f0;
+  --terminal-bg: #ffffff;
+  --shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Theme: Snow (cold icy blue light) ── */
+[data-theme="snow"] {
+  --bg-base: #dce7f7;
+  --bg-panel: #f2f7ff;
+  --bg-card: #e8f0fc;
+  --bg-card-hover: #d9e6f8;
+  --bg-input: #f7faff;
+  --border: #9db6d9;
+  --border-subtle: #c5d6ee;
+  --text: #0b1f3a;
+  --text-secondary: #35527a;
+  --text-muted: #6b86a8;
+  --accent: #1d4ed8;
+  --accent-hover: #1e40af;
+  --accent-muted: rgba(29, 78, 216, 0.12);
+  --accent-fg: #ffffff;
+  --nav-active: #d7e5f8;
+  --terminal-bg: #eaf2ff;
+  --shadow: 0 1px 3px rgba(29, 78, 216, 0.1);
+}
+
+/* ── Theme: Pearl (warm soft light) ── */
+[data-theme="pearl"] {
+  --bg-base: #f4ece4;
+  --bg-panel: #fffaf5;
+  --bg-card: #f7efe6;
+  --bg-card-hover: #efe3d6;
+  --bg-input: #fffaf5;
+  --border: #d2bdb0;
+  --border-subtle: #e8d8cc;
+  --text: #2a1f18;
+  --text-secondary: #6a5346;
+  --text-muted: #9a8172;
+  --accent: #0f766e;
+  --accent-hover: #0d9488;
+  --accent-muted: rgba(15, 118, 110, 0.12);
+  --accent-fg: #ffffff;
+  --nav-active: #efe4da;
+  --terminal-bg: #faf4ee;
+  --shadow: 0 1px 2px rgba(42, 31, 24, 0.06);
 }
 
 * {
@@ -298,6 +403,40 @@ textarea,
   color: rgba(0, 0, 0, 0.58);
 }
 
+[data-theme="white"] .home-action-primary {
+  background: #000000 !important;
+  color: #ffffff;
+}
+
+[data-theme="white"] .home-action-primary:hover {
+  background: #333333 !important;
+}
+
+[data-theme="white"] .home-action-primary-icon {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="white"] .home-action-primary-desc {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+[data-theme="pearl"] .home-action-primary {
+  background: #0f766e !important;
+  color: #ffffff;
+}
+
+[data-theme="pearl"] .home-action-primary:hover {
+  background: #0d9488 !important;
+}
+
+[data-theme="pearl"] .home-action-primary-icon {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="pearl"] .home-action-primary-desc {
+  color: rgba(255, 255, 255, 0.75);
+}
+
 .key-card-actions button {
   background: var(--bg-panel) !important;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, var(--text-muted)) !important;
@@ -364,7 +503,8 @@ textarea,
 
 .connect-wash {
   position: absolute;
-  inset: 0;
+  /* Larger than the screen so the fade completes before the clip edge */
+  inset: -35%;
   pointer-events: none;
   opacity: 0;
   transition: opacity 420ms ease;

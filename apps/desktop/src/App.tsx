@@ -1278,7 +1278,6 @@ function App() {
             hosts={hosts}
             keys={keys}
             openSessions={tabs.filter((t) => !t.poppedOut).length}
-            syncStatus={syncStatus}
             connectingHostId={connectingHostId}
             onConnect={(host) => void connectToHost(host)}
             onAddServer={() => openAddDrawer()}
@@ -1286,7 +1285,6 @@ function App() {
             onOpenHosts={() => handleNavigate("hosts")}
             onOpenKeys={() => handleNavigate("keys")}
             onOpenSettings={() => handleNavigate("settings")}
-            onSignIn={handleSignInForSync}
             isMobile={isMobile}
           />
         );

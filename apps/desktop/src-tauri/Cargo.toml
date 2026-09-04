@@ -2,7 +2,7 @@
 name = "azalea"
 version = "0.1.1"
 description = "A modern open-source SSH terminal client"
-authors = ["Rexsystems"]
+authors = ["RexSystems"]
 license = "AGPL-3.0-or-later"
 edition = "2021"
 

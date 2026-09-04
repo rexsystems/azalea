@@ -1,16 +1,13 @@
 import { useMemo } from "react";
 import type { Host, SshKey } from "@azalea/shared";
-import type { SyncStatus } from "../lib/api";
-import { formatHostEndpoint, maskEmail } from "../lib/utils";
+import { formatHostEndpoint } from "../lib/utils";
 import { HostOsIcon } from "./HostOsIcon";
 import { KeyRound, Plus, Server, Settings, SquareTerminal } from "./icons";
-import { PlanBadge } from "./PlanBadge";
 
 interface HomePageProps {
   hosts: Host[];
   keys: SshKey[];
   openSessions: number;
-  syncStatus?: SyncStatus | null;
   connectingHostId: string | null;
   onConnect: (host: Host) => void;
   onAddServer: () => void;
@@ -18,7 +15,6 @@ interface HomePageProps {
   onOpenHosts: () => void;
   onOpenKeys: () => void;
   onOpenSettings: () => void;
-  onSignIn?: () => void;
   isMobile?: boolean;
 }
 
@@ -26,7 +22,6 @@ export function HomePage({
   hosts,
   keys,
   openSessions,
-  syncStatus,
   connectingHostId,
   onConnect,
   onAddServer,
@@ -34,7 +29,6 @@ export function HomePage({
   onOpenHosts,
   onOpenKeys,
   onOpenSettings,
-  onSignIn,
   isMobile = false,
 }: HomePageProps) {
   const recent = useMemo(
@@ -132,7 +126,7 @@ export function HomePage({
       style={{ background: "var(--bg-base)" }}
     >
       <div className="settings-shell flex min-h-0 flex-1 flex-col overflow-y-auto !pb-6">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-3 shrink-0">
+        <div className="mb-6 shrink-0">
           <div className="min-w-0">
             <h2
               className="text-2xl font-semibold tracking-tight sm:text-3xl"
@@ -146,36 +140,6 @@ export function HomePage({
                 : "Pick up where you left off, or jump in with a quick action."}
             </p>
           </div>
-          {syncStatus?.logged_in ? (
-            <button
-              type="button"
-              onClick={onOpenSettings}
-              className="rounded-xl border px-3 py-2 text-left"
-              style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
-            >
-              <div
-                className="text-[10px] uppercase tracking-wide"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Account
-              </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <PlanBadge plan={syncStatus.plan} size="md" />
-                <span className="max-w-[10rem] truncate text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  {syncStatus.email ? maskEmail(syncStatus.email) : "Signed in"}
-                </span>
-              </div>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => (onSignIn ? onSignIn() : onOpenSettings())}
-              className="rounded-xl border px-3 py-2 text-sm font-medium"
-              style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-            >
-              Sign in for sync
-            </button>
-          )}
         </div>
 
         <div className="mb-5 grid grid-cols-3 gap-3">

@@ -1,11 +1,16 @@
 export type ThemeId =
+  | "noir"
+  | "dark"
   | "midnight"
-  | "lilac"
   | "graphite"
   | "ocean"
-  | "noir"
+  | "lilac"
   | "ember"
-  | "snow";
+  | "forest"
+  | "rose"
+  | "white"
+  | "snow"
+  | "pearl";
 
 export interface ThemeDefinition {
   id: ThemeId;
@@ -14,13 +19,18 @@ export interface ThemeDefinition {
 }
 
 export const themes: ThemeDefinition[] = [
+  { id: "noir", name: "Noir", preview: "#0a0a0a" },
+  { id: "dark", name: "Dark", preview: "#1c1c1e" },
   { id: "midnight", name: "Midnight", preview: "#3d4556" },
-  { id: "lilac", name: "Lilac", preview: "#7c3aed" },
   { id: "graphite", name: "Graphite", preview: "#52525b" },
   { id: "ocean", name: "Ocean", preview: "#0891b2" },
-  { id: "noir", name: "Noir", preview: "#0a0a0a" },
+  { id: "lilac", name: "Lilac", preview: "#7c3aed" },
   { id: "ember", name: "Ember", preview: "#d97706" },
-  { id: "snow", name: "Snow", preview: "#f4f6f9" },
+  { id: "forest", name: "Forest", preview: "#166534" },
+  { id: "rose", name: "Rose", preview: "#e11d48" },
+  { id: "white", name: "White", preview: "#ffffff" },
+  { id: "snow", name: "Snow", preview: "#c7d7f0" },
+  { id: "pearl", name: "Pearl", preview: "#f3ebe3" },
 ];
 
 const STORAGE_KEY = "azalea-theme";
@@ -31,7 +41,7 @@ export function getStoredTheme(): ThemeId {
   if (stored && themes.some((t) => t.id === stored)) {
     return stored as ThemeId;
   }
-  return "midnight";
+  return "noir";
 }
 
 export function setStoredTheme(id: ThemeId) {

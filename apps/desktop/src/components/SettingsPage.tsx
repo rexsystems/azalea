@@ -412,7 +412,7 @@ export function SettingsPage({
                       Build {__AZALEA_BUILD__}
                     </div>
                     <div className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
-                      Rexsystems
+                      RexSystems
                     </div>
                   </div>
                 </SettingRow>

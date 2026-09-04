@@ -143,7 +143,7 @@ function terminalBgColor(): string {
 }
 
 function xtermPalette() {
-  const theme = document.documentElement.dataset.theme ?? "midnight";
+  const theme = document.documentElement.dataset.theme ?? "noir";
   if (theme === "noir") {
     return {
       background: terminalBgColor(),
@@ -165,6 +165,31 @@ function xtermPalette() {
       brightBlue: "#bfdbfe",
       brightMagenta: "#e9d5ff",
       brightCyan: "#a5f3fc",
+      brightWhite: "#ffffff",
+    };
+  }
+
+  if (theme === "dark") {
+    return {
+      background: terminalBgColor(),
+      foreground: "#f5f5f7",
+      cursor: "#0a84ff",
+      selectionBackground: "#0a84ff40",
+      black: "#1c1c1e",
+      red: "#ff453a",
+      green: "#30d158",
+      yellow: "#ffd60a",
+      blue: "#0a84ff",
+      magenta: "#bf5af2",
+      cyan: "#64d2ff",
+      white: "#f5f5f7",
+      brightBlack: "#8e8e93",
+      brightRed: "#ff6961",
+      brightGreen: "#63e67b",
+      brightYellow: "#ffde3a",
+      brightBlue: "#409cff",
+      brightMagenta: "#d48fff",
+      brightCyan: "#8adfff",
       brightWhite: "#ffffff",
     };
   }
@@ -194,28 +219,128 @@ function xtermPalette() {
     };
   }
 
-  if (theme === "snow") {
+  if (theme === "forest") {
     return {
       background: terminalBgColor(),
-      foreground: "#1e293b",
-      cursor: "#2563eb",
-      selectionBackground: "#2563eb33",
-      black: "#0f172a",
+      foreground: "#ecfdf3",
+      cursor: "#22c55e",
+      selectionBackground: "#22c55e40",
+      black: "#121a15",
+      red: "#f87171",
+      green: "#4ade80",
+      yellow: "#facc15",
+      blue: "#93c5fd",
+      magenta: "#c084fc",
+      cyan: "#2dd4bf",
+      white: "#ecfdf3",
+      brightBlack: "#6b9b7c",
+      brightRed: "#fca5a5",
+      brightGreen: "#86efac",
+      brightYellow: "#fde047",
+      brightBlue: "#bfdbfe",
+      brightMagenta: "#d8b4fe",
+      brightCyan: "#5eead4",
+      brightWhite: "#ffffff",
+    };
+  }
+
+  if (theme === "rose") {
+    return {
+      background: terminalBgColor(),
+      foreground: "#fff1f5",
+      cursor: "#fb7185",
+      selectionBackground: "#fb718540",
+      black: "#1c1014",
+      red: "#fb7185",
+      green: "#4ade80",
+      yellow: "#fbbf24",
+      blue: "#93c5fd",
+      magenta: "#f472b6",
+      cyan: "#67e8f9",
+      white: "#fff1f5",
+      brightBlack: "#9f6b76",
+      brightRed: "#fda4af",
+      brightGreen: "#86efac",
+      brightYellow: "#fde68a",
+      brightBlue: "#bfdbfe",
+      brightMagenta: "#f9a8d4",
+      brightCyan: "#a5f3fc",
+      brightWhite: "#ffffff",
+    };
+  }
+
+  if (theme === "white") {
+    return {
+      background: terminalBgColor(),
+      foreground: "#000000",
+      cursor: "#000000",
+      selectionBackground: "#00000022",
+      black: "#000000",
       red: "#dc2626",
       green: "#16a34a",
       yellow: "#ca8a04",
       blue: "#2563eb",
       magenta: "#9333ea",
       cyan: "#0891b2",
-      white: "#334155",
-      brightBlack: "#64748b",
+      white: "#404040",
+      brightBlack: "#737373",
       brightRed: "#ef4444",
       brightGreen: "#22c55e",
       brightYellow: "#eab308",
       brightBlue: "#3b82f6",
       brightMagenta: "#a855f7",
       brightCyan: "#06b6d4",
-      brightWhite: "#0f172a",
+      brightWhite: "#111111",
+    };
+  }
+
+  if (theme === "snow") {
+    return {
+      background: terminalBgColor(),
+      foreground: "#0b1f3a",
+      cursor: "#1d4ed8",
+      selectionBackground: "#1d4ed833",
+      black: "#0b1f3a",
+      red: "#dc2626",
+      green: "#15803d",
+      yellow: "#a16207",
+      blue: "#1d4ed8",
+      magenta: "#7e22ce",
+      cyan: "#0e7490",
+      white: "#35527a",
+      brightBlack: "#6b86a8",
+      brightRed: "#ef4444",
+      brightGreen: "#22c55e",
+      brightYellow: "#eab308",
+      brightBlue: "#3b82f6",
+      brightMagenta: "#a855f7",
+      brightCyan: "#06b6d4",
+      brightWhite: "#0b1f3a",
+    };
+  }
+
+  if (theme === "pearl") {
+    return {
+      background: terminalBgColor(),
+      foreground: "#2a1f18",
+      cursor: "#0f766e",
+      selectionBackground: "#0f766e33",
+      black: "#2a1f18",
+      red: "#b91c1c",
+      green: "#15803d",
+      yellow: "#a16207",
+      blue: "#1d4ed8",
+      magenta: "#9d174d",
+      cyan: "#0f766e",
+      white: "#6a5346",
+      brightBlack: "#9a8172",
+      brightRed: "#ef4444",
+      brightGreen: "#22c55e",
+      brightYellow: "#eab308",
+      brightBlue: "#3b82f6",
+      brightMagenta: "#db2777",
+      brightCyan: "#14b8a6",
+      brightWhite: "#2a1f18",
     };
   }
 
