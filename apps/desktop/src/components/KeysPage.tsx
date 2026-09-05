@@ -58,6 +58,20 @@ function shortFingerprint(fp: string): string {
   return `${clean.slice(0, 10)}…${clean.slice(-8)}`;
 }
 
+/** `.pub` export with an Azalea attribution comment. */
+function formatPublicKeyExport(key: SshKey): string {
+  const comment = `${key.name.trim() || "key"} through Azalea`;
+  const line =
+    key.public_key
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .find((l) => l.length > 0 && !l.startsWith("#")) ?? key.public_key.trim();
+  const parts = line.split(/\s+/);
+  const keyed =
+    parts.length >= 2 ? `${parts[0]} ${parts[1]} ${comment}` : `${line} ${comment}`;
+  return `# ${comment}\n${keyed}\n`;
+}
+
 export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPageProps) {
   const [newKeyName, setNewKeyName] = useState("");
   const [algorithm, setAlgorithm] = useState<string>("ed25519");
@@ -156,7 +170,7 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
       const path = await api.saveTextFile(
         `${key.name.replace(/[^\w.-]+/g, "_")}.pub`,
         [{ name: "Public key", extensions: ["pub"] }],
-        `${key.public_key.trim()}\n`,
+        formatPublicKeyExport(key),
       );
       if (path) setNotice(`Saved public key to ${path}`);
     } catch (err) {
@@ -387,10 +401,9 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                             </div>
                           </div>
                           <Button
-                            variant="ghost"
+                            variant="danger"
                             size="sm"
-                            className="!p-2 shrink-0"
-                            style={{ color: "#f87171" }}
+                            className="!px-2 !py-2 shrink-0"
                             disabled={busy}
                             onClick={() => void onDelete(key.id)}
                             title="Delete key"
@@ -408,30 +421,27 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                         </p>
 
                         <div
-                          className="key-card-actions mt-auto flex flex-wrap gap-1.5 border-t pt-3"
+                          className="key-card-actions mt-auto grid grid-cols-3 overflow-hidden rounded-lg border"
                           style={{ borderColor: "var(--border-subtle)", marginTop: "1rem" }}
                         >
-                          <Button
-                            variant="secondary"
-                            size="sm"
+                          <button
+                            type="button"
                             disabled={busy}
                             onClick={() => void copyPublicKey(key)}
                           >
                             {copied ? <Check size={14} /> : <Copy size={14} />}
-                            {copied ? "Copied" : "Copy"}
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
+                            <span>{copied ? "Copied" : "Copy"}</span>
+                          </button>
+                          <button
+                            type="button"
                             disabled={busy}
                             onClick={() => void exportPublicKey(key)}
                           >
                             <FileKey2 size={14} />
-                            Export
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
+                            <span>Export</span>
+                          </button>
+                          <button
+                            type="button"
                             disabled={busy || hosts.length === 0}
                             onClick={() => {
                               setInstallResult(null);
@@ -439,8 +449,8 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                             }}
                           >
                             <HardDriveUpload size={14} />
-                            Install
-                          </Button>
+                            <span>Install</span>
+                          </button>
                         </div>
                       </article>
                     );

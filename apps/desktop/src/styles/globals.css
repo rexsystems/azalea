@@ -438,14 +438,42 @@ textarea,
 }
 
 .key-card-actions button {
-  background: var(--bg-panel) !important;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, var(--text-muted)) !important;
-  color: var(--text-secondary) !important;
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.4rem;
+  border: none;
+  border-right: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.key-card-actions button:last-child {
+  border-right: none;
 }
 
 .key-card-actions button:hover:not(:disabled) {
-  background: var(--bg-card-hover) !important;
-  color: var(--text) !important;
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.key-card-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.key-card-actions button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .titlebar-btn {
