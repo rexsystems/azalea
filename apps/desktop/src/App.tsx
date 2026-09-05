@@ -1286,7 +1286,9 @@ function App() {
     useFancyConnect &&
     overlayTab != null &&
     !api.isLocalSession(overlayTab.id) &&
-    (activeTabId === overlayTab.id || activeNeedsConnectOverlay);
+    (activeTabId === overlayTab.id || activeNeedsConnectOverlay) &&
+    // Full-bleed connect UI looks wrong over a split; panes have their own chrome.
+    !activeTab?.splitWithId;
 
   const connectOverlayStatus: "connecting" | "connected" | "error" =
     overlayTab?.status === "error"
@@ -1399,8 +1401,21 @@ function App() {
             {tabs.map((tab) => {
               if (tab.poppedOut) return null;
               const isActive = tab.id === activeTabId;
-              const isSplitPartner =
-                !isMobile && !isActive && activeTab?.splitWithId === tab.id;
+              const splitMateId = !isMobile ? activeTab?.splitWithId : undefined;
+              const isSplitPane =
+                Boolean(splitMateId) &&
+                (tab.id === activeTabId || tab.id === splitMateId);
+              const leftSplitId =
+                isSplitPane && splitMateId && activeTab
+                  ? (() => {
+                      const pair = [activeTab.id, splitMateId] as const;
+                      const ia = tabs.findIndex((t) => t.id === pair[0]);
+                      const ib = tabs.findIndex((t) => t.id === pair[1]);
+                      return ia <= ib ? pair[0] : pair[1];
+                    })()
+                  : null;
+              const showAsRightPane =
+                isSplitPane && leftSplitId != null && tab.id !== leftSplitId;
               const isLocalConnecting =
                 api.isLocalSession(tab.id) && tab.status === "connecting";
               const midSessionReconnect =
@@ -1423,38 +1438,85 @@ function App() {
                 tab.status === "disconnected" ||
                 midSessionReconnect ||
                 isLocalConnecting ||
-                (connectScreen === "instant" && tab.status === "connecting");
+                (connectScreen === "instant" && tab.status === "connecting") ||
+                (isSplitPane && tab.status === "connecting");
               const terminalVisible =
-                viewingTerminal && (isActive || isSplitPartner) && statusAllowsView;
+                viewingTerminal && (isActive || isSplitPane) && statusAllowsView;
 
               if (!keepTerminal) return null;
+
+              const paneTitle =
+                displayTabs.find((t) => t.id === tab.id)?.title ?? tab.title;
+              const statusDot =
+                tab.status === "connected"
+                  ? "#4ade80"
+                  : tab.status === "connecting" || tab.status === "reconnecting"
+                    ? "#fbbf24"
+                    : tab.status === "error"
+                      ? "#f87171"
+                      : "var(--text-muted)";
 
               return (
                 <div
                   key={tab.id}
                   className={
-                    terminalVisible ? "relative h-full min-w-0 flex-1" : "hidden"
-                  }
-                  style={
-                    terminalVisible && isSplitPartner
-                      ? { borderLeft: "1px solid var(--border-subtle)" }
-                      : undefined
+                    terminalVisible
+                      ? `relative flex h-full min-w-0 flex-col ${isSplitPane ? "flex-1 basis-0" : "flex-1"}`
+                      : "hidden"
                   }
                   aria-hidden={!terminalVisible}
                   onMouseDownCapture={() => {
-                    // In split view the tab highlight follows whichever pane
-                    // the user clicks into.
                     if (!isActive) setActiveTabId(tab.id);
                   }}
                 >
+                  {terminalVisible && showAsRightPane && (
+                    <div
+                      className="absolute bottom-0 left-0 top-0 z-[1] w-px"
+                      style={{ background: "var(--border-subtle)" }}
+                      aria-hidden
+                    />
+                  )}
+
+                  {terminalVisible && isSplitPane && (
+                    <div
+                      className="flex h-8 shrink-0 items-center gap-2 border-b px-3"
+                      style={{
+                        background: isActive ? "var(--bg-panel)" : "var(--bg-base)",
+                        borderColor: "var(--border-subtle)",
+                        boxShadow: isActive
+                          ? "inset 0 -2px 0 0 var(--accent)"
+                          : undefined,
+                      }}
+                    >
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: statusDot }}
+                      />
+                      <span
+                        className="min-w-0 flex-1 truncate text-xs font-medium"
+                        style={{ color: isActive ? "var(--text)" : "var(--text-muted)" }}
+                      >
+                        {paneTitle}
+                      </span>
+                      <span
+                        className="shrink-0 font-mono text-[10px]"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        {tab.username}@{tab.hostname}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="relative min-h-0 min-w-0 flex-1">
                   <TerminalView
                     sessionId={tab.id}
                     settings={terminalSettings}
                     bootstrapLocal={isLocalConnecting}
                     active={
                       viewingTerminal &&
-                      (isActive || isSplitPartner) &&
+                      (isActive || isSplitPane) &&
                       (tab.status === "connected" ||
+                        tab.status === "connecting" ||
                         midSessionReconnect ||
                         isLocalConnecting)
                     }
@@ -1492,6 +1554,7 @@ function App() {
                       onRetryNow={() => retryReconnectNow(tab.id)}
                     />
                   )}
+                  </div>
                 </div>
               );
             })}

@@ -612,6 +612,7 @@ export function TerminalView({
     if (!term || !fitAddon || !container || !active) return;
 
     void attachBackend(term, fitAddon, sessionId, container).then(() => {
+      syncTerminalFit(term, fitAddon);
       term.focus();
     });
   }, [active, sessionId]);
