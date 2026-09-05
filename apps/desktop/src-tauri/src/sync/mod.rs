@@ -729,7 +729,7 @@ pub async fn perform_sync(
             None => Ok(SyncOutcome::Conflict { remote_version: vault.version }),
         }
     } else {
-        // Remote moved ahead of us — never pull without explicit user choice.
+        // Remote moved ahead of us - never pull without explicit user choice.
         if resolution == Some("keep_cloud") {
             let plaintext = crypto::decrypt(&vault_key, &vault.ciphertext)?;
             let settings = apply_remote_vault(db, &plaintext)?;

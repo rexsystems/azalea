@@ -114,6 +114,23 @@ jobs:
       - name: Build Azalea (deb + rpm + AppImage)
         run: npm run build:linux:ci
 
+      - name: Sign Linux package updaters
+        # createUpdaterArtifacts signs AppImage; rpm/deb need an explicit sign for
+        # linux-x86_64-rpm / linux-x86_64-deb keys used by installed packages.
+        run: |
+          shopt -s nullglob
+          for pkg in \
+            apps/desktop/src-tauri/target/release/bundle/rpm/*.rpm \
+            apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+          do
+            if [ ! -f "${pkg}.sig" ]; then
+              echo "Signing $pkg"
+              npm exec --workspace @azalea/desktop -- tauri signer sign "$pkg"
+            else
+              echo "Already signed: $pkg"
+            fi
+          done
+
       - name: Read version
         id: meta
         run: |
@@ -134,7 +151,9 @@ jobs:
           name: linux
           path: |
             apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+            apps/desktop/src-tauri/target/release/bundle/deb/*.sig
             apps/desktop/src-tauri/target/release/bundle/rpm/*.rpm
+            apps/desktop/src-tauri/target/release/bundle/rpm/*.sig
             apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
             apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz
             apps/desktop/src-tauri/target/release/bundle/appimage/*.sig
@@ -262,6 +281,7 @@ jobs:
             -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.AppImage.tar.gz' \
             -o -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \
           \) -exec cp -n {} release-files/ \;
+          # Prefer AppImage / nsis updater payloads; keep all .sig files (rpm/deb/AppImage/exe)
           cp artifacts/latest.json release-files/latest.json
           ls -la release-files
 

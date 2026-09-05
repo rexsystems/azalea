@@ -12,7 +12,7 @@ const SALT_LEN: usize = 16;
 pub type VaultKey = [u8; KEY_LEN];
 
 fn argon2() -> Argon2<'static> {
-    // 64 MiB, 3 iterations, 1 lane — interactive-grade Argon2id.
+    // 64 MiB, 3 iterations, 1 lane - interactive-grade Argon2id.
     let params = Params::new(64 * 1024, 3, 1, Some(KEY_LEN)).expect("valid argon2 params");
     Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
 }
@@ -65,7 +65,7 @@ pub fn decrypt(key: &VaultKey, blob_b64: &str) -> anyhow::Result<Vec<u8>> {
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
     cipher
         .decrypt(Nonce::from_slice(nonce), ciphertext)
-        .map_err(|_| anyhow::anyhow!("Decryption failed — wrong passphrase or corrupted data"))
+        .map_err(|_| anyhow::anyhow!("Decryption failed - wrong passphrase or corrupted data"))
 }
 
 /// Encrypts the random vault key with a KEK (passphrase-derived or recovery key).
@@ -93,7 +93,7 @@ pub fn format_recovery_key(key: &VaultKey) -> String {
 }
 
 /// A recovery key is random bytes; we must keep the exact bytes to decrypt.
-/// So we store base64 of the raw key inside the formatted string is lossy —
+/// So we store base64 of the raw key inside the formatted string is lossy -
 /// instead we derive: recovery KEK = SHA-256(normalized recovery string).
 pub fn recovery_kek_from_string(recovery: &str) -> VaultKey {
     use sha2::{Digest, Sha256};

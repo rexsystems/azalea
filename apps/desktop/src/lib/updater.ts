@@ -33,6 +33,14 @@ export function formatUpdateError(error: unknown): string {
     return "Auto-updates are not available on this platform.";
   }
 
+  if (
+    message.includes("fallback platforms") ||
+    message.includes("were found in the response") ||
+    message.includes("was not found in the response")
+  ) {
+    return "No update package for this install type yet. Try again after the next release, or download from azalea.rexsystems.me.";
+  }
+
   return message.replace(/^Error:\s*/i, "");
 }
 

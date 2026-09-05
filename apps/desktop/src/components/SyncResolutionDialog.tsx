@@ -110,7 +110,7 @@ function dialogCopy(preview: SyncPreview): {
       return {
         title: "Sync conflict",
         description:
-          "Both this device and the cloud changed since the last sync. Choose which version to keep — the other side will be overwritten.",
+          "Both this device and the cloud changed since the last sync. Choose which version to keep - the other side will be overwritten.",
         primaryLabel: "Keep this device",
         primaryResolution: "keep_local",
         showSecondary: true,
@@ -213,7 +213,7 @@ export function SyncResolutionDialog({
           disabled={busy}
           onClick={onSkip}
         >
-          Skip for now — keep working locally
+          Skip for now - keep working locally
         </button>
       </div>
     </div>

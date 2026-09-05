@@ -236,7 +236,7 @@ export function AddServerDrawer({
           label="Password"
           type="password"
           placeholder={isEdit ? "Leave blank to keep current" : "Optional"}
-          hint={isEdit ? undefined : "Optional — you can also use an SSH key"}
+          hint={isEdit ? undefined : "Optional - you can also use an SSH key"}
           icon={<Lock size={15} />}
           value={values.password}
           onChange={(e) =>
@@ -264,7 +264,7 @@ export function AddServerDrawer({
             label="SSH Key"
             icon={<KeyRound size={15} />}
             value={values.key_id ?? ""}
-            placeholder="Optional — choose when connecting"
+            placeholder="Optional - choose when connecting"
             onChange={(keyId) =>
               setValues((prev) => ({
                 ...prev,
@@ -272,7 +272,7 @@ export function AddServerDrawer({
               }))
             }
             options={[
-              { value: "", label: "None — choose when connecting" },
+              { value: "", label: "None - choose when connecting" },
               ...keys.map((key) => ({ value: key.id, label: key.name })),
             ]}
           />

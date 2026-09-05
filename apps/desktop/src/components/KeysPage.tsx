@@ -250,7 +250,7 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-end">
                 <Input
                   label="Name"
-                  placeholder="My Laptop — or leave empty to use filename"
+                  placeholder="My Laptop - or leave empty to use filename"
                   value={newKeyName}
                   onChange={(e) => setNewKeyName(e.target.value)}
                 />

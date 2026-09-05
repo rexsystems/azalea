@@ -103,7 +103,7 @@ export function AppShell({
   const [appVersion, setAppVersion] = useState("…");
 
   useEffect(() => {
-    void getVersion().then(setAppVersion).catch(() => setAppVersion("—"));
+    void getVersion().then(setAppVersion).catch(() => setAppVersion("-"));
   }, []);
 
   if (isMobile) {

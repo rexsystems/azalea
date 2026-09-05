@@ -10,7 +10,7 @@ export interface HostFormValues {
   mac_address: string;
 }
 
-/** Short connection label for host cards — never show a full IP. */
+/** Short connection label for host cards - never show a full IP. */
 export function formatHostEndpoint(username: string, hostname: string): string {
   return `${username}@${shortenHostForCard(hostname)}`;
 }

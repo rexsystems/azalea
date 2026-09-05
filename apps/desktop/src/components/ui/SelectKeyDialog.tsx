@@ -38,7 +38,7 @@ export function SelectKeyDialog({
           Choose SSH key
         </h3>
         <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-          {hostName} has no key saved. Pick one to connect — it will be saved on this host.
+          {hostName} has no key saved. Pick one to connect - it will be saved on this host.
         </p>
 
         {keys.length === 0 ? (

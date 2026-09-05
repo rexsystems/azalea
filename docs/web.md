@@ -1,6 +1,6 @@
 # Web app
 
-Standalone repo: **https://github.com/rexsystems/azalea-web** (private, not public) — deployed at **https://azalea.rexsystems.me** (Cloudflare Pages + custom domain).
+Standalone repo: **https://github.com/rexsystems/azalea-web** (private, not public) - deployed at **https://azalea.rexsystems.me** (Cloudflare Pages + custom domain).
 
 ## Work from this monorepo
 

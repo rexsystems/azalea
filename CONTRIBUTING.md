@@ -11,8 +11,8 @@ Thanks for your interest in contributing!
 
 ## Development workflow
 
-- **Frontend**: `apps/desktop/src/` — React + TypeScript
-- **Backend**: `apps/desktop/src-tauri/src/` — Rust (SSH, storage, keychain)
+- **Frontend**: `apps/desktop/src/` - React + TypeScript
+- **Backend**: `apps/desktop/src-tauri/src/` - Rust (SSH, storage, keychain)
 - **Shared types**: `packages/shared/`
 
 Before submitting a PR:
@@ -28,7 +28,7 @@ cargo test
 ## Code style
 
 - Match existing patterns in the file you're editing
-- Keep changes focused — one feature or fix per PR
+- Keep changes focused - one feature or fix per PR
 - Rust: run `cargo fmt` before committing
 
 ## Reporting issues

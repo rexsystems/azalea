@@ -11,10 +11,15 @@ The desktop app uses [Tauri updater](https://v2.tauri.app/plugin/updater/) with 
 
 | Key | Artifact |
 |-----|----------|
-| `windows-x86_64` | `.nsis.zip` |
-| `linux-x86_64` | `.AppImage.tar.gz` |
+| `windows-x86_64` | `.nsis.zip` or setup `.exe` |
+| `linux-x86_64` | `.AppImage` / `.AppImage.tar.gz` |
+| `linux-x86_64-rpm` | `.rpm` (Fedora / Nobara / RHEL installs) |
+| `linux-x86_64-deb` | `.deb` (Debian / Ubuntu installs) |
 | `darwin-aarch64` | `.app.tar.gz` (Apple Silicon) |
 | `darwin-x86_64` | `.app.tar.gz` (Intel) |
+
+The app checks `azalea.rexsystems.me` first. That file must stay in sync with the
+GitHub Release `latest.json`, or Linux/macOS checks fail even when GitHub is fine.
 
 ## GitHub Actions secrets (master release only)
 
@@ -35,7 +40,7 @@ The **public** key is already in `apps/desktop/src-tauri/tauri.conf.json`. If yo
 
 macOS builds from CI are **not** Apple Developer ID signed (Gatekeeper may warn). Users can right-click → Open the first time, or clear quarantine. Auto-update still works via Tauri’s own signatures.
 
-CI builds macOS with `--bundles app` (signed `.app.tar.gz` for the updater), then packs a DMG via `.github/create-macos-dmg.sh` (plain `hdiutil`, no Finder AppleScript — that step is what usually breaks on GitHub Actions).
+CI builds macOS with `--bundles app` (signed `.app.tar.gz` for the updater), then packs a DMG via `.github/create-macos-dmg.sh` (plain `hdiutil`, no Finder AppleScript - that step is what usually breaks on GitHub Actions).
 
 ## After each master release
 

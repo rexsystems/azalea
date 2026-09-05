@@ -108,7 +108,7 @@ fn format_import_error(err: russh_keys::Error, had_passphrase: bool) -> anyhow::
             "Invalid key file: base64 decoding failed. The file may be corrupted or use an unsupported encoding."
         ),
         russh_keys::Error::CouldNotReadKey => anyhow::anyhow!(
-            "Could not read key. Supported: OpenSSH, PKCS#1, PKCS#8 — Ed25519, RSA, ECDSA (P-256/P-384/P-521), and DSA."
+            "Could not read key. Supported: OpenSSH, PKCS#1, PKCS#8 - Ed25519, RSA, ECDSA (P-256/P-384/P-521), and DSA."
         ),
         other => anyhow::anyhow!("{other}"),
     }

@@ -128,7 +128,7 @@ export function SettingsPage({
   const [appVersion, setAppVersion] = useState("…");
 
   useEffect(() => {
-    void getVersion().then(setAppVersion).catch(() => setAppVersion("—"));
+    void getVersion().then(setAppVersion).catch(() => setAppVersion("-"));
   }, []);
 
   useEffect(() => {

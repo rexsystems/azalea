@@ -64,7 +64,7 @@ Same via monorepo junction:
 lilacssh/apps/azalea-web/supabase/functions/delete-account/index.ts
 ```
 
-**Option A — CLI** (from `azalea-web` folder):
+**Option A - CLI** (from `azalea-web` folder):
 
 ```bash
 npm i -g supabase
@@ -73,7 +73,7 @@ supabase link --project-ref YOUR_PROJECT_REF
 supabase functions deploy delete-account
 ```
 
-**Option B — Dashboard:**
+**Option B - Dashboard:**
 
 1. Edge Functions -> **Deploy a new function**
 2. Name: `delete-account`
@@ -107,7 +107,7 @@ NEXT_PUBLIC_GITHUB_REPO=rexsystems/azalea
 | Warning | Status |
 |---------|--------|
 | `delete_own_account` SECURITY DEFINER | Fixed: RPC removed, use Edge Function |
-| Admin RPCs (`admin_check`, etc.) | May still warn **0029** — intentional. Each function checks `is_admin()` before doing anything. `anon` cannot call them. |
+| Admin RPCs (`admin_check`, etc.) | May still warn **0029** - intentional. Each function checks `is_admin()` before doing anything. `anon` cannot call them. |
 | Leaked password protection | Dashboard toggle (not SQL) |
 
 ## Quick checklist

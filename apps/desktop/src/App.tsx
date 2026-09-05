@@ -164,7 +164,7 @@ function App() {
     void checkForUpdateSilent().then((result) => {
       if (result) {
         setStatusMessage(
-          `Update available: Azalea ${result.version} — open Settings → Updates to install`,
+          `Update available: Azalea ${result.version} - open Settings → Updates to install`,
         );
       }
     });
@@ -276,7 +276,7 @@ function App() {
 
     const popout = new WebviewWindow(`popout-${tab.id}`, {
       url: `/?popout=${encodeURIComponent(tab.id)}&title=${encodeURIComponent(tab.title)}`,
-      title: `${tab.title} — Azalea`,
+      title: `${tab.title} - Azalea`,
       width: 900,
       height: 560,
       minWidth: 480,
@@ -497,7 +497,7 @@ function App() {
       }));
 
       if (attempt === 0) {
-        setStatusMessage("Disconnected — checking host…");
+        setStatusMessage("Disconnected - checking host…");
       }
 
       clearReconnectPhaseTimers(sessionId);
@@ -1781,7 +1781,7 @@ function App() {
           keyMismatch
             ? `The host key for ${keyMismatch.hostname}:${keyMismatch.port} has changed.\n\n` +
               `Old: ${keyMismatch.old_fingerprint}\nNew: ${keyMismatch.new_fingerprint}\n\n` +
-              `This can mean the server was reinstalled — or that someone is intercepting the connection. ` +
+              `This can mean the server was reinstalled - or that someone is intercepting the connection. ` +
               `Replace the saved key and connect?`
             : ""
         }

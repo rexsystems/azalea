@@ -8,15 +8,15 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 
 ## Features
 
-- **SSH terminal** — multi-tab sessions, search, clickable links, local shell
-- **Hosts & groups** — password or key auth, reconnect, host key change warnings
-- **SSH keys** — generate ed25519 or import existing keys; secrets stay in the OS keychain
-- **SFTP** — browse, upload/download, drag-and-drop upload, edit remote text files
-- **Port forwarding** — manage and start local forwards from a session
-- **Snippets** — save and run common commands
-- **Import / export** — Azalea backups, OpenSSH `config`, and JSON host lists
-- **Cloud sync** (optional) — zero-knowledge encrypted vault; Free / Pro storage caps
-- **Themes & settings** — Midnight / Noir, font size, connect screen, auto-update
+- **SSH terminal** - multi-tab sessions, search, clickable links, local shell
+- **Hosts & groups** - password or key auth, reconnect, host key change warnings
+- **SSH keys** - generate ed25519 or import existing keys; secrets stay in the OS keychain
+- **SFTP** - browse, upload/download, drag-and-drop upload, edit remote text files
+- **Port forwarding** - manage and start local forwards from a session
+- **Snippets** - save and run common commands
+- **Import / export** - Azalea backups, OpenSSH `config`, and JSON host lists
+- **Cloud sync** (optional) - zero-knowledge encrypted vault; Free / Pro storage caps
+- **Themes & settings** - Midnight / Noir, font size, connect screen, auto-update
 
 ## Development
 

@@ -141,7 +141,7 @@ export function GroupSection({
             color: "var(--text-muted)",
           }}
         >
-          Empty group — add a server
+          Empty group - add a server
         </div>
       ) : (
         <div

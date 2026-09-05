@@ -51,7 +51,7 @@ function fmtBytes(bytes: number): string {
 }
 
 function syncStateLabel(status: api.SyncStatus): string {
-  if (status.storage_blocked) return "Storage full — upload blocked";
+  if (status.storage_blocked) return "Storage full - upload blocked";
   if (!status.unlocked) return status.vault_exists === false ? "No cloud vault" : "Locked";
   if (
     status.remote_version != null &&
@@ -179,7 +179,7 @@ export function SyncSection({
           setNotice(`Cloud vault downloaded (v${outcome.version}).`);
           break;
         case "conflict":
-          setError("Sync conflict — choose which version to keep.");
+          setError("Sync conflict - choose which version to keep.");
           break;
         case "needs_setup":
         case "locked":
@@ -363,7 +363,7 @@ export function SyncSection({
           {accountRow}
           {storagePanel}
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Choose a master passphrase. It encrypts everything before upload — never sent to the
+            Choose a master passphrase. It encrypts everything before upload - never sent to the
             server. You will get a one-time recovery key.
           </p>
           <input
@@ -457,7 +457,7 @@ export function SyncSection({
         </div>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
           Sync shows what would change before anything is uploaded or downloaded. Local data is
-          unlimited — only encrypted cloud storage counts toward your plan.
+          unlimited - only encrypted cloud storage counts toward your plan.
         </p>
       </div>
     );
@@ -516,7 +516,7 @@ export function SyncSection({
             </h4>
             <p className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
               This is the only way to recover your vault if you forget the master passphrase. It is
-              shown once — store it somewhere safe.
+              shown once - store it somewhere safe.
             </p>
             <div
               className="mb-3 break-all rounded-lg border p-3 font-mono text-xs"
@@ -560,7 +560,7 @@ export function SyncSection({
             {status?.logged_in && <PlanBadge plan={status.plan} size="md" />}
           </div>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-            Encrypted cloud backup for hosts, keys, and settings. Free includes sync — you only pay
+            Encrypted cloud backup for hosts, keys, and settings. Free includes sync - you only pay
             for more cloud space.
           </p>
         </div>

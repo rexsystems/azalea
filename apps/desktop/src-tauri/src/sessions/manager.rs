@@ -619,7 +619,7 @@ pub async fn sftp_read_text_file(
         .read_to_end(&mut buf)
         .await?;
     if buf.len() as u64 > SFTP_TEXT_MAX_BYTES {
-        anyhow::bail!("File is larger than 2 MB — open it locally instead");
+        anyhow::bail!("File is larger than 2 MB - open it locally instead");
     }
     String::from_utf8(buf).map_err(|_| anyhow::anyhow!("File is not valid UTF-8 text"))
 }
@@ -1233,7 +1233,7 @@ pub async fn install_authorized_key(
         .map_err(|err| anyhow::anyhow!("Could not reach host: {err}"))?;
 
     if *key_mismatch.lock() {
-        anyhow::bail!("Host key mismatch — trust the new key from a normal connection first.");
+        anyhow::bail!("Host key mismatch - trust the new key from a normal connection first.");
     }
 
     authenticate(&mut session, &host).await?;
@@ -1275,7 +1275,7 @@ pub async fn install_authorized_key(
         return Ok(InstallPublicKeyResult {
             status: "already_present".to_string(),
             message: format!(
-                "Public key already on {}@{} — nothing to change.",
+                "Public key already on {}@{} - nothing to change.",
                 host.username, host.hostname
             ),
         });
