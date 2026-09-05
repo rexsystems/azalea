@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PortForward } from "@azalea/shared";
+import type { PortForward, PortForwardStatus } from "@azalea/shared";
+import { listen } from "@tauri-apps/api/event";
 import { Plus, Trash2, X } from "./icons";
 import * as api from "../lib/api";
 
@@ -10,32 +11,92 @@ interface ForwardsPopoverProps {
   onStatus: (message: string) => void;
 }
 
-export function ForwardsPopover({ hostId, sessionId, onClose, onStatus }: ForwardsPopoverProps) {
+function statusLabel(status: PortForwardStatus | undefined): {
+  text: string;
+  color: string;
+} {
+  if (!status || status.state === "stopped") {
+    return { text: "Off", color: "var(--text-muted)" };
+  }
+  if (status.state === "failed") {
+    return { text: "Failed", color: "#f87171" };
+  }
+  if (status.state === "connected") {
+    const n = status.connections;
+    return {
+      text: n === 1 ? "Connected · 1" : `Connected · ${n}`,
+      color: "#86efac",
+    };
+  }
+  return { text: "Listening", color: "var(--accent)" };
+}
+
+export function ForwardsPopover({
+  hostId,
+  sessionId,
+  onClose,
+  onStatus,
+}: ForwardsPopoverProps) {
   const [forwards, setForwards] = useState<PortForward[]>([]);
-  const [activeIds, setActiveIds] = useState<Set<string>>(new Set());
+  const [statuses, setStatuses] = useState<Record<string, PortForwardStatus>>({});
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
   const [localPort, setLocalPort] = useState("");
   const [remoteHost, setRemoteHost] = useState("localhost");
   const [remotePort, setRemotePort] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const applyStatuses = useCallback((list: PortForwardStatus[]) => {
+    const next: Record<string, PortForwardStatus> = {};
+    for (const item of list) {
+      if (item.state !== "stopped") next[item.forward_id] = item;
+    }
+    setStatuses(next);
+  }, []);
 
   const refresh = useCallback(() => {
     void api.listPortForwards(hostId).then(setForwards).catch(() => setForwards([]));
     void api
       .listActiveForwards(sessionId)
-      .then((ids) => setActiveIds(new Set(ids)))
-      .catch(() => setActiveIds(new Set()));
-  }, [hostId, sessionId]);
+      .then(applyStatuses)
+      .catch(() => applyStatuses([]));
+  }, [hostId, sessionId, applyStatuses]);
 
   useEffect(refresh, [refresh]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void api.listActiveForwards(sessionId).then(applyStatuses).catch(() => undefined);
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [sessionId, applyStatuses]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<PortForwardStatus>("port-forward-status", (event) => {
+      const status = event.payload;
+      if (status.session_id !== sessionId) return;
+      setStatuses((prev) => {
+        const next = { ...prev };
+        if (status.state === "stopped") {
+          delete next[status.forward_id];
+        } else {
+          next[status.forward_id] = status;
+        }
+        return next;
+      });
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, [sessionId]);
 
   useEffect(() => {
     const onMouseDown = (e: MouseEvent) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
       if (panelRef.current?.contains(target)) return;
-      // Toolbar toggle: mousedown would close, then click would reopen.
       if (target.closest("[data-azalea-popover-trigger]")) return;
       onClose();
     };
@@ -62,18 +123,42 @@ export function ForwardsPopover({ hostId, sessionId, onClose, onStatus }: Forwar
   };
 
   const toggle = async (forward: PortForward) => {
+    const current = statuses[forward.id];
+    const running =
+      current && (current.state === "listening" || current.state === "connected");
+    setBusyId(forward.id);
     try {
-      if (activeIds.has(forward.id)) {
+      if (running) {
         await api.stopForward(sessionId, forward.id);
         onStatus(`Stopped forward ${forward.label}`);
       } else {
-        await api.startForward(sessionId, forward.id);
-        onStatus(`Forwarding 127.0.0.1:${forward.local_port} → ${forward.remote_host}:${forward.remote_port}`);
+        const started = await api.startForward(sessionId, forward.id);
+        setStatuses((prev) => ({ ...prev, [forward.id]: started }));
+        onStatus(
+          `Listening on 127.0.0.1:${forward.local_port} → ${forward.remote_host}:${forward.remote_port}`,
+        );
       }
     } catch (err) {
-      onStatus(String(err));
+      const message = String(err).replace(/^Error:\s*/, "");
+      setStatuses((prev) => ({
+        ...prev,
+        [forward.id]: {
+          session_id: sessionId,
+          forward_id: forward.id,
+          label: forward.label,
+          local_port: forward.local_port,
+          remote_host: forward.remote_host,
+          remote_port: forward.remote_port,
+          state: "failed",
+          connections: 0,
+          error: message,
+        },
+      }));
+      onStatus(message);
+    } finally {
+      setBusyId(null);
+      refresh();
     }
-    refresh();
   };
 
   const inputStyle = {
@@ -165,7 +250,13 @@ export function ForwardsPopover({ hostId, sessionId, onClose, onStatus }: Forwar
           </div>
         )}
         {forwards.map((forward) => {
-          const active = activeIds.has(forward.id);
+          const status = statuses[forward.id];
+          const running =
+            status?.state === "listening" || status?.state === "connected";
+          const failed = status?.state === "failed";
+          const badge = statusLabel(status);
+          const toggleOn = running || (failed && Boolean(status?.error && busyId === forward.id));
+
           return (
             <div
               key={forward.id}
@@ -173,22 +264,42 @@ export function ForwardsPopover({ hostId, sessionId, onClose, onStatus }: Forwar
             >
               <button
                 onClick={() => void toggle(forward)}
-                className="relative h-4 w-7 shrink-0 rounded-full transition-colors"
-                style={{ background: active ? "var(--accent)" : "var(--border-subtle)" }}
-                title={active ? "Stop" : "Start"}
+                disabled={busyId === forward.id}
+                className="relative h-4 w-7 shrink-0 rounded-full transition-colors disabled:opacity-50"
+                style={{
+                  background: running
+                    ? "var(--accent)"
+                    : failed
+                      ? "rgba(248,113,113,0.45)"
+                      : "var(--border-subtle)",
+                }}
+                title={running ? "Stop" : "Start"}
               >
                 <span
                   className="absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all"
-                  style={{ left: active ? "14px" : "2px" }}
+                  style={{ left: running || toggleOn ? "14px" : "2px" }}
                 />
               </button>
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-xs font-medium" style={{ color: "var(--text)" }}>
-                  {forward.label}
-                </span>
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate text-xs font-medium" style={{ color: "var(--text)" }}>
+                    {forward.label}
+                  </span>
+                  <span
+                    className="shrink-0 text-[10px] font-medium"
+                    style={{ color: badge.color }}
+                  >
+                    {badge.text}
+                  </span>
+                </div>
                 <span className="truncate font-mono text-[10px]" style={{ color: "var(--text-muted)" }}>
                   127.0.0.1:{forward.local_port} → {forward.remote_host}:{forward.remote_port}
                 </span>
+                {status?.error && (
+                  <span className="truncate text-[10px]" style={{ color: "#f87171" }} title={status.error}>
+                    {status.error}
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => {

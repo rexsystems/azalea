@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use crate::models::{CreatePortForwardInput, PortForward};
+use crate::models::{CreatePortForwardInput, PortForward, PortForwardStatus};
 use crate::sessions::{start_port_forward, SharedSshSessionManager};
 use crate::store::SharedDatabase;
 
@@ -46,11 +46,12 @@ pub fn delete_port_forward(
 
 #[tauri::command]
 pub async fn start_forward(
+    app: tauri::AppHandle,
     db: tauri::State<'_, SharedDatabase>,
     sessions: tauri::State<'_, SharedSshSessionManager>,
     session_id: String,
     forward_id: String,
-) -> Result<(), String> {
+) -> Result<PortForwardStatus, String> {
     let forward = {
         let db = db.lock();
         db.list_port_forwards(None)
@@ -60,18 +61,29 @@ pub async fn start_forward(
             .ok_or_else(|| "Forward rule not found".to_string())?
     };
 
-    start_port_forward(sessions.inner(), &session_id, forward)
+    start_port_forward(app, sessions.inner(), &session_id, forward)
         .await
-        .map_err(|err| err.to_string())
+        .map_err(|err| err.to_string())?;
+
+    sessions
+        .lock()
+        .await
+        .active_forwards(&session_id)
+        .into_iter()
+        .find(|s| s.forward_id == forward_id)
+        .ok_or_else(|| "Forward started but status missing".to_string())
 }
 
 #[tauri::command]
 pub async fn stop_forward(
+    app: tauri::AppHandle,
     sessions: tauri::State<'_, SharedSshSessionManager>,
     session_id: String,
     forward_id: String,
 ) -> Result<(), String> {
-    sessions.lock().await.stop_forward(&session_id, &forward_id);
+    if let Some(status) = sessions.lock().await.stop_forward(&session_id, &forward_id) {
+        let _ = tauri::Emitter::emit(&app, "port-forward-status", status);
+    }
     Ok(())
 }
 
@@ -79,6 +91,6 @@ pub async fn stop_forward(
 pub async fn list_active_forwards(
     sessions: tauri::State<'_, SharedSshSessionManager>,
     session_id: String,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<PortForwardStatus>, String> {
     Ok(sessions.lock().await.active_forwards(&session_id))
 }

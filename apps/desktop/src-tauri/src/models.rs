@@ -236,6 +236,21 @@ pub struct CreatePortForwardInput {
     pub remote_port: i64,
 }
 
+/// Live status for a running (or failed) local port forward.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortForwardStatus {
+    pub session_id: String,
+    pub forward_id: String,
+    pub label: String,
+    pub local_port: i64,
+    pub remote_host: String,
+    pub remote_port: i64,
+    /// `listening` | `connected` | `failed` | `stopped`
+    pub state: String,
+    pub connections: u32,
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileEntry {
     pub name: String,

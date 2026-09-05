@@ -9,6 +9,7 @@ import type {
   ImportKeyInput,
   InstallPublicKeyResult,
   PortForward,
+  PortForwardStatus,
   SftpListResult,
   Snippet,
   SshKey,
@@ -251,7 +252,7 @@ export function deletePortForward(id: string): Promise<void> {
   return invoke("delete_port_forward", { id });
 }
 
-export function startForward(sessionId: string, forwardId: string): Promise<void> {
+export function startForward(sessionId: string, forwardId: string): Promise<PortForwardStatus> {
   return invoke("start_forward", { sessionId, forwardId });
 }
 
@@ -259,7 +260,7 @@ export function stopForward(sessionId: string, forwardId: string): Promise<void>
   return invoke("stop_forward", { sessionId, forwardId });
 }
 
-export function listActiveForwards(sessionId: string): Promise<string[]> {
+export function listActiveForwards(sessionId: string): Promise<PortForwardStatus[]> {
   return invoke("list_active_forwards", { sessionId });
 }
 

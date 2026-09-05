@@ -7,6 +7,7 @@ import type {
   HostOsUpdatedEvent,
   ImportBackupResult,
   ImportResult,
+  PortForwardStatus,
 } from "@azalea/shared";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -139,6 +140,9 @@ function App() {
   const [filesPanelTabs, setFilesPanelTabs] = useState<Set<string>>(() => new Set());
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [forwardsOpen, setForwardsOpen] = useState(false);
+  const [forwardStatuses, setForwardStatuses] = useState<
+    Record<string, Record<string, PortForwardStatus>>
+  >({});
   const [keyMismatch, setKeyMismatch] = useState<HostKeyMismatchEvent | null>(null);
   const [unknownHostKey, setUnknownHostKey] = useState<HostKeyUnknownEvent | null>(null);
   const [splitPickerOpen, setSplitPickerOpen] = useState(false);
@@ -552,6 +556,12 @@ function App() {
       } else {
         await api.disconnectSsh(tabId).catch(() => undefined);
       }
+      setForwardStatuses((prev) => {
+        if (!(tabId in prev)) return prev;
+        const next = { ...prev };
+        delete next[tabId];
+        return next;
+      });
       removeTab(tabId);
       closingTabsRef.current.delete(tabId);
     },
@@ -688,12 +698,26 @@ function App() {
       void refreshHosts();
     });
 
+    const unlistenForwards = listen<PortForwardStatus>("port-forward-status", (event) => {
+      const status = event.payload;
+      setForwardStatuses((prev) => {
+        const session = { ...(prev[status.session_id] ?? {}) };
+        if (status.state === "stopped") {
+          delete session[status.forward_id];
+        } else {
+          session[status.forward_id] = status;
+        }
+        return { ...prev, [status.session_id]: session };
+      });
+    });
+
     return () => {
       void unlistenStatus.then((unlisten) => unlisten());
       void unlistenLog.then((unlisten) => unlisten());
       void unlistenMismatch.then((unlisten) => unlisten());
       void unlistenUnknown.then((unlisten) => unlisten());
       void unlistenOs.then((unlisten) => unlisten());
+      void unlistenForwards.then((unlisten) => unlisten());
     };
   }, [scheduleReconnect, clearReconnectState, removeTab, refreshHosts]);
 
@@ -1188,6 +1212,11 @@ function App() {
   const showHostDrawer = drawerOpen && (navPage === "hosts" || navPage === "home");
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeForwardCount = activeTab
+    ? Object.values(forwardStatuses[activeTab.id] ?? {}).filter(
+        (s) => s.state === "listening" || s.state === "connected",
+      ).length
+    : 0;
   const filesPanelOpen = Boolean(activeTabId && filesPanelTabs.has(activeTabId));
 
   const setFilesPanelOpenForActive = (open: boolean) => {
@@ -1571,8 +1600,11 @@ function App() {
                             ? [
                                 {
                                   icon: ArrowLeftRight,
-                                  title: "Port forwarding",
-                                  active: forwardsOpen,
+                                  title:
+                                    activeForwardCount > 0
+                                      ? `Port forwarding (${activeForwardCount} active)`
+                                      : "Port forwarding",
+                                  active: forwardsOpen || activeForwardCount > 0,
                                   onClick: () => {
                                     setSnippetsOpen(false);
                                     setForwardsOpen((v) => !v);

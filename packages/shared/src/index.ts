@@ -146,6 +146,20 @@ export interface CreatePortForwardInput {
   remote_port: number;
 }
 
+/** Live status for a running (or failed) local port forward. */
+export interface PortForwardStatus {
+  session_id: string;
+  forward_id: string;
+  label: string;
+  local_port: number;
+  remote_host: string;
+  remote_port: number;
+  /** `listening` | `connected` | `failed` | `stopped` */
+  state: "listening" | "connected" | "failed" | "stopped" | string;
+  connections: number;
+  error: string | null;
+}
+
 export interface FileEntry {
   name: string;
   is_dir: boolean;

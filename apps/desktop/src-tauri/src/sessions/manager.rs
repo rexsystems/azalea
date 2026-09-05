@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -15,8 +16,8 @@ use uuid::Uuid;
 use crate::keys::{get_host_password, load_key_pair, public_key_identity};
 use crate::models::{
     ConnectionLogEvent, FileEntry, Host, HostKeyMismatchEvent, HostKeyUnknownEvent,
-    HostOsUpdatedEvent, InstallPublicKeyResult, KnownHostRecord, PortForward, SftpListResult,
-    TerminalOutputEvent, TerminalStatusEvent,
+    HostOsUpdatedEvent, InstallPublicKeyResult, KnownHostRecord, PortForward, PortForwardStatus,
+    SftpListResult, TerminalOutputEvent, TerminalStatusEvent,
 };
 use crate::store::SharedDatabase;
 
@@ -170,7 +171,49 @@ struct ActiveSession {
     cancel_tx: Option<oneshot::Sender<()>>,
     handle: Option<Arc<client::Handle<SshClientHandler>>>,
     sftp: Option<Arc<SftpSession>>,
-    forwards: HashMap<String, JoinHandle<()>>,
+    forwards: HashMap<String, ForwardRuntime>,
+}
+
+struct ForwardRuntime {
+    forward_id: String,
+    label: String,
+    local_port: i64,
+    remote_host: String,
+    remote_port: i64,
+    task: JoinHandle<()>,
+    connections: Arc<AtomicUsize>,
+    listening: Arc<AtomicBool>,
+    last_error: Arc<parking_lot::Mutex<Option<String>>>,
+}
+
+impl ForwardRuntime {
+    fn to_status(&self, session_id: &str) -> PortForwardStatus {
+        let connections = self.connections.load(Ordering::SeqCst) as u32;
+        let listening = self.listening.load(Ordering::SeqCst);
+        let error = self.last_error.lock().clone();
+        let state = if !listening {
+            "failed"
+        } else if connections > 0 {
+            "connected"
+        } else {
+            "listening"
+        };
+        PortForwardStatus {
+            session_id: session_id.to_string(),
+            forward_id: self.forward_id.clone(),
+            label: self.label.clone(),
+            local_port: self.local_port,
+            remote_host: self.remote_host.clone(),
+            remote_port: self.remote_port,
+            state: state.to_string(),
+            connections,
+            error,
+        }
+    }
+}
+
+fn emit_forward_status(app: &AppHandle, status: &PortForwardStatus) {
+    let _ = app.emit("port-forward-status", status.clone());
 }
 
 pub struct SshSessionManager {
@@ -346,8 +389,9 @@ impl SshSessionManager {
 
     fn remove_session(&mut self, session_id: &str) {
         if let Some(mut session) = self.sessions.remove(session_id) {
-            for (_, task) in session.forwards.drain() {
-                task.abort();
+            for (_, runtime) in session.forwards.drain() {
+                runtime.listening.store(false, Ordering::SeqCst);
+                runtime.task.abort();
             }
             if let Some(cancel_tx) = session.cancel_tx.take() {
                 let _ = cancel_tx.send(());
@@ -413,34 +457,48 @@ impl SshSessionManager {
         }
     }
 
-    pub fn register_forward(
+    fn register_forward(
         &mut self,
         session_id: &str,
-        forward_id: &str,
-        task: JoinHandle<()>,
+        runtime: ForwardRuntime,
     ) -> anyhow::Result<()> {
         let session = self
             .sessions
             .get_mut(session_id)
             .ok_or_else(|| anyhow::anyhow!("Session not found"))?;
-        if let Some(old) = session.forwards.insert(forward_id.to_string(), task) {
-            old.abort();
+        let forward_id = runtime.forward_id.clone();
+        if let Some(old) = session.forwards.insert(forward_id, runtime) {
+            old.listening.store(false, Ordering::SeqCst);
+            old.task.abort();
         }
         Ok(())
     }
 
-    pub fn stop_forward(&mut self, session_id: &str, forward_id: &str) {
-        if let Some(session) = self.sessions.get_mut(session_id) {
-            if let Some(task) = session.forwards.remove(forward_id) {
-                task.abort();
-            }
-        }
+    pub fn stop_forward(
+        &mut self,
+        session_id: &str,
+        forward_id: &str,
+    ) -> Option<PortForwardStatus> {
+        let session = self.sessions.get_mut(session_id)?;
+        let runtime = session.forwards.remove(forward_id)?;
+        runtime.listening.store(false, Ordering::SeqCst);
+        runtime.task.abort();
+        let mut status = runtime.to_status(session_id);
+        status.state = "stopped".to_string();
+        status.connections = 0;
+        status.error = None;
+        Some(status)
     }
 
-    pub fn active_forwards(&self, session_id: &str) -> Vec<String> {
+    pub fn active_forwards(&self, session_id: &str) -> Vec<PortForwardStatus> {
         self.sessions
             .get(session_id)
-            .map(|s| s.forwards.keys().cloned().collect())
+            .map(|s| {
+                s.forwards
+                    .values()
+                    .map(|runtime| runtime.to_status(session_id))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 }
@@ -585,6 +643,7 @@ pub async fn sftp_write_text_file(
 }
 
 pub async fn start_port_forward(
+    app: AppHandle,
     manager: &SharedSshSessionManager,
     session_id: &str,
     forward: PortForward,
@@ -597,14 +656,91 @@ pub async fn start_port_forward(
 
     let remote_host = forward.remote_host.clone();
     let remote_port = forward.remote_port as u32;
+    let connections = Arc::new(AtomicUsize::new(0));
+    let listening = Arc::new(AtomicBool::new(true));
+    let last_error: Arc<parking_lot::Mutex<Option<String>>> =
+        Arc::new(parking_lot::Mutex::new(None));
+
+    let session_id_task = session_id.to_string();
+    let forward_id = forward.id.clone();
+    let label = forward.label.clone();
+    let local_port = forward.local_port;
+    let remote_host_status = forward.remote_host.clone();
+    let remote_port_status = forward.remote_port;
+    let connections_loop = connections.clone();
+    let listening_loop = listening.clone();
+    let last_error_loop = last_error.clone();
+    let app_loop = app.clone();
+
+    let make_status = {
+        let session_id = session_id_task.clone();
+        let forward_id = forward_id.clone();
+        let label = label.clone();
+        let remote_host_status = remote_host_status.clone();
+        let connections = connections.clone();
+        let listening = listening.clone();
+        let last_error = last_error.clone();
+        move || {
+            let n = connections.load(Ordering::SeqCst) as u32;
+            let is_listening = listening.load(Ordering::SeqCst);
+            let error = last_error.lock().clone();
+            let state = if !is_listening {
+                "failed"
+            } else if n > 0 {
+                "connected"
+            } else {
+                "listening"
+            };
+            PortForwardStatus {
+                session_id: session_id.clone(),
+                forward_id: forward_id.clone(),
+                label: label.clone(),
+                local_port,
+                remote_host: remote_host_status.clone(),
+                remote_port: remote_port_status,
+                state: state.to_string(),
+                connections: n,
+                error,
+            }
+        }
+    };
+
+    emit_forward_status(&app, &make_status());
 
     let task = tokio::spawn(async move {
         loop {
             let Ok((mut tcp, peer)) = listener.accept().await else {
+                listening_loop.store(false, Ordering::SeqCst);
+                *last_error_loop.lock() =
+                    Some("Listener closed unexpectedly".to_string());
+                emit_forward_status(&app_loop, &{
+                    let n = connections_loop.load(Ordering::SeqCst) as u32;
+                    PortForwardStatus {
+                        session_id: session_id_task.clone(),
+                        forward_id: forward_id.clone(),
+                        label: label.clone(),
+                        local_port,
+                        remote_host: remote_host_status.clone(),
+                        remote_port: remote_port_status,
+                        state: "failed".to_string(),
+                        connections: n,
+                        error: last_error_loop.lock().clone(),
+                    }
+                });
                 break;
             };
+
             let handle = handle.clone();
             let remote_host = remote_host.clone();
+            let connections = connections_loop.clone();
+            let listening = listening_loop.clone();
+            let last_error = last_error_loop.clone();
+            let app = app_loop.clone();
+            let session_id = session_id_task.clone();
+            let forward_id = forward_id.clone();
+            let label = label.clone();
+            let remote_host_status = remote_host_status.clone();
+
             tokio::spawn(async move {
                 match handle
                     .channel_open_direct_tcpip(
@@ -616,21 +752,98 @@ pub async fn start_port_forward(
                     .await
                 {
                     Ok(channel) => {
+                        *last_error.lock() = None;
+                        connections.fetch_add(1, Ordering::SeqCst);
+                        let n = connections.load(Ordering::SeqCst) as u32;
+                        emit_forward_status(
+                            &app,
+                            &PortForwardStatus {
+                                session_id: session_id.clone(),
+                                forward_id: forward_id.clone(),
+                                label: label.clone(),
+                                local_port,
+                                remote_host: remote_host_status.clone(),
+                                remote_port: remote_port_status,
+                                state: "connected".to_string(),
+                                connections: n,
+                                error: None,
+                            },
+                        );
+
                         let mut stream = channel.into_stream();
                         let _ = tokio::io::copy_bidirectional(&mut tcp, &mut stream).await;
+
+                        let prev = connections.fetch_sub(1, Ordering::SeqCst);
+                        let n = prev.saturating_sub(1) as u32;
+                        if listening.load(Ordering::SeqCst) {
+                            emit_forward_status(
+                                &app,
+                                &PortForwardStatus {
+                                    session_id,
+                                    forward_id,
+                                    label,
+                                    local_port,
+                                    remote_host: remote_host_status,
+                                    remote_port: remote_port_status,
+                                    state: if n > 0 {
+                                        "connected".to_string()
+                                    } else {
+                                        "listening".to_string()
+                                    },
+                                    connections: n,
+                                    error: last_error.lock().clone(),
+                                },
+                            );
+                        }
                     }
-                    Err(_) => {
-                        // remote refused; drop local connection
+                    Err(err) => {
+                        let message = format!("Remote tunnel failed: {err}");
+                        *last_error.lock() = Some(message.clone());
+                        if listening.load(Ordering::SeqCst) {
+                            let n = connections.load(Ordering::SeqCst) as u32;
+                            emit_forward_status(
+                                &app,
+                                &PortForwardStatus {
+                                    session_id,
+                                    forward_id,
+                                    label,
+                                    local_port,
+                                    remote_host: remote_host_status,
+                                    remote_port: remote_port_status,
+                                    state: if n > 0 {
+                                        "connected".to_string()
+                                    } else {
+                                        "listening".to_string()
+                                    },
+                                    connections: n,
+                                    error: Some(message),
+                                },
+                            );
+                        }
                     }
                 }
             });
         }
     });
 
-    manager
-        .lock()
-        .await
-        .register_forward(session_id, &forward.id, task)?;
+    let abort_handle = task.abort_handle();
+    let runtime = ForwardRuntime {
+        forward_id: forward.id.clone(),
+        label: forward.label.clone(),
+        local_port: forward.local_port,
+        remote_host: forward.remote_host.clone(),
+        remote_port: forward.remote_port,
+        task,
+        connections,
+        listening: listening.clone(),
+        last_error,
+    };
+
+    if let Err(err) = manager.lock().await.register_forward(session_id, runtime) {
+        listening.store(false, Ordering::SeqCst);
+        abort_handle.abort();
+        return Err(err);
+    }
     Ok(())
 }
 
