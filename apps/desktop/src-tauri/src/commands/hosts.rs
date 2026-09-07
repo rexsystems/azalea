@@ -38,6 +38,7 @@ pub fn create_host(
         group_id: input.group_id,
         mac_address: normalize_mac(input.mac_address),
         os_id: None,
+        last_connected_at: None,
         created_at: now,
         updated_at: now,
     };

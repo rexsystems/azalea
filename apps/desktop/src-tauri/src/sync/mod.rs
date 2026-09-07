@@ -278,14 +278,33 @@ async fn refresh_session(state: &mut SyncState) -> anyhow::Result<()> {
         .or_else(|| get_keyring("sync-refresh-token"))
         .ok_or_else(|| anyhow::anyhow!("Not logged in"))?;
 
-    let session = auth_request(
+    match auth_request(
         state,
         "token?grant_type=refresh_token",
         json!({ "refresh_token": refresh_token }),
     )
-    .await?;
-    state.apply_session(session);
-    Ok(())
+    .await
+    {
+        Ok(session) => {
+            state.apply_session(session);
+            Ok(())
+        }
+        Err(err) => {
+            let msg = err.to_string().to_lowercase();
+            // Only wipe credentials on a definitive auth rejection — not network blips.
+            let hard_reject = msg.contains("invalid refresh token")
+                || msg.contains("invalid_grant")
+                || msg.contains("refresh token not found")
+                || msg.contains("session not found");
+            if hard_reject {
+                state.access_token = None;
+                state.refresh_token = None;
+                state.expires_at = 0;
+                delete_keyring("sync-refresh-token");
+            }
+            Err(err)
+        }
+    }
 }
 
 /// Makes sure we have a valid access token; restores the session from the
@@ -296,6 +315,12 @@ pub async fn ensure_session(state: &mut SyncState) -> anyhow::Result<()> {
         return Ok(());
     }
     refresh_session(state).await
+}
+
+/// True if we still have a persisted refresh token (even if access token refresh
+/// just failed transiently).
+fn has_persisted_login(state: &SyncState) -> bool {
+    state.refresh_token.is_some() || get_keyring("sync-refresh-token").is_some()
 }
 
 pub fn logout(state: &mut SyncState, db: &SharedDatabase) {
@@ -777,13 +802,25 @@ pub struct SyncStatus {
 pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
     let configured = supabase_config().is_ok();
     let mut logged_in = false;
+    let mut session_ok = false;
 
     if configured {
-        logged_in = ensure_session(state).await.is_ok();
+        match ensure_session(state).await {
+            Ok(()) => {
+                logged_in = true;
+                session_ok = true;
+            }
+            Err(_) => {
+                // Network / temporary failures: keep showing signed-in if refresh
+                // token is still on disk. Hard auth rejects clear the keyring above.
+                logged_in = has_persisted_login(state);
+                session_ok = false;
+            }
+        }
     }
 
     let mut vault_row: Option<VaultRow> = None;
-    let (vault_exists, remote_version) = if logged_in {
+    let (vault_exists, remote_version) = if session_ok {
         match fetch_vault(state).await {
             Ok(Some(vault)) => {
                 vault_row = Some(vault.clone());
@@ -796,7 +833,7 @@ pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
         (None, None)
     };
 
-    let plan = if logged_in {
+    let plan = if session_ok {
         fetch_account_plan(state).await
     } else {
         AccountPlanRow::default()
@@ -805,7 +842,7 @@ pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
     let mut local_estimated_bytes = None;
     let mut storage_blocked = false;
 
-    if logged_in && state.is_unlocked() {
+    if session_ok && state.is_unlocked() {
         if let Some(vault_key) = state.vault_key.as_ref() {
             if let Ok((local_json, _)) = local_vault_json(db, None) {
                 if let Ok(ciphertext) = crypto::encrypt(vault_key, local_json.as_bytes()) {

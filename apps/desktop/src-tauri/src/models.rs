@@ -33,6 +33,8 @@ pub struct Host {
     pub mac_address: Option<String>,
     #[serde(default)]
     pub os_id: Option<String>,
+    #[serde(default)]
+    pub last_connected_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
 }

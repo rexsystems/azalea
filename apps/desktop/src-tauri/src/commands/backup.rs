@@ -28,6 +28,8 @@ pub struct BackupHost {
     pub mac_address: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub os_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_connected_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -115,6 +117,7 @@ pub fn build_backup(db: &SharedDatabase, settings: Option<Value>) -> Result<Azal
                 group_id: host.group_id,
                 mac_address: host.mac_address,
                 os_id: host.os_id,
+                last_connected_at: host.last_connected_at,
                 created_at: host.created_at,
                 updated_at: host.updated_at,
                 password,
@@ -304,6 +307,7 @@ pub fn import_azalea_backup_db(
             group_id: mapped_group_id,
             mac_address: host.mac_address,
             os_id: host.os_id,
+            last_connected_at: host.last_connected_at,
             created_at: host.created_at.max(0).min(now),
             updated_at: now,
         };
@@ -376,6 +380,7 @@ fn import_json_hosts(
             group_id: None,
             mac_address: None,
             os_id: None,
+            last_connected_at: None,
             created_at: now,
             updated_at: now,
         };
@@ -486,6 +491,7 @@ fn import_ssh_config(db: &tauri::State<'_, SharedDatabase>, data: &str, replace:
             group_id: None,
             mac_address: None,
             os_id: None,
+            last_connected_at: None,
             created_at: now,
             updated_at: now,
         };

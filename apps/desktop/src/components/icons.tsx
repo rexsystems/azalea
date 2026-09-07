@@ -6,6 +6,7 @@ import {
   ArrowLeft01Icon,
   ArrowLeftRightIcon,
   ArrowUp01Icon,
+  Cancel01Icon,
   CancelCircleIcon,
   CheckmarkCircle02Icon,
   ClipboardCopyIcon,
@@ -126,4 +127,6 @@ export const Trash2 = makeIcon(Delete03Icon, "Trash2");
 export const Upload = makeIcon(Upload04Icon, "Upload");
 export const User = makeIcon(UserIcon, "User");
 export const X = makeIcon(CancelCircleIcon, "X");
+/** Plain X for window chrome (no circle). */
+export const WindowClose = makeIcon(Cancel01Icon, "WindowClose");
 export const Zap = makeIcon(ZapIcon, "Zap");

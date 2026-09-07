@@ -913,19 +913,25 @@ async fn run_session(
 
     let session = Arc::new(session);
 
+    let mut reported_os = host.os_id.clone().unwrap_or_default();
     if let Some(os_id) = detect_remote_os(&session).await {
         if host.os_id.as_deref() != Some(os_id.as_str()) {
             if db.lock().set_host_os_id(&host.id, &os_id).is_ok() {
-                let _ = app.emit(
-                    "host-os-updated",
-                    HostOsUpdatedEvent {
-                        host_id: host.id.clone(),
-                        os_id,
-                    },
-                );
+                reported_os = os_id;
             }
+        } else {
+            reported_os = os_id;
         }
     }
+
+    let _ = db.lock().touch_host_connected(&host.id);
+    let _ = app.emit(
+        "host-os-updated",
+        HostOsUpdatedEvent {
+            host_id: host.id.clone(),
+            os_id: reported_os,
+        },
+    );
 
     emit_log(&app, &session_id, "Opening shell...");
     let mut channel = session.channel_open_session().await?;

@@ -32,7 +32,15 @@ export function HomePage({
   isMobile = false,
 }: HomePageProps) {
   const recent = useMemo(
-    () => [...hosts].sort((a, b) => b.updated_at - a.updated_at).slice(0, 6),
+    () =>
+      [...hosts]
+        .sort((a, b) => {
+          const ac = a.last_connected_at ?? 0;
+          const bc = b.last_connected_at ?? 0;
+          if (bc !== ac) return bc - ac;
+          return b.updated_at - a.updated_at;
+        })
+        .slice(0, 6),
     [hosts],
   );
 

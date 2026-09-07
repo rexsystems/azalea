@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS hosts (
     group_id TEXT REFERENCES host_groups(id) ON DELETE SET NULL,
     mac_address TEXT,
     os_id TEXT,
+    last_connected_at INTEGER,
     sync_version INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
@@ -105,6 +106,11 @@ impl Database {
         if !Self::column_exists(&self.conn, "hosts", "os_id") {
             self.conn
                 .execute("ALTER TABLE hosts ADD COLUMN os_id TEXT", [])?;
+        }
+
+        if !Self::column_exists(&self.conn, "hosts", "last_connected_at") {
+            self.conn
+                .execute("ALTER TABLE hosts ADD COLUMN last_connected_at INTEGER", [])?;
         }
 
         if Self::column_exists(&self.conn, "hosts", "group_name") {
@@ -222,7 +228,8 @@ impl Database {
 
     pub fn list_hosts(&self) -> anyhow::Result<Vec<Host>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, hostname, port, username, auth_type, key_id, group_id, mac_address, os_id, created_at, updated_at
+            "SELECT id, name, hostname, port, username, auth_type, key_id, group_id, mac_address, os_id,
+                    last_connected_at, created_at, updated_at
              FROM hosts ORDER BY name ASC",
         )?;
 
@@ -238,8 +245,9 @@ impl Database {
                 group_id: row.get(7)?,
                 mac_address: row.get(8)?,
                 os_id: row.get(9)?,
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                last_connected_at: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         })?;
 
@@ -248,7 +256,8 @@ impl Database {
 
     pub fn get_host(&self, id: &str) -> anyhow::Result<Option<Host>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, hostname, port, username, auth_type, key_id, group_id, mac_address, os_id, created_at, updated_at
+            "SELECT id, name, hostname, port, username, auth_type, key_id, group_id, mac_address, os_id,
+                    last_connected_at, created_at, updated_at
              FROM hosts WHERE id = ?1",
         )?;
 
@@ -265,8 +274,9 @@ impl Database {
                 group_id: row.get(7)?,
                 mac_address: row.get(8)?,
                 os_id: row.get(9)?,
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
+                last_connected_at: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             }))
         } else {
             Ok(None)
@@ -275,8 +285,9 @@ impl Database {
 
     pub fn insert_host(&self, host: &Host) -> anyhow::Result<()> {
         self.conn.execute(
-            "INSERT INTO hosts (id, name, hostname, port, username, auth_type, key_id, group_id, mac_address, os_id, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT INTO hosts (id, name, hostname, port, username, auth_type, key_id, group_id, mac_address, os_id,
+             last_connected_at, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 host.id,
                 host.name,
@@ -288,6 +299,7 @@ impl Database {
                 host.group_id,
                 host.mac_address,
                 host.os_id,
+                host.last_connected_at,
                 host.created_at,
                 host.updated_at,
             ],
@@ -298,7 +310,8 @@ impl Database {
     pub fn update_host(&self, host: &Host) -> anyhow::Result<()> {
         self.conn.execute(
             "UPDATE hosts SET name = ?2, hostname = ?3, port = ?4, username = ?5, auth_type = ?6,
-             key_id = ?7, group_id = ?8, mac_address = ?9, os_id = ?10, updated_at = ?11 WHERE id = ?1",
+             key_id = ?7, group_id = ?8, mac_address = ?9, os_id = ?10, last_connected_at = ?11,
+             updated_at = ?12 WHERE id = ?1",
             params![
                 host.id,
                 host.name,
@@ -310,6 +323,7 @@ impl Database {
                 host.group_id,
                 host.mac_address,
                 host.os_id,
+                host.last_connected_at,
                 host.updated_at,
             ],
         )?;
@@ -318,8 +332,16 @@ impl Database {
 
     pub fn set_host_os_id(&self, host_id: &str, os_id: &str) -> anyhow::Result<()> {
         self.conn.execute(
-            "UPDATE hosts SET os_id = ?2, updated_at = ?3 WHERE id = ?1",
-            params![host_id, os_id, chrono::Utc::now().timestamp()],
+            "UPDATE hosts SET os_id = ?2 WHERE id = ?1",
+            params![host_id, os_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn touch_host_connected(&self, host_id: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "UPDATE hosts SET last_connected_at = ?2 WHERE id = ?1",
+            params![host_id, chrono::Utc::now().timestamp()],
         )?;
         Ok(())
     }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, X } from "./icons";
+import { Minus, WindowClose } from "./icons";
 import { Logo } from "./Logo";
 
 function MaximizeIcon({ size = 12 }: { size?: number }) {
@@ -105,7 +105,7 @@ export function TitleBar({ title }: { title?: string }) {
           title="Close"
           tabIndex={-1}
         >
-          <X size={17} />
+          <WindowClose size={14} />
         </button>
       </div>
     </div>

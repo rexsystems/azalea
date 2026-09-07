@@ -18,6 +18,8 @@ export interface Host {
   mac_address: string | null;
   /** Detected remote OS id after a successful connect (ubuntu, debian, …). */
   os_id: string | null;
+  /** Unix seconds of last successful SSH connect; null if never connected. */
+  last_connected_at: number | null;
   created_at: number;
   updated_at: number;
 }

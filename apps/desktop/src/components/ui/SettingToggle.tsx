@@ -5,10 +5,15 @@ interface SettingToggleProps {
   onChange: (checked: boolean) => void;
 }
 
+/** Single clickable control - do not wrap a button in a <label> (double-fires). */
 export function SettingToggle({ label, description, checked, onChange }: SettingToggleProps) {
   return (
-    <label
-      className="hover-subtle flex cursor-pointer items-start justify-between gap-4 rounded-xl border px-4 py-3.5"
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="hover-subtle flex w-full cursor-pointer items-start justify-between gap-4 rounded-xl border px-4 py-3.5 text-left"
       style={{
         borderColor: "var(--border-subtle)",
         background: "var(--bg-card)",
@@ -24,22 +29,19 @@ export function SettingToggle({ label, description, checked, onChange }: Setting
           </div>
         )}
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
+      <span
         className="transition-ui relative mt-0.5 h-7 w-12 shrink-0 rounded-full"
         style={{
           background: checked ? "var(--accent)" : "var(--bg-card)",
           border: checked ? "none" : "1px solid var(--border-subtle)",
         }}
+        aria-hidden
       >
         <span
           className="transition-ui absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-sm"
           style={{ left: checked ? "24px" : "2px" }}
         />
-      </button>
-    </label>
+      </span>
+    </button>
   );
 }

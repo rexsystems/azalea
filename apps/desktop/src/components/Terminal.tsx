@@ -493,10 +493,30 @@ export function TerminalView({
       if (text) void copyText(text);
     };
 
-    const onMouseUp = (e: MouseEvent) => {
-      if (e.button === 2) return;
-      copySelection();
+    // Copy after the selection is finalized. Window-level mouseup matters because
+    // releasing outside the terminal (common on long selects) never hits the container.
+    let dragSelecting = false;
+    const resetDrag = () => {
+      dragSelecting = false;
     };
+    const onSelectMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      dragSelecting = true;
+    };
+    const onSelectMouseUp = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      if (!dragSelecting) return;
+      dragSelecting = false;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(copySelection);
+      });
+    };
+    const selectionDisposable = term.onSelectionChange(() => {
+      // Keyboard / shift selection (no active drag).
+      if (dragSelecting) return;
+      copySelection();
+    });
+
     const unbindRightClickPaste = bindRightClickPaste(
       term,
       container,
@@ -504,7 +524,10 @@ export function TerminalView({
       () => settingsRef.current,
     );
 
-    container.addEventListener("mouseup", onMouseUp);
+    container.addEventListener("mousedown", onSelectMouseDown);
+    window.addEventListener("mouseup", onSelectMouseUp);
+    window.addEventListener("blur", resetDrag);
+    document.addEventListener("visibilitychange", resetDrag);
 
     const resizeObserver = new ResizeObserver(() => {
       if (!activeRef.current) return;
@@ -571,9 +594,13 @@ export function TerminalView({
     return () => {
       cancelled = true;
       dataDisposable.dispose();
+      selectionDisposable.dispose();
       unlistenOutput?.();
       unlistenStatus?.();
-      container.removeEventListener("mouseup", onMouseUp);
+      container.removeEventListener("mousedown", onSelectMouseDown);
+      window.removeEventListener("mouseup", onSelectMouseUp);
+      window.removeEventListener("blur", resetDrag);
+      document.removeEventListener("visibilitychange", resetDrag);
       unbindRightClickPaste();
       resizeObserver.disconnect();
       term.dispose();
@@ -590,6 +617,15 @@ export function TerminalView({
     if (!term) return;
     term.options.rightClickSelectsWord = !settings.rightClickToPaste;
   }, [settings.rightClickToPaste]);
+
+  // When select-to-copy is turned on, copy any existing selection immediately.
+  useEffect(() => {
+    if (!settings.selectToCopy) return;
+    const term = termRef.current;
+    if (!term?.hasSelection()) return;
+    const text = term.getSelection();
+    if (text) void copyText(text);
+  }, [settings.selectToCopy]);
 
   useEffect(() => {
     const term = termRef.current;
