@@ -1,15 +1,28 @@
 import { useMemo, useState } from "react";
 import type { Host, HostGroup } from "@azalea/shared";
-import { Folder, Plus, Search, SquareTerminal } from "./icons";
+import {
+  Folder,
+  Pencil,
+  Play,
+  Plus,
+  Search,
+  Server,
+  SquareTerminal,
+  Tag,
+  Trash2,
+  Zap,
+} from "./icons";
 import { groupHostsByGroup } from "../lib/utils";
 import { EmptyHostsState, GroupSection } from "./HostTile";
 import { useContextMenu } from "./ui/ContextMenu";
 import { SelectGroupDialog } from "./ui/SelectGroupDialog";
+import { SkeletonCard } from "./ui/Skeleton";
 
 interface HostsPageProps {
   hosts: Host[];
   groups: HostGroup[];
   connectingHostId: string | null;
+  loading?: boolean;
   onConnect: (host: Host) => void;
   onWakeHost: (host: Host) => void;
   onAddServer: (groupId?: string | null) => void;
@@ -30,6 +43,7 @@ export function HostsPage({
   hosts,
   groups,
   connectingHostId,
+  loading = false,
   onConnect,
   onWakeHost,
   onAddServer,
@@ -67,36 +81,91 @@ export function HostsPage({
   const hostMenu = (host: Host) => [
     {
       items: [
-        { id: "connect", label: "Connect", onClick: () => onConnect(host) },
+        {
+          id: "connect",
+          label: "Connect",
+          icon: <Play size={14} />,
+          onClick: () => onConnect(host),
+        },
         ...(!isMobile && host.mac_address
-          ? [{ id: "wake", label: "Wake up", onClick: () => onWakeHost(host) }]
+          ? [
+              {
+                id: "wake",
+                label: "Wake up",
+                icon: <Zap size={14} />,
+                onClick: () => onWakeHost(host),
+              },
+            ]
           : []),
-        { id: "edit", label: "Edit", onClick: () => onEditHost(host) },
+        {
+          id: "edit",
+          label: "Edit",
+          icon: <Pencil size={14} />,
+          onClick: () => onEditHost(host),
+        },
         {
           id: "add-to-group",
           label: host.group_id ? "Move to group…" : "Add to group…",
+          icon: <Tag size={14} />,
           onClick: () => setGroupPickHost(host),
         },
       ],
     },
     {
-      items: [{ id: "delete", label: "Delete", danger: true, onClick: () => onDeleteHost(host) }],
+      items: [
+        {
+          id: "delete",
+          label: "Delete",
+          icon: <Trash2 size={14} />,
+          danger: true,
+          onClick: () => onDeleteHost(host),
+        },
+      ],
     },
   ];
 
   const groupMenu = (group: HostGroup | null) => {
     if (!group) {
-      return [{ items: [{ id: "add", label: "Add server", onClick: () => onAddServer(null) }] }];
+      return [
+        {
+          items: [
+            {
+              id: "add",
+              label: "Add server",
+              icon: <Server size={14} />,
+              onClick: () => onAddServer(null),
+            },
+          ],
+        },
+      ];
     }
     return [
       {
         items: [
-          { id: "add", label: "Add server", onClick: () => onAddServer(group.id) },
-          { id: "rename", label: "Rename", onClick: () => onRenameGroup(group) },
+          {
+            id: "add",
+            label: "Add server",
+            icon: <Server size={14} />,
+            onClick: () => onAddServer(group.id),
+          },
+          {
+            id: "rename",
+            label: "Rename",
+            icon: <Pencil size={14} />,
+            onClick: () => onRenameGroup(group),
+          },
         ],
       },
       {
-        items: [{ id: "del", label: "Delete group", danger: true, onClick: () => onDeleteGroup(group) }],
+        items: [
+          {
+            id: "del",
+            label: "Delete group",
+            icon: <Trash2 size={14} />,
+            danger: true,
+            onClick: () => onDeleteGroup(group),
+          },
+        ],
       },
     ];
   };
@@ -110,8 +179,18 @@ export function HostsPage({
         openMenu(e, [
           {
             items: [
-              { id: "add-server", label: "New Host", onClick: () => onAddServer() },
-              { id: "add-group", label: "New Group", onClick: onAddGroup },
+              {
+                id: "add-server",
+                label: "New Host",
+                icon: <Server size={14} />,
+                onClick: () => onAddServer(),
+              },
+              {
+                id: "add-group",
+                label: "New Group",
+                icon: <Folder size={14} />,
+                onClick: onAddGroup,
+              },
             ],
           },
         ]);
@@ -219,7 +298,13 @@ export function HostsPage({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-          {hosts.length === 0 && groups.length === 0 ? (
+          {loading ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }, (_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : hosts.length === 0 && groups.length === 0 ? (
             <EmptyHostsState onAddServer={() => onAddServer()} />
           ) : grouped.length === 0 ? (
             <p className="py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>

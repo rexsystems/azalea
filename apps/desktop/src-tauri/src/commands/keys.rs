@@ -1,4 +1,6 @@
-use crate::keys::{delete_private_key, generate_key as generate_ssh_key, import_private_key};
+use crate::keys::{
+    delete_private_key, generate_key as generate_ssh_key, get_private_key, import_private_key,
+};
 use crate::models::{
     CreateKeyInput, ImportKeyInput, InstallPublicKeyInput, InstallPublicKeyResult, SshKeyRecord,
 };
@@ -39,6 +41,13 @@ pub fn import_key(
 pub fn delete_key(db: tauri::State<'_, SharedDatabase>, id: String) -> Result<(), String> {
     delete_private_key(&id).map_err(|err| err.to_string())?;
     db.lock().delete_key(&id).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub fn export_private_key(id: String) -> Result<String, String> {
+    get_private_key(&id)
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| "Private key not found in keyring".to_string())
 }
 
 #[tauri::command]

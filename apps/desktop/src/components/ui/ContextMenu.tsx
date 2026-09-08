@@ -73,9 +73,9 @@ export function ContextMenu({ x, y, sections, onClose }: ContextMenuProps) {
                 item.onClick();
                 onClose();
               }}
-              className="transition-ui flex w-full px-3.5 py-2 text-left text-sm disabled:opacity-40"
+              className="transition-ui flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-40"
               style={{
-                color: item.danger ? "#f87171" : "var(--text-secondary)",
+                color: item.danger ? "var(--danger)" : "var(--text-secondary)",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = item.danger
@@ -85,10 +85,17 @@ export function ContextMenu({ x, y, sections, onClose }: ContextMenuProps) {
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = item.danger ? "#f87171" : "var(--text-secondary)";
+                e.currentTarget.style.color = item.danger
+                  ? "var(--danger)"
+                  : "var(--text-secondary)";
               }}
             >
-              {item.label}
+              {item.icon && (
+                <span className="inline-flex w-4 shrink-0 items-center justify-center" aria-hidden>
+                  {item.icon}
+                </span>
+              )}
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
             </button>
           ))}
         </div>

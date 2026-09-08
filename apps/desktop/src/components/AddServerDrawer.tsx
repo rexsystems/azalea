@@ -12,6 +12,7 @@ import {
   Tag,
   Trash2,
   User,
+  WindowClose,
 } from "./icons";
 import type { HostFormValues } from "../lib/utils";
 import { parsePortInput, validateHostForm } from "../lib/utils";
@@ -226,8 +227,12 @@ export function AddServerDrawer({
               }))
             }
             options={[
-              { value: "", label: "No group" },
-              ...groups.map((g) => ({ value: g.id, label: g.name })),
+              { value: "", label: "No group", icon: <WindowClose size={15} /> },
+              ...groups.map((g) => ({
+                value: g.id,
+                label: g.name,
+                icon: <Folder size={15} />,
+              })),
             ]}
           />
         )}
@@ -272,8 +277,16 @@ export function AddServerDrawer({
               }))
             }
             options={[
-              { value: "", label: "None - choose when connecting" },
-              ...keys.map((key) => ({ value: key.id, label: key.name })),
+              {
+                value: "",
+                label: "None - choose when connecting",
+                icon: <WindowClose size={15} />,
+              },
+              ...keys.map((key) => ({
+                value: key.id,
+                label: key.name,
+                icon: <KeyRound size={15} />,
+              })),
             ]}
           />
         )}

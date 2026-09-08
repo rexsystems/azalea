@@ -30,6 +30,7 @@ import { AppShell, type NavPage } from "./components/AppShell";
 import { ConnectionScreen } from "./components/ConnectionScreen";
 import { ReconnectOverlay, type ReconnectInfo, type ReconnectPhase } from "./components/ReconnectOverlay";
 import { FileBrowserPanel } from "./components/FileBrowserPanel";
+import { FirstRunWizard } from "./components/FirstRunWizard";
 import { ForwardsPopover } from "./components/ForwardsPopover";
 import { HomePage } from "./components/HomePage";
 import { HostsPage } from "./components/HostsPage";
@@ -94,7 +95,7 @@ interface PromptState {
 }
 
 function App() {
-  const { hosts, createHost, updateHost, removeHost, refresh: refreshHosts } = useHosts();
+  const { hosts, createHost, updateHost, removeHost, refresh: refreshHosts, loading: hostsLoading } = useHosts();
   const { keys, generateKey, importKey, removeKey, refresh: refreshKeys } = useKeys();
   const {
     groups,
@@ -116,6 +117,25 @@ function App() {
   const [statusMessage, setStatusMessage] = useState("Ready");
 
   const [navPage, setNavPage] = useState<NavPage>("home");
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  const [accounts, setAccounts] = useState<api.AccountRecord[]>([]);
+  const [activeAccount, setActiveAccount] = useState<api.AccountRecord | null>(null);
+
+  const refreshAccounts = useCallback(async () => {
+    try {
+      const [list, active] = await Promise.all([api.listAccounts(), api.activeAccount()]);
+      setAccounts(list);
+      setActiveAccount(active);
+    } catch {
+      setAccounts([]);
+      setActiveAccount(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void api.accountsOnboarded().then(setOnboarded).catch(() => setOnboarded(true));
+    void refreshAccounts();
+  }, [refreshAccounts]);
   const [viewingTerminal, setViewingTerminal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -857,6 +877,69 @@ function App() {
     setViewingTerminal(false);
   };
 
+  const handleOpenAccount = useCallback(() => {
+    setNavPage("settings");
+    setViewingTerminal(false);
+    setFocusSettingsSync(true);
+  }, []);
+
+  const handleSwitchAccount = useCallback(
+    async (id: string) => {
+      try {
+        setStatusMessage("Switching account…");
+        const next = await api.switchAccount(id);
+        setActiveAccount(next);
+        await refreshAccounts();
+        await Promise.all([
+          refreshHosts(),
+          refreshGroups(),
+          refreshKeys(),
+          refreshSyncStatus(),
+        ]);
+        setStatusMessage(`Switched to ${next.label}.`);
+      } catch (err) {
+        setStatusMessage(`Switch failed: ${String(err).replace(/^Error:\s*/, "")}`);
+      }
+    },
+    [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+  );
+
+  const handleAddAccount = useCallback(
+    async (input: {
+      kind: api.AccountKind;
+      label: string;
+      base_url?: string | null;
+      web_url?: string | null;
+    }) => {
+      const created = await api.addAccount(input);
+      await refreshAccounts();
+      await Promise.all([
+        refreshHosts(),
+        refreshGroups(),
+        refreshKeys(),
+        refreshSyncStatus(),
+      ]);
+      setStatusMessage(`Added ${created.label}.`);
+    },
+    [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+  );
+
+  const handleRemoveAccount = useCallback(
+    async (id: string) => {
+      const next = await api.removeAccount(id);
+      setActiveAccount(next);
+      await refreshAccounts();
+      await Promise.all([
+        refreshHosts(),
+        refreshGroups(),
+        refreshKeys(),
+        refreshSyncStatus(),
+      ]);
+      setStatusMessage(`Removed account. Now on ${next.label}.`);
+    },
+    [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+  );
+
   const handleSignInForSync = useCallback(() => {
     setNavPage("settings");
     setViewingTerminal(false);
@@ -866,12 +949,13 @@ function App() {
         setStatusMessage("Opening browser to sign in…");
         await api.syncBrowserLogin();
         await refreshSyncStatus();
+        await refreshAccounts();
         setStatusMessage("Signed in.");
       } catch (err) {
         setStatusMessage(`Sign in failed: ${String(err).replace(/^Error:\s*/, "")}`);
       }
     })();
-  }, [refreshSyncStatus]);
+  }, [refreshAccounts, refreshSyncStatus]);
 
   const handleSelectTab = (tabId: string) => {
     setActiveTabId(tabId);
@@ -1325,6 +1409,7 @@ function App() {
             hosts={hosts}
             groups={groups}
             connectingHostId={connectingHostId}
+            loading={hostsLoading}
             onConnect={(host) => void connectToHost(host)}
             onWakeHost={(host) => void wakeHost(host)}
             onAddServer={(groupId) => openAddDrawer(groupId)}
@@ -1613,9 +1698,27 @@ function App() {
 
   return (
     <>
+      {onboarded === false ? (
+        <FirstRunWizard
+          onDone={() => {
+            setOnboarded(true);
+            void refreshAccounts();
+            void refreshHosts();
+            void refreshGroups();
+            void refreshKeys();
+            void refreshSyncStatus();
+          }}
+        />
+      ) : (
       <AppShell
         activePage={navPage}
         onNavigate={handleNavigate}
+        accounts={accounts}
+        activeAccount={activeAccount}
+        onSwitchAccount={handleSwitchAccount}
+        onAddAccount={handleAddAccount}
+        onRemoveAccount={handleRemoveAccount}
+        onOpenAccount={handleOpenAccount}
         onSignInForSync={handleSignInForSync}
         statusMessage={isMobile ? undefined : statusMessage}
         syncStatus={syncStatus}
@@ -1739,6 +1842,7 @@ function App() {
       >
         {renderMain()}
       </AppShell>
+      )}
 
       <ConfirmDialog
         open={pendingConfirm !== null}

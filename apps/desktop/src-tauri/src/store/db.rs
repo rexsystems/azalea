@@ -80,7 +80,10 @@ pub struct Database {
 
 impl Database {
     pub fn new(app: &AppHandle) -> anyhow::Result<Self> {
-        let db_path = db_path(app)?;
+        Self::open_path(db_path(app)?)
+    }
+
+    pub fn open_path(db_path: PathBuf) -> anyhow::Result<Self> {
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -90,6 +93,13 @@ impl Database {
         let db = Self { conn };
         db.run_migrations()?;
         Ok(db)
+    }
+
+    /// Replace the open connection with another account database.
+    pub fn reopen(&mut self, db_path: PathBuf) -> anyhow::Result<()> {
+        let next = Self::open_path(db_path)?;
+        self.conn = next.conn;
+        Ok(())
     }
 
     fn run_migrations(&self) -> anyhow::Result<()> {
@@ -589,6 +599,7 @@ impl Database {
 }
 
 fn db_path(app: &AppHandle) -> anyhow::Result<PathBuf> {
+    // Legacy single-file path (migration handled by AccountRegistry).
     let dir = app
         .path()
         .app_data_dir()
@@ -598,6 +609,7 @@ fn db_path(app: &AppHandle) -> anyhow::Result<PathBuf> {
 
 pub type SharedDatabase = Arc<parking_lot::Mutex<Database>>;
 
-pub fn init_database(app: &AppHandle) -> anyhow::Result<SharedDatabase> {
-    Ok(Arc::new(parking_lot::Mutex::new(Database::new(app)?)))
+pub fn init_database(app: &AppHandle, account_id: &str) -> anyhow::Result<SharedDatabase> {
+    let path = crate::store::accounts::account_db_path(app, account_id)?;
+    Ok(Arc::new(parking_lot::Mutex::new(Database::open_path(path)?)))
 }

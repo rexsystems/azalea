@@ -2,11 +2,10 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Home, KeyRound, Server, Settings, type AppIcon } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
-import type { SyncStatus } from "../lib/api";
-import { maskEmail } from "../lib/utils";
-import { PlanBadge } from "./PlanBadge";
+import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { TitleBar } from "./TitleBar";
 import { Logo } from "./Logo";
+import { AccountSwitcher } from "./AccountSwitcher";
 
 export type NavPage = "home" | "hosts" | "keys" | "settings";
 
@@ -14,6 +13,17 @@ interface AppShellProps {
   children: ReactNode;
   activePage: NavPage;
   onNavigate: (page: NavPage) => void;
+  accounts: AccountRecord[];
+  activeAccount: AccountRecord | null;
+  onSwitchAccount: (id: string) => void | Promise<void>;
+  onAddAccount: (input: {
+    kind: AccountKind;
+    label: string;
+    base_url?: string | null;
+    web_url?: string | null;
+  }) => void | Promise<void>;
+  onRemoveAccount: (id: string) => void | Promise<void>;
+  onOpenAccount?: () => void;
   onSignInForSync?: () => void;
   statusMessage?: string;
   syncStatus?: SyncStatus | null;
@@ -91,6 +101,12 @@ export function AppShell({
   children,
   activePage,
   onNavigate,
+  accounts,
+  activeAccount,
+  onSwitchAccount,
+  onAddAccount,
+  onRemoveAccount,
+  onOpenAccount,
   onSignInForSync,
   statusMessage,
   syncStatus,
@@ -105,6 +121,25 @@ export function AppShell({
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => setAppVersion("-"));
   }, []);
+
+  const openAccount = () => {
+    if (onOpenAccount) onOpenAccount();
+    else onNavigate("settings");
+  };
+
+  const switcher = (
+    <AccountSwitcher
+      accounts={accounts}
+      active={activeAccount}
+      syncStatus={syncStatus}
+      onSwitch={onSwitchAccount}
+      onAdd={onAddAccount}
+      onRemove={onRemoveAccount}
+      onManage={openAccount}
+      onSignIn={onSignInForSync}
+      compact={isMobile}
+    />
+  );
 
   if (isMobile) {
     return (
@@ -129,31 +164,11 @@ export function AppShell({
                   Azalea
                 </div>
                 <div className="truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
-                  {syncStatus?.logged_in
-                    ? syncStatus.email
-                      ? maskEmail(syncStatus.email)
-                      : "Signed in"
-                    : `v${appVersion}`}
+                  v{appVersion}
                 </div>
               </div>
             </div>
-            {syncStatus?.logged_in ? (
-              <button type="button" onClick={() => onNavigate("settings")}>
-                <PlanBadge plan={syncStatus.plan} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  if (onSignInForSync) onSignInForSync();
-                  else onNavigate("settings");
-                }}
-                className="rounded-lg border px-2.5 py-1.5 text-[11px] font-medium"
-                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-              >
-                Sign in
-              </button>
-            )}
+            {switcher}
           </header>
         )}
 
@@ -237,38 +252,9 @@ export function AppShell({
             </div>
           </div>
 
-          <div className="border-t px-3 py-3" style={{ borderColor: "var(--border-subtle)" }}>
-            {syncStatus?.logged_in ? (
-              <>
-                <div className="mb-1.5 truncate text-xs font-medium" style={{ color: "var(--text)" }}>
-                  {syncStatus.email ? maskEmail(syncStatus.email) : "Signed in"}
-                </div>
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <PlanBadge plan={syncStatus.plan} />
-                  <button
-                    type="button"
-                    onClick={() => onNavigate("settings")}
-                    className="text-[10px] transition-opacity hover:opacity-80"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    Account
-                  </button>
-                </div>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  if (onSignInForSync) onSignInForSync();
-                  else onNavigate("settings");
-                }}
-                className="mb-2 w-full rounded-lg border px-2.5 py-2 text-left text-xs transition-ui hover-subtle"
-                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-              >
-                Sign in for cloud sync
-              </button>
-            )}
-            <div className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <div className="border-t px-2.5 py-3" style={{ borderColor: "var(--border-subtle)" }}>
+            {switcher}
+            <div className="px-1.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
               v{appVersion}
             </div>
           </div>

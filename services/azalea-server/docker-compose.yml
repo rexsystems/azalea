@@ -1,0 +1,22 @@
+services:
+  azalea-server:
+    build: .
+    image: ghcr.io/rexsystems/azalea-server:latest
+    ports:
+      - "8787:8787"
+    environment:
+      AZALEA_JWT_SECRET: change-me-to-a-long-random-string
+      AZALEA_SETUP_SECRET: change-me-setup
+      AZALEA_DATA_DIR: /data
+      AZALEA_BIND: 0.0.0.0:8787
+      # Resend (password reset emails). Leave empty to disable mail.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      AZALEA_MAIL_FROM: ${AZALEA_MAIL_FROM:-Azalea <onboarding@resend.dev>}
+      AZALEA_PUBLIC_WEB_URL: ${AZALEA_PUBLIC_WEB_URL:-http://localhost:3000}
+      RUST_LOG: azalea_server=info,tower_http=info
+    volumes:
+      - azalea-data:/data
+    restart: unless-stopped
+
+volumes:
+  azalea-data:

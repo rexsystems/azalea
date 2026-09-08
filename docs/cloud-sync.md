@@ -1,8 +1,15 @@
-# Azalea Cloud Sync - Plan (Supabase)
+# Azalea Cloud Sync
+
+> **Migration in progress.** The self-hostable Rust API is documented in
+> [`sync-api-v1.md`](./sync-api-v1.md). Server crate: `services/azalea-server`.
+> The sections below describe the current Supabase-backed desktop client until
+> cutover.
+
+---
 
 Zero-knowledge sync of data (hosts, groups, snippets, port forwards, settings,
 known hosts, keys + passwords) across devices, per account. The server stores
-only ciphertext - a Supabase breach exposes nothing readable.
+only ciphertext - a breach exposes nothing readable.
 
 ## Principles
 

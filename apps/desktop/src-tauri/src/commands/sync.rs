@@ -162,11 +162,13 @@ pub async fn sync_browser_login(
         .port();
     let expected_state = random_state();
 
+    let web = {
+        let sync = state.lock().await;
+        sync::web_base_url(Some(&sync))
+    };
     let url = format!(
         "{}/authorize?port={}&state={}",
-        sync::web_base_url(),
-        port,
-        expected_state
+        web, port, expected_state
     );
 
     app.opener()

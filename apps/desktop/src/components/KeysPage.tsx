@@ -7,12 +7,14 @@ import {
   FileKey2,
   Fingerprint,
   HardDriveUpload,
+  KeyRound,
   Trash2,
 } from "./icons";
 import * as api from "../lib/api";
 import { copyText } from "../lib/clipboard";
 import { filenameToKeyName } from "../lib/utils";
 import { Button } from "./ui/Button";
+import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { Input } from "./ui/Input";
 import { Select } from "./ui/Select";
 import { SelectHostDialog, type SelectHostResult } from "./ui/SelectHostDialog";
@@ -84,6 +86,7 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
   const [installKeyId, setInstallKeyId] = useState<string | null>(null);
   const [installBusy, setInstallBusy] = useState(false);
   const [installResult, setInstallResult] = useState<SelectHostResult | null>(null);
+  const [exportPrivateTarget, setExportPrivateTarget] = useState<SshKey | null>(null);
 
   const handleGenerate = async () => {
     const name = newKeyName.trim() || "My Key";
@@ -177,6 +180,25 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
       setError(String(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const exportPrivateKey = async (key: SshKey) => {
+    try {
+      setBusy(true);
+      setError(null);
+      const pem = await api.exportPrivateKey(key.id);
+      const path = await api.saveTextFile(
+        `${key.name.replace(/[^\w.-]+/g, "_")}`,
+        [{ name: "Private key", extensions: ["pem", "key", ""] }],
+        pem.endsWith("\n") ? pem : `${pem}\n`,
+      );
+      if (path) setNotice(`Saved private key to ${path}`);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusy(false);
+      setExportPrivateTarget(null);
     }
   };
 
@@ -421,7 +443,7 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                         </p>
 
                         <div
-                          className="key-card-actions mt-auto grid grid-cols-3 overflow-hidden rounded-lg border"
+                          className="key-card-actions mt-auto grid grid-cols-2 overflow-hidden rounded-lg border sm:grid-cols-4"
                           style={{ borderColor: "var(--border-subtle)", marginTop: "1rem" }}
                         >
                           <button
@@ -439,6 +461,14 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                           >
                             <FileKey2 size={14} />
                             <span>Export</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => setExportPrivateTarget(key)}
+                          >
+                            <KeyRound size={14} />
+                            <span>Private</span>
                           </button>
                           <button
                             type="button"
@@ -461,6 +491,18 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(exportPrivateTarget)}
+        title="Export private key?"
+        message={`This writes the private key for "${exportPrivateTarget?.name ?? "key"}" to disk unencrypted. Anyone with that file can access servers that trust it.`}
+        confirmLabel="Export private key"
+        danger
+        onConfirm={() => {
+          if (exportPrivateTarget) void exportPrivateKey(exportPrivateTarget);
+        }}
+        onCancel={() => setExportPrivateTarget(null)}
+      />
 
       <SelectHostDialog
         open={Boolean(installKeyId)}

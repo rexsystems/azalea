@@ -4,8 +4,8 @@ The desktop app uses [Tauri updater](https://v2.tauri.app/plugin/updater/) with 
 
 ## Endpoints (in order)
 
-1. `https://azalea.rexsystems.me/updates/latest.json` (hosted update manifest; GitHub repo can stay private)
-2. `https://github.com/rexsystems/azalea/releases/latest/download/latest.json` (if the repo is public)
+1. `https://github.com/rexsystems/azalea/releases/latest/download/latest.json` (primary; always published by CI)
+2. `https://azalea.rexsystems.me/updates/latest.json` (fallback; keep in sync with GitHub)
 
 ## Platforms in `latest.json`
 
@@ -18,8 +18,9 @@ The desktop app uses [Tauri updater](https://v2.tauri.app/plugin/updater/) with 
 | `darwin-aarch64` | `.app.tar.gz` (Apple Silicon) |
 | `darwin-x86_64` | `.app.tar.gz` (Intel) |
 
-The app checks `azalea.rexsystems.me` first. That file must stay in sync with the
-GitHub Release `latest.json`, or Linux/macOS checks fail even when GitHub is fine.
+The app checks GitHub first. Keep `azalea.rexsystems.me/updates/latest.json`
+copied from the GitHub Release asset after each release, or the website fallback
+drifts and can serve a stale/incomplete platform list.
 
 ## GitHub Actions secrets (master release only)
 

@@ -65,14 +65,7 @@ impl Default for AccountPlanRow {
 }
 
 async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
-    let Ok((status, body)) = rest_request(
-        state,
-        reqwest::Method::POST,
-        "rpc/get_account_plan",
-        Some(json!({})),
-        None,
-    )
-    .await
+    let Ok((status, body)) = api_request(state, reqwest::Method::GET, "/v1/account", None).await
     else {
         return AccountPlanRow::default();
     };
@@ -81,17 +74,23 @@ async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
         return AccountPlanRow::default();
     }
 
-    if let Ok(rows) = serde_json::from_value::<Vec<AccountPlanRow>>(body.clone()) {
-        if let Some(row) = rows.into_iter().next() {
-            return normalize_plan_row(row);
-        }
+    #[derive(Deserialize)]
+    struct AccountBody {
+        plan: String,
+        vault_bytes: i64,
+        vault_limit_bytes: i64,
     }
 
-    if let Ok(row) = serde_json::from_value::<AccountPlanRow>(body) {
-        return normalize_plan_row(row);
-    }
+    let Ok(account) = serde_json::from_value::<AccountBody>(body) else {
+        return AccountPlanRow::default();
+    };
 
-    AccountPlanRow::default()
+    normalize_plan_row(AccountPlanRow {
+        plan: account.plan,
+        limit_bytes: account.vault_limit_bytes,
+        used_bytes: account.vault_bytes,
+        remaining_bytes: (account.vault_limit_bytes - account.vault_bytes).max(0),
+    })
 }
 
 fn normalize_plan_row(mut row: AccountPlanRow) -> AccountPlanRow {
@@ -115,6 +114,9 @@ pub struct SyncState {
     user_id: Option<String>,
     email: Option<String>,
     vault_key: Option<VaultKey>,
+    account_id: Option<String>,
+    api_base: Option<String>,
+    web_url: Option<String>,
 }
 
 pub type SharedSyncState = Arc<tokio::sync::Mutex<SyncState>>;
@@ -128,26 +130,50 @@ pub fn init_sync_state() -> SharedSyncState {
         user_id: None,
         email: None,
         vault_key: None,
+        account_id: None,
+        api_base: None,
+        web_url: None,
     }))
 }
 
-fn supabase_config() -> anyhow::Result<(String, String)> {
-    let url = std::env::var("SUPABASE_URL")
+fn api_base_url(state: &SyncState) -> anyhow::Result<String> {
+    if let Some(url) = state
+        .api_base
+        .as_ref()
+        .map(|u| u.trim().trim_end_matches('/'))
+        .filter(|u| !u.is_empty())
+    {
+        return Ok(url.to_string());
+    }
+    std::env::var("AZALEA_API_URL")
         .ok()
         .filter(|v| !v.is_empty())
-        .or_else(|| option_env!("SUPABASE_URL").map(str::to_string))
-        .ok_or_else(|| anyhow::anyhow!("SUPABASE_URL is not configured"))?;
-    let key = std::env::var("SUPABASE_ANON_KEY")
-        .ok()
-        .filter(|v| !v.is_empty())
-        .or_else(|| option_env!("SUPABASE_ANON_KEY").map(str::to_string))
-        .ok_or_else(|| anyhow::anyhow!("SUPABASE_ANON_KEY is not configured"))?;
-    Ok((url.trim_end_matches('/').to_string(), key))
+        .or_else(|| option_env!("AZALEA_API_URL").map(str::to_string))
+        .map(|u| u.trim_end_matches('/').to_string())
+        .ok_or_else(|| anyhow::anyhow!("AZALEA_API_URL is not configured"))
 }
 
+fn api_configured(state: &SyncState) -> bool {
+    api_base_url(state).is_ok()
+}
+
+fn keyring_name(state: &SyncState, key: &str) -> String {
+    match &state.account_id {
+        Some(id) => format!("{key}:{id}"),
+        None => key.to_string(),
+    }
+}
+
+
 /// Base URL of the Azalea management website used for browser login.
-/// Configurable via AZALEA_WEB_URL; falls back to the hosted site.
-pub fn web_base_url() -> String {
+pub fn web_base_url(state: Option<&SyncState>) -> String {
+    if let Some(url) = state
+        .and_then(|s| s.web_url.as_ref())
+        .map(|u| u.trim().trim_end_matches('/'))
+        .filter(|u| !u.is_empty())
+    {
+        return url.to_string();
+    }
     std::env::var("AZALEA_WEB_URL")
         .ok()
         .filter(|v| !v.is_empty())
@@ -182,7 +208,9 @@ fn delete_keyring(name: &str) {
 #[derive(Debug, Deserialize)]
 struct AuthUser {
     id: String,
-    email: Option<String>,
+    email: String,
+    #[serde(default)]
+    role: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -209,11 +237,12 @@ impl SyncState {
         self.access_token = Some(session.access_token);
         self.expires_at = chrono::Utc::now().timestamp() + session.expires_in - 60;
         self.user_id = Some(session.user.id.clone());
-        self.email = session.user.email.clone();
-        let _ = store_keyring("sync-refresh-token", &session.refresh_token);
-        if let Some(email) = &session.user.email {
-            let _ = store_keyring("sync-email", email);
-        }
+        self.email = Some(session.user.email.clone());
+        let _ = store_keyring(
+            &keyring_name(self, "sync-refresh-token"),
+            &session.refresh_token,
+        );
+        let _ = store_keyring(&keyring_name(self, "sync-email"), &session.user.email);
         self.refresh_token = Some(session.refresh_token);
     }
 
@@ -222,21 +251,41 @@ impl SyncState {
     }
 
     pub fn email(&self) -> Option<String> {
-        self.email.clone().or_else(|| get_keyring("sync-email"))
+        self.email
+            .clone()
+            .or_else(|| get_keyring(&keyring_name(self, "sync-email")))
+    }
+
+    pub fn bind_account(
+        &mut self,
+        account_id: String,
+        api_base: Option<String>,
+        web_url: Option<String>,
+    ) {
+        self.account_id = Some(account_id);
+        self.api_base = api_base;
+        self.web_url = web_url;
+        self.access_token = None;
+        self.refresh_token = None;
+        self.expires_at = 0;
+        self.user_id = None;
+        self.email = None;
+        self.vault_key = None;
+        if let Some(token) = get_keyring(&keyring_name(self, "sync-refresh-token")) {
+            self.refresh_token = Some(token);
+        }
+        if let Some(email) = get_keyring(&keyring_name(self, "sync-email")) {
+            self.email = Some(email);
+        }
     }
 }
 
-async fn auth_request(
-    state: &SyncState,
-    path_and_query: &str,
-    body: Value,
-) -> anyhow::Result<AuthSession> {
-    let (url, anon) = supabase_config()?;
+async fn auth_refresh(state: &SyncState, refresh_token: &str) -> anyhow::Result<AuthSession> {
+    let base = api_base_url(state)?;
     let resp = state
         .http
-        .post(format!("{url}/auth/v1/{path_and_query}"))
-        .header("apikey", &anon)
-        .json(&body)
+        .post(format!("{base}/v1/auth/refresh"))
+        .json(&json!({ "refresh_token": refresh_token }))
         .send()
         .await
         .map_err(|err| anyhow::anyhow!("Network error: {err}"))?;
@@ -247,26 +296,15 @@ async fn auth_request(
         anyhow::bail!(auth_error_message(&body));
     }
 
-    if body.get("access_token").is_none() {
-        // Signup with email confirmation enabled returns a user but no session.
-        anyhow::bail!("CONFIRM_EMAIL");
-    }
-
     serde_json::from_value(body).map_err(|_| anyhow::anyhow!("Unexpected auth response"))
 }
 
 /// Signs in using a refresh token obtained from the browser login flow.
-/// The token is exchanged for a fresh session (and persisted to the keyring).
 pub async fn login_with_refresh_token(
     state: &mut SyncState,
     refresh_token: &str,
 ) -> anyhow::Result<()> {
-    let session = auth_request(
-        state,
-        "token?grant_type=refresh_token",
-        json!({ "refresh_token": refresh_token }),
-    )
-    .await?;
+    let session = auth_refresh(state, refresh_token).await?;
     state.apply_session(session);
     Ok(())
 }
@@ -275,32 +313,26 @@ async fn refresh_session(state: &mut SyncState) -> anyhow::Result<()> {
     let refresh_token = state
         .refresh_token
         .clone()
-        .or_else(|| get_keyring("sync-refresh-token"))
+        .or_else(|| get_keyring(&keyring_name(state, "sync-refresh-token")))
         .ok_or_else(|| anyhow::anyhow!("Not logged in"))?;
 
-    match auth_request(
-        state,
-        "token?grant_type=refresh_token",
-        json!({ "refresh_token": refresh_token }),
-    )
-    .await
-    {
+    match auth_refresh(state, &refresh_token).await {
         Ok(session) => {
             state.apply_session(session);
             Ok(())
         }
         Err(err) => {
             let msg = err.to_string().to_lowercase();
-            // Only wipe credentials on a definitive auth rejection — not network blips.
             let hard_reject = msg.contains("invalid refresh token")
                 || msg.contains("invalid_grant")
                 || msg.contains("refresh token not found")
-                || msg.contains("session not found");
+                || msg.contains("session not found")
+                || msg.contains("unauthorized");
             if hard_reject {
                 state.access_token = None;
                 state.refresh_token = None;
                 state.expires_at = 0;
-                delete_keyring("sync-refresh-token");
+                delete_keyring(&keyring_name(state, "sync-refresh-token"));
             }
             Err(err)
         }
@@ -320,18 +352,21 @@ pub async fn ensure_session(state: &mut SyncState) -> anyhow::Result<()> {
 /// True if we still have a persisted refresh token (even if access token refresh
 /// just failed transiently).
 fn has_persisted_login(state: &SyncState) -> bool {
-    state.refresh_token.is_some() || get_keyring("sync-refresh-token").is_some()
+    state.refresh_token.is_some()
+        || get_keyring(&keyring_name(state, "sync-refresh-token")).is_some()
 }
 
 pub fn logout(state: &mut SyncState, db: &SharedDatabase) {
+    let refresh_key = keyring_name(state, "sync-refresh-token");
+    let email_key = keyring_name(state, "sync-email");
     state.access_token = None;
     state.refresh_token = None;
     state.user_id = None;
     state.email = None;
     state.vault_key = None;
     state.expires_at = 0;
-    delete_keyring("sync-refresh-token");
-    delete_keyring("sync-email");
+    delete_keyring(&refresh_key);
+    delete_keyring(&email_key);
     let db = db.lock();
     let _ = db.delete_sync_meta(META_LAST_VERSION);
     let _ = db.delete_sync_meta(META_LAST_HASH);
@@ -348,14 +383,13 @@ pub struct VaultRow {
     pub ciphertext: String,
 }
 
-async fn rest_request(
+async fn api_request(
     state: &SyncState,
     method: reqwest::Method,
-    path_and_query: &str,
+    path: &str,
     body: Option<Value>,
-    prefer: Option<&str>,
 ) -> anyhow::Result<(reqwest::StatusCode, Value)> {
-    let (url, anon) = supabase_config()?;
+    let base = api_base_url(state)?;
     let token = state
         .access_token
         .as_ref()
@@ -363,12 +397,8 @@ async fn rest_request(
 
     let mut req = state
         .http
-        .request(method, format!("{url}/rest/v1/{path_and_query}"))
-        .header("apikey", &anon)
+        .request(method, format!("{base}{path}"))
         .header("Authorization", format!("Bearer {token}"));
-    if let Some(prefer) = prefer {
-        req = req.header("Prefer", prefer);
-    }
     if let Some(body) = body {
         req = req.json(&body);
     }
@@ -383,22 +413,60 @@ async fn rest_request(
 }
 
 pub async fn fetch_vault(state: &SyncState) -> anyhow::Result<Option<VaultRow>> {
-    let (status, body) = rest_request(
-        state,
-        reqwest::Method::GET,
-        "vaults?select=version,kdf_salt,verifier,recovery_envelope,ciphertext",
-        None,
-        None,
-    )
-    .await?;
+    let (status, body) = api_request(state, reqwest::Method::GET, "/v1/vault", None).await?;
 
     if !status.is_success() {
         anyhow::bail!("Could not fetch vault: {}", auth_error_message(&body));
     }
 
-    let rows: Vec<VaultRow> = serde_json::from_value(body)
+    let exists = body
+        .get("exists")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if !exists {
+        return Ok(None);
+    }
+
+    let row: VaultRow = serde_json::from_value(body)
         .map_err(|_| anyhow::anyhow!("Unexpected vault response"))?;
-    Ok(rows.into_iter().next())
+    Ok(Some(row))
+}
+
+async fn put_vault(
+    state: &SyncState,
+    expected_version: i64,
+    kdf_salt: &str,
+    verifier: &str,
+    recovery_envelope: Option<&str>,
+    ciphertext: &str,
+) -> anyhow::Result<i64> {
+    let (status, body) = api_request(
+        state,
+        reqwest::Method::PUT,
+        "/v1/vault",
+        Some(json!({
+            "expected_version": expected_version,
+            "kdf_salt": kdf_salt,
+            "verifier": verifier,
+            "recovery_envelope": recovery_envelope,
+            "ciphertext": ciphertext,
+        })),
+    )
+    .await?;
+
+    if status.as_u16() == 409 {
+        anyhow::bail!("version_conflict");
+    }
+    if status.as_u16() == 413 {
+        anyhow::bail!("{}", vault_error_message(&body));
+    }
+    if !status.is_success() {
+        anyhow::bail!("Could not save vault: {}", vault_error_message(&body));
+    }
+
+    body.get("version")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| anyhow::anyhow!("Unexpected vault put response"))
 }
 
 async fn insert_vault(
@@ -408,61 +476,40 @@ async fn insert_vault(
     recovery_envelope: &str,
     ciphertext: &str,
 ) -> anyhow::Result<()> {
-    let user_id = state
-        .user_id
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("Not logged in"))?;
-    let (status, body) = rest_request(
+    let _ = put_vault(
         state,
-        reqwest::Method::POST,
-        "vaults",
-        Some(json!({
-            "user_id": user_id,
-            "version": 1,
-            "kdf_salt": kdf_salt,
-            "verifier": verifier,
-            "recovery_envelope": recovery_envelope,
-            "ciphertext": ciphertext,
-        })),
-        Some("return=minimal"),
+        0,
+        kdf_salt,
+        verifier,
+        Some(recovery_envelope),
+        ciphertext,
     )
     .await?;
-
-    if !status.is_success() {
-        anyhow::bail!("Could not create vault: {}", vault_error_message(&body));
-    }
     Ok(())
 }
 
-/// Optimistic-lock update: only succeeds if the remote version is still
-/// `expected_version`. Returns false when someone else pushed in between.
+/// Optimistic-lock update. Returns false when someone else pushed in between.
 async fn update_vault(
     state: &SyncState,
     expected_version: i64,
-    new_version: i64,
+    _new_version: i64,
     ciphertext: &str,
+    vault_meta: &VaultRow,
 ) -> anyhow::Result<bool> {
-    let user_id = state
-        .user_id
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("Not logged in"))?;
-    let (status, body) = rest_request(
+    match put_vault(
         state,
-        reqwest::Method::PATCH,
-        &format!("vaults?user_id=eq.{user_id}&version=eq.{expected_version}"),
-        Some(json!({
-            "version": new_version,
-            "ciphertext": ciphertext,
-            "updated_at": chrono::Utc::now().to_rfc3339(),
-        })),
-        Some("return=representation"),
+        expected_version,
+        &vault_meta.kdf_salt,
+        &vault_meta.verifier,
+        vault_meta.recovery_envelope.as_deref(),
+        ciphertext,
     )
-    .await?;
-
-    if !status.is_success() {
-        anyhow::bail!("Could not push vault: {}", vault_error_message(&body));
+    .await
+    {
+        Ok(_) => Ok(true),
+        Err(err) if err.to_string().contains("version_conflict") => Ok(false),
+        Err(err) => Err(err),
     }
-    Ok(body.as_array().map(|rows| !rows.is_empty()).unwrap_or(false))
 }
 
 // ---------- vault build / apply ----------
@@ -610,7 +657,7 @@ async fn push_local(
     );
     ensure_vault_within_limit(limit_bytes, total)?;
     let new_version = expected + 1;
-    if update_vault(state, expected, new_version, &ciphertext).await? {
+    if update_vault(state, expected, new_version, &ciphertext, vault_meta).await? {
         Ok(Some(new_version))
     } else {
         Ok(None)
@@ -800,7 +847,7 @@ pub struct SyncStatus {
 }
 
 pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
-    let configured = supabase_config().is_ok();
+    let configured = api_configured(state);
     let mut logged_in = false;
     let mut session_ok = false;
 

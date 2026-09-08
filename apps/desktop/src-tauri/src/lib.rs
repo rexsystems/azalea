@@ -6,7 +6,7 @@ mod store;
 mod sync;
 
 use crate::commands::{
-    backup, files, forwards, groups, hosts, keys as key_commands, known_hosts,
+    accounts, backup, files, forwards, groups, hosts, keys as key_commands, known_hosts,
     local_terminal, sftp, snippets, ssh as ssh_commands, sync as sync_commands, wol,
 };
 use sessions::{init_local_terminal_manager, init_session_manager};
@@ -19,13 +19,11 @@ use tauri_plugin_prevent_default::Flags;
 pub fn run() {
     #[cfg(target_os = "linux")]
     {
-        // Fix for WebKitGTK DMA-BUF renderer protocol error on Wayland compositors (Fedora/KDE/GNOME/etc.)
         if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
             std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
         }
     }
 
-    // Loads SUPABASE_URL / SUPABASE_ANON_KEY in dev; silently ignored if absent.
     let _ = dotenvy::dotenv();
 
     tauri::Builder::default()
@@ -40,12 +38,24 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            let db = init_database(&app.handle())?;
+            let registry = accounts::init_accounts(&app.handle())?;
+            let active = registry.lock().active().cloned();
+            let active_id = active
+                .as_ref()
+                .map(|a| a.id.clone())
+                .ok_or_else(|| anyhow::anyhow!("No active account"))?;
+            let db = init_database(&app.handle(), &active_id)?;
             keys::keyring::init_storage(&app.handle())?;
+            let sync_state = init_sync_state();
+            if let Some(account) = active {
+                let mut sync = sync_state.blocking_lock();
+                sync.bind_account(account.id, account.base_url, account.web_url);
+            }
+            app.manage(registry);
             app.manage(db);
             app.manage(init_session_manager());
             app.manage(init_local_terminal_manager());
-            app.manage(init_sync_state());
+            app.manage(sync_state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -64,6 +74,7 @@ pub fn run() {
             key_commands::generate_key,
             key_commands::import_key,
             key_commands::delete_key,
+            key_commands::export_private_key,
             key_commands::install_public_key,
             ssh_commands::prepare_ssh,
             ssh_commands::start_ssh,
@@ -104,6 +115,13 @@ pub fn run() {
             local_terminal::write_local_terminal,
             local_terminal::resize_local_terminal,
             local_terminal::close_local_terminal,
+            accounts::list_accounts,
+            accounts::active_account,
+            accounts::accounts_onboarded,
+            accounts::set_accounts_onboarded,
+            accounts::add_account,
+            accounts::switch_account,
+            accounts::remove_account,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -14,7 +14,6 @@ import { Button } from "./ui/Button";
 import { SettingToggle } from "./ui/SettingToggle";
 import { Slider } from "./ui/Slider";
 import { SyncSection } from "./SyncSection";
-import { PlanBadge } from "./PlanBadge";
 import { UpdateSection } from "./UpdateSection";
 import type { SyncStatus } from "../lib/api";
 
@@ -143,37 +142,16 @@ export function SettingsPage({
       style={{ background: "var(--bg-base)" }}
     >
       <div className="settings-shell flex min-h-0 flex-1 flex-col !pb-0">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3 shrink-0">
-          <div>
-            <h2
-              className="text-2xl font-semibold tracking-tight sm:text-3xl"
-              style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
-            >
-              Settings
-            </h2>
-            <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
-              Manage appearance, sessions, sync, and backups
-            </p>
-          </div>
-          {syncStatus?.logged_in && (
-            <div
-              className="rounded-xl border px-3 py-2"
-              style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
-            >
-              <div
-                className="text-[10px] uppercase tracking-wide"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Plan
-              </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <PlanBadge plan={syncStatus.plan} size="md" />
-                <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                  {syncStatus.plan === "pro" ? "10 MB vault" : "256 KB vault"}
-                </span>
-              </div>
-            </div>
-          )}
+        <div className="mb-5 shrink-0">
+          <h2
+            className="text-2xl font-semibold tracking-tight sm:text-3xl"
+            style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
+          >
+            Settings
+          </h2>
+          <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
+            Manage appearance, sessions, sync, and backups
+          </p>
         </div>
 
         <div
@@ -341,9 +319,6 @@ export function SettingsPage({
                 <PanelHeader
                   title="Account & sync"
                   description="Encrypted cloud backup for hosts, keys, and settings."
-                  action={
-                    syncStatus?.logged_in ? <PlanBadge plan={syncStatus.plan} size="md" /> : null
-                  }
                 />
                 <SyncSection
                   embedded

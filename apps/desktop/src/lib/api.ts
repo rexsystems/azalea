@@ -72,6 +72,10 @@ export function deleteKey(id: string): Promise<void> {
   return invoke("delete_key", { id });
 }
 
+export function exportPrivateKey(id: string): Promise<string> {
+  return invoke("export_private_key", { id });
+}
+
 export function installPublicKey(
   keyId: string,
   hostId: string,
@@ -366,4 +370,55 @@ export function syncNow(
   resolution?: "keep_local" | "keep_cloud",
 ): Promise<SyncOutcome> {
   return invoke("sync_now", { settings, resolution: resolution ?? null });
+}
+
+export type AccountKind = "cloud" | "selfhost" | "offline";
+
+export interface AccountRecord {
+  id: string;
+  kind: AccountKind;
+  label: string;
+  base_url: string | null;
+  email: string | null;
+  web_url: string | null;
+}
+
+export function listAccounts(): Promise<AccountRecord[]> {
+  return invoke("list_accounts");
+}
+
+export function activeAccount(): Promise<AccountRecord | null> {
+  return invoke("active_account");
+}
+
+export function accountsOnboarded(): Promise<boolean> {
+  return invoke("accounts_onboarded");
+}
+
+export function setAccountsOnboarded(onboarded: boolean): Promise<void> {
+  return invoke("set_accounts_onboarded", { onboarded });
+}
+
+export function addAccount(input: {
+  kind: AccountKind;
+  label: string;
+  base_url?: string | null;
+  web_url?: string | null;
+}): Promise<AccountRecord> {
+  return invoke("add_account", {
+    input: {
+      kind: input.kind,
+      label: input.label,
+      base_url: input.base_url ?? null,
+      web_url: input.web_url ?? null,
+    },
+  });
+}
+
+export function switchAccount(id: string): Promise<AccountRecord> {
+  return invoke("switch_account", { id });
+}
+
+export function removeAccount(id: string): Promise<AccountRecord> {
+  return invoke("remove_account", { id });
 }

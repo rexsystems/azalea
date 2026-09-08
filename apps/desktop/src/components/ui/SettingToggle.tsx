@@ -32,14 +32,19 @@ export function SettingToggle({ label, description, checked, onChange }: Setting
       <span
         className="transition-ui relative mt-0.5 h-7 w-12 shrink-0 rounded-full"
         style={{
-          background: checked ? "var(--accent)" : "var(--bg-card)",
-          border: checked ? "none" : "1px solid var(--border-subtle)",
+          background: checked
+            ? "var(--accent)"
+            : "color-mix(in srgb, var(--text-muted) 40%, var(--bg-input))",
+          boxShadow: checked ? "none" : "inset 0 0 0 1px var(--border)",
         }}
         aria-hidden
       >
         <span
-          className="transition-ui absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-sm"
-          style={{ left: checked ? "24px" : "2px" }}
+          className="transition-ui absolute top-0.5 h-6 w-6 rounded-full shadow-sm"
+          style={{
+            left: checked ? "24px" : "2px",
+            background: checked ? "var(--accent-fg)" : "var(--text-secondary)",
+          }}
         />
       </span>
     </button>

@@ -1,12 +1,18 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-const CONFIG_KEYS: &[&str] = &["SUPABASE_URL", "SUPABASE_ANON_KEY", "AZALEA_WEB_URL"];
+const CONFIG_KEYS: &[&str] = &["AZALEA_API_URL", "AZALEA_WEB_URL"];
 
 fn main() {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let mut values = HashMap::new();
 
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=azalea.public.env");
+    println!("cargo:rerun-if-changed=supabase.public.env");
+    println!("cargo:rerun-if-changed=.env");
+
+    load_env_file(&manifest_dir.join("azalea.public.env"), &mut values);
     load_env_file(&manifest_dir.join("supabase.public.env"), &mut values);
     load_env_file(&manifest_dir.join(".env"), &mut values);
 
@@ -18,10 +24,6 @@ fn main() {
             }
         }
     }
-
-    println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=supabase.public.env");
-    println!("cargo:rerun-if-changed=.env");
 
     for key in CONFIG_KEYS {
         let Some(value) = values.get(*key) else {
