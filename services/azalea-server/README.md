@@ -11,8 +11,10 @@ Self-hostable Azalea sync API (Rust + SQLite + Docker). AGPL-3.0-or-later.
 curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/install.sh | bash
 ```
 
-Interactive: secrets, domain, Resend, optional web UI tip, pull image (or build from
-source if GHCR is private), bootstrap admin.
+Interactive: secrets, domain, Resend, optional web UI tip, **builds the image from
+GitHub source**, starts the container, bootstrap admin.
+
+(GHCR pull is optional later. Org packages often stay private; see below.)
 
 Image: `ghcr.io/rexsystems/azalea-server:latest`
 

@@ -1,0 +1,31 @@
+{
+  "version": "0.1.1",
+  "notes": "Azalea 0.1.1",
+  "pub_date": "2026-09-07T20:36:48.184Z",
+  "platforms": {
+    "linux-x86_64": {
+      "url": "https://github.com/rexsystems/azalea/releases/latest/download/Azalea_0.1.1_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkNpcGdESHkrYUZWU3FDdVhmbCtXcU9RQzNzQ1R3ekNjVG1udElLNGJaUHFtc0VteVc0YTl4bDgzejhXUndxUTE4OHk1V3ZBS0NReXFyeE5yNml2MEFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEzMjI5CWZpbGU6QXphbGVhXzAuMS4xX2FtZDY0LkFwcEltYWdlCkdPLzY1SW5DNzEycnExRllVUzNPSEUrMlI1Tk9BWENZam9oVUNWMklLK0laUEV5eWl6ZkFMdFpST2ovYzBraVNsSWlqeUxhQW1zZkhqQW1IaWJVaUN3PT0K"
+    },
+    "linux-x86_64-rpm": {
+      "url": "https://github.com/rexsystems/azalea/releases/latest/download/Azalea-0.1.1-1.x86_64.rpm",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0Tk1aRW9oQVlQQm9PNFZGS0ozYm52QWR5UE8vUEFaeG1sSVVHZDRxUWNLVXZCMHU3bVJtNFZjRkwxU0p0alFvVE5vOUVYMnZSUjUvSmMxZzFJNlRUdXdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEzMjI5CWZpbGU6QXphbGVhLTAuMS4xLTEueDg2XzY0LnJwbQpOejFKS1pRTlVUYUZaYVlheThwaVlkRm00enlRZGszUXdPaFdrT2gyT0dpZER1eHhFWGkzR3p0dkhtUG51YWFkNEh4WU9Neld2NVVpdlQ5Uy9XbXhEdz09Cg=="
+    },
+    "linux-x86_64-deb": {
+      "url": "https://github.com/rexsystems/azalea/releases/latest/download/Azalea_0.1.1_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkF5aktkbjkxaTBzOUY1cmtoS0RDSlhaQ2J2bnpBdVYvbWpsZGoxWloxeTRZdGZxWGVtVFNMN1R6RWhnZnh5aTllb1p3YVpGa2Vhc25MbnRmT0p0MndBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEzMjI5CWZpbGU6QXphbGVhXzAuMS4xX2FtZDY0LmRlYgp1SVQwTlZlUTN0OWtSM3p6YmwrSW5Lc3NhQjcrOTlSNXR1K2pWa2RJWC9lVHVDV01ZOUlxNnhDVDhzNnVrbG5FWDNHOW4vc3E1aW5iNTNDNmo4R3pBZz09Cg=="
+    },
+    "darwin-aarch64": {
+      "url": "https://github.com/rexsystems/azalea/releases/latest/download/Azalea.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkxhZ1hVZko0bFltZm45WmZMWXBia09zUXo4ZjRlYnZVRitzRUVSVTBuV0xtVEg5STRjYlB2ZDNacEFMTGtuenZoTXoyQ0sycFBnZEhZSXJlRi9laFFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEzMTEzCWZpbGU6QXphbGVhLmFwcC50YXIuZ3oKQk1PaUhPdUFZbjZXWGlLQ2NZRTFKdnJlWlY1ZkVLb0YyZFZ0bFpYNUd6Y3NXdXAzcmdLRDRPVGZqaHBHaTh3Nm96SEJZbURhMG51Z3pLaThwckwxRGc9PQo="
+    },
+    "darwin-x86_64": {
+      "url": "https://github.com/rexsystems/azalea/releases/latest/download/Azalea.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkdFZDNpSWliNXJ0VjlPUlppemMya1lOd3A3aXpLSkx5L3puTE1IV2hhM3BJdXlVb0d1dno3d2pQQldRbmVjZFlSMDNFekRGNklYL0FXWkEzam42OFFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEyOTkzCWZpbGU6QXphbGVhLmFwcC50YXIuZ3oKaTRYNlZrUlVlcXMyOERPMFF1VzZ3R0ZiaEQvMWlFNUZRNzZCdjNlU1NBMGZFNFFjOVBPZVNCRTJsSG9aU0xHc1FDb1JySzFNRHBaNmJvWElHNUFUQ3c9PQo="
+    },
+    "windows-x86_64": {
+      "url": "https://github.com/rexsystems/azalea/releases/latest/download/Azalea_0.1.1_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0Tk5wY2ZXUjJWd1RJU2tKNXFUc1dRTWJqVjRvcUcvSnQ0dDA2MVd6anlvaTdqNTlHM0VteFUyaFZtbzlDaHdnaHBiZ3pXY0dsalAyNWhsZFdzRDk1Z3dJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEzNDA3CWZpbGU6QXphbGVhXzAuMS4xX3g2NC1zZXR1cC5leGUKMnMvbXpUK1lGOXNkN1hMS3VIZ2h2UHZGU1ptWmdUOXgwM2RJdFU2aHMzMzdla2M3bXk3MGZkYitzVXpVR3RreWR5Ui9WY3k0amZ3RGxmZ0hub2F0QUE9PQo="
+    }
+  }
+}

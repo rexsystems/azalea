@@ -1,0 +1,5 @@
+# Updater manifest
+
+`latest.json` is copied here after each release build so Cloudflare Pages can serve it publicly.
+
+See `docs/updater.md` in the azalea desktop repo.

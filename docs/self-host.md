@@ -83,9 +83,17 @@ docker compose up -d
 curl -s http://127.0.0.1:9482/v1/health
 ```
 
-If GHCR returns `unauthorized`, the installer builds from GitHub source instead.
-To pull anonymously later: GitHub -> Packages -> `azalea-server` -> Change visibility
--> Public (CI also tries to set this after each publish).
+If you want anonymous `docker pull` from GHCR later (optional; installer builds from
+source by default):
+
+1. Org must allow public packages:  
+   https://github.com/organizations/rexsystems/settings/packages  
+   Under **Package creation**, enable **Public**.
+2. Open the package (from the repo sidebar **Packages**, or  
+   https://github.com/orgs/rexsystems/packages?repo_name=azalea ).
+3. **Package settings** (right side) → scroll to **Danger Zone** → **Change visibility** → Public.
+
+Until that is Public, `docker pull ghcr.io/rexsystems/azalea-server:latest` stays unauthorized. That is normal.
 
 ### 3. HTTPS / Cloudflare
 

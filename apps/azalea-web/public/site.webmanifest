@@ -1,0 +1,17 @@
+{
+  "name": "Azalea",
+  "short_name": "Azalea",
+  "description": "Open-source SSH terminal client for Windows, Linux, and macOS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#a855f7",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

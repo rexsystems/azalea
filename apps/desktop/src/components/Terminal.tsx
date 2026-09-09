@@ -83,6 +83,162 @@ async function pasteFromClipboard(term: XTerm, sessionId: string) {
   }
 }
 
+/** Overlay scrollbar: native webkit thumbs stick in Tauri/WebView after click. */
+function bindOverlayScrollbar(container: HTMLElement, term: XTerm): () => void {
+  const track = document.createElement("div");
+  track.className = "terminal-scroll";
+  track.dataset.visible = "false";
+  const thumb = document.createElement("div");
+  thumb.className = "terminal-scroll-thumb";
+  track.appendChild(thumb);
+  if (getComputedStyle(container).position === "static") {
+    container.style.position = "relative";
+  }
+  container.appendChild(track);
+
+  let viewport: HTMLElement | null = null;
+  let dragging = false;
+  let dragOffsetY = 0;
+  let raf = 0;
+
+  const findViewport = () => {
+    if (viewport?.isConnected) return viewport;
+    const el = container.querySelector(".xterm-viewport");
+    viewport = el instanceof HTMLElement ? el : null;
+    return viewport;
+  };
+
+  const sync = () => {
+    const vp = findViewport();
+    if (!vp) {
+      track.dataset.visible = "false";
+      return;
+    }
+    const { scrollTop, scrollHeight, clientHeight } = vp;
+    if (scrollHeight <= clientHeight + 1) {
+      track.dataset.visible = "false";
+      return;
+    }
+    track.dataset.visible = "true";
+    const trackH = track.clientHeight || 1;
+    const thumbH = Math.max(24, (clientHeight / scrollHeight) * trackH);
+    const maxTop = Math.max(0, trackH - thumbH);
+    const top =
+      maxTop === 0 ? 0 : (scrollTop / Math.max(1, scrollHeight - clientHeight)) * maxTop;
+    thumb.style.height = `${thumbH}px`;
+    thumb.style.transform = `translateY(${top}px)`;
+  };
+
+  const scheduleSync = () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      sync();
+    });
+  };
+
+  const onScroll = () => {
+    if (!dragging) scheduleSync();
+  };
+
+  const attachViewport = () => {
+    const vp = findViewport();
+    if (!vp || vp.dataset.azaleaScrollBound === "1") return;
+    vp.dataset.azaleaScrollBound = "1";
+    vp.addEventListener("scroll", onScroll, { passive: true });
+    scheduleSync();
+  };
+
+  const scrollFromClientY = (clientY: number, grabOffset: number) => {
+    const vp = findViewport();
+    if (!vp) return;
+    const trackRect = track.getBoundingClientRect();
+    const thumbH = thumb.offsetHeight;
+    const maxTop = Math.max(0, trackRect.height - thumbH);
+    const y = clientY - trackRect.top - grabOffset;
+    const clamped = Math.min(maxTop, Math.max(0, y));
+    const maxScroll = Math.max(0, vp.scrollHeight - vp.clientHeight);
+    vp.scrollTop = maxTop === 0 ? 0 : (clamped / maxTop) * maxScroll;
+    thumb.style.transform = `translateY(${clamped}px)`;
+  };
+
+  const onPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragging = true;
+    track.dataset.dragging = "true";
+    thumb.setPointerCapture(e.pointerId);
+    dragOffsetY = e.clientY - thumb.getBoundingClientRect().top;
+  };
+
+  const onPointerMove = (e: PointerEvent) => {
+    if (!dragging) return;
+    e.preventDefault();
+    scrollFromClientY(e.clientY, dragOffsetY);
+  };
+
+  const endDrag = (e: PointerEvent) => {
+    if (!dragging) return;
+    dragging = false;
+    track.dataset.dragging = "false";
+    try {
+      if (thumb.hasPointerCapture(e.pointerId)) {
+        thumb.releasePointerCapture(e.pointerId);
+      }
+    } catch {
+      // already released
+    }
+    scheduleSync();
+  };
+
+  const onTrackPointerDown = (e: PointerEvent) => {
+    if (e.button !== 0 || e.target === thumb) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const thumbH = thumb.offsetHeight;
+    scrollFromClientY(e.clientY, thumbH / 2);
+    dragging = true;
+    track.dataset.dragging = "true";
+    thumb.setPointerCapture(e.pointerId);
+    dragOffsetY = thumbH / 2;
+  };
+
+  thumb.addEventListener("pointerdown", onPointerDown);
+  thumb.addEventListener("pointermove", onPointerMove);
+  thumb.addEventListener("pointerup", endDrag);
+  thumb.addEventListener("pointercancel", endDrag);
+  track.addEventListener("pointerdown", onTrackPointerDown);
+
+  const ro = new ResizeObserver(scheduleSync);
+  ro.observe(container);
+
+  const mo = new MutationObserver(attachViewport);
+  mo.observe(container, { childList: true, subtree: true });
+  attachViewport();
+
+  const renderDisposable = term.onRender(() => scheduleSync());
+  const scrollDisposable = term.onScroll(() => scheduleSync());
+
+  return () => {
+    if (raf) cancelAnimationFrame(raf);
+    renderDisposable.dispose();
+    scrollDisposable.dispose();
+    mo.disconnect();
+    ro.disconnect();
+    if (viewport) {
+      viewport.removeEventListener("scroll", onScroll);
+      delete viewport.dataset.azaleaScrollBound;
+    }
+    thumb.removeEventListener("pointerdown", onPointerDown);
+    thumb.removeEventListener("pointermove", onPointerMove);
+    thumb.removeEventListener("pointerup", endDrag);
+    thumb.removeEventListener("pointercancel", endDrag);
+    track.removeEventListener("pointerdown", onTrackPointerDown);
+    track.remove();
+  };
+}
+
 function bindRightClickPaste(
   term: XTerm,
   container: HTMLElement,
@@ -501,6 +657,8 @@ export function TerminalView({
     };
     const onSelectMouseDown = (e: MouseEvent) => {
       if (e.button !== 0) return;
+      // Overlay scrollbar / track: never start select-to-copy drag.
+      if ((e.target as Element | null)?.closest?.(".terminal-scroll")) return;
       dragSelecting = true;
     };
     const onSelectMouseUp = (e: MouseEvent) => {
@@ -523,6 +681,7 @@ export function TerminalView({
       sessionId,
       () => settingsRef.current,
     );
+    const unbindScrollbar = bindOverlayScrollbar(container, term);
 
     container.addEventListener("mousedown", onSelectMouseDown);
     window.addEventListener("mouseup", onSelectMouseUp);
@@ -602,6 +761,7 @@ export function TerminalView({
       window.removeEventListener("blur", resetDrag);
       document.removeEventListener("visibilitychange", resetDrag);
       unbindRightClickPaste();
+      unbindScrollbar();
       resizeObserver.disconnect();
       term.dispose();
       termRef.current = null;

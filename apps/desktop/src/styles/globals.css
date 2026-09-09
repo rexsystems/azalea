@@ -319,12 +319,14 @@ textarea,
   -webkit-user-select: text;
 }
 
-::-webkit-scrollbar {
+/* App chrome scrollbars. Terminal uses its own overlay (see Terminal.tsx)
+   because WebKit/Tauri custom ::-webkit-scrollbar thumb-drag sticks. */
+*:not(.xterm-viewport)::-webkit-scrollbar {
   width: 5px;
   height: 5px;
 }
 
-::-webkit-scrollbar-thumb {
+*:not(.xterm-viewport)::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 999px;
 }
@@ -338,6 +340,47 @@ textarea,
 
 .xterm .xterm-viewport {
   background-color: var(--terminal-bg) !important;
+  /* Hide native bar; Terminal.tsx draws a pointer-capture overlay. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+.terminal-scroll {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  bottom: 4px;
+  width: 10px;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.terminal-scroll-thumb {
+  position: absolute;
+  left: 1px;
+  width: 8px;
+  min-height: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 90%, transparent);
+  pointer-events: auto;
+  cursor: default;
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+
+.terminal-scroll:hover .terminal-scroll-thumb,
+.terminal-scroll[data-dragging="true"] .terminal-scroll-thumb {
+  opacity: 0.95;
+}
+
+.terminal-scroll[data-visible="false"] {
+  visibility: hidden;
 }
 
 /* Fast, subtle transitions only */

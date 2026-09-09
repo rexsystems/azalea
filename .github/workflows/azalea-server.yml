@@ -44,29 +44,29 @@ jobs:
           context: services/azalea-server
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=Azalea sync API (azalea-server)
 
+      # GITHUB_TOKEN often cannot change org package visibility (404).
+      # If this fails, set Public once in the UI (see docs/self-host.md).
       - name: Make GHCR package public
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           OWNER="${{ github.repository_owner }}"
-          NAME="${{ env.PACKAGE_NAME }}"
+          NAME="azalea-server"
           set +e
-          gh api --method PUT \
+          out=$(gh api --method PUT \
             -H "Accept: application/vnd.github+json" \
             "/orgs/${OWNER}/packages/container/${NAME}/visibility" \
-            -f visibility=public
-          org_rc=$?
-          gh api --method PUT \
-            -H "Accept: application/vnd.github+json" \
-            "/user/packages/container/${NAME}/visibility" \
-            -f visibility=public
-          user_rc=$?
-          set -e
-          if [[ "$org_rc" -ne 0 && "$user_rc" -ne 0 ]]; then
-            echo "Could not set package public automatically."
-            echo "GitHub -> Packages -> ${NAME} -> Package settings -> Change visibility -> Public"
-          else
-            echo "Package visibility set to public (or already public)."
+            --input - <<<'{"visibility":"public"}' 2>&1)
+          rc=$?
+          echo "$out"
+          if [[ "$rc" -ne 0 ]]; then
+            echo "::warning::Could not set GHCR package public via API."
+            echo "Do this once: https://github.com/orgs/${OWNER}/packages/container/package/${NAME}"
+            echo "Package settings -> Change visibility -> Public"
+            echo "Until then, install.sh falls back to building from source."
           fi
