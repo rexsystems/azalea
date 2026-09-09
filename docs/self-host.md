@@ -23,7 +23,7 @@ The script asks for:
 - admin email / password
 - Resend mail (optional)
 - whether you want the **optional** azalea-web UI
-- bind to localhost vs public :8787
+- bind to localhost vs public :9482
 
 Default install dir: `~/azalea`.
 
@@ -80,7 +80,7 @@ EOF
 
 docker compose pull
 docker compose up -d
-curl -s http://127.0.0.1:8787/v1/health
+curl -s http://127.0.0.1:9482/v1/health
 ```
 
 If GHCR returns `unauthorized`, the installer builds from GitHub source instead.
@@ -97,7 +97,7 @@ API at `https://yourdomain.com/api` (proxy strips `/api`).
 ```caddy
 yourdomain.com {
   handle_path /api/* {
-    reverse_proxy 127.0.0.1:8787
+    reverse_proxy 127.0.0.1:9482
   }
 }
 ```
@@ -106,7 +106,7 @@ yourdomain.com {
 
 ```nginx
 location /api/ {
-  proxy_pass http://127.0.0.1:8787/;
+  proxy_pass http://127.0.0.1:9482/;
   proxy_http_version 1.1;
   proxy_set_header Host $host;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -119,7 +119,7 @@ API URL in the app (no `/api` strip). Or tunnel into Caddy with `/api`.
 
 ### 4. Desktop
 
-Add account -> Self-hosted -> `https://yourdomain.com` (or `http://IP:8787`).
+Add account -> Self-hosted -> `https://yourdomain.com` (or `http://IP:9482`).
 
 ## Optional web UI (azalea-web)
 

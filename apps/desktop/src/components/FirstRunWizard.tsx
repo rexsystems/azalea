@@ -113,7 +113,7 @@ export function FirstRunWizard({ onDone }: FirstRunWizardProps) {
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
                 placeholder="https://azalea.example.com"
-                hint="Public domain uses /api. Local :8787 or a path ending in /api stays as-is."
+                hint="Public domain uses /api. Local :9482 or a path ending in /api stays as-is."
               />
               <div className="flex gap-2 pt-1">
                 <Button

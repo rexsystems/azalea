@@ -6,7 +6,7 @@ Desktop and `azalea-web` talk to this HTTP API only.
 Base URL examples:
 
 - Azalea Cloud: `https://api.azalea.rexsystems.me` (TBD at cutover)
-- Self-host: `https://sync.example.com` or `http://host:8787`
+- Self-host: `https://sync.example.com` or `http://host:9482`
 
 All JSON. Errors: `{ "error": "code", "message": "..." }` with suitable HTTP status.
 

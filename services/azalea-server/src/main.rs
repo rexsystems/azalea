@@ -45,7 +45,7 @@ async fn run_serve() -> anyhow::Result<()> {
         tracing::warn!("AZALEA_JWT_SECRET not set; using ephemeral secret (dev only)");
         hex::encode(rand::random::<[u8; 32]>())
     });
-    let bind = env::var("AZALEA_BIND").unwrap_or_else(|_| "0.0.0.0:8787".into());
+    let bind = env::var("AZALEA_BIND").unwrap_or_else(|_| "0.0.0.0:9482".into());
 
     let db = db::Database::open(&db_path)?;
     db.migrate()?;

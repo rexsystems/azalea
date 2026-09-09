@@ -54,7 +54,7 @@ docker compose -f docker-compose.build.yml up -d --build
 |---|---|---|
 | `AZALEA_JWT_SECRET` | yes | Access token signing |
 | `AZALEA_DATA_DIR` | no (default `/data`) | SQLite directory |
-| `AZALEA_BIND` | no (default `0.0.0.0:8787`) | Listen address |
+| `AZALEA_BIND` | no (default `0.0.0.0:9482`) | Listen address |
 | `RESEND_API_KEY` | no | Password-reset email via Resend |
 | `AZALEA_MAIL_FROM` | no | From header for Resend |
 | `AZALEA_PUBLIC_WEB_URL` | no | Base URL for reset links |

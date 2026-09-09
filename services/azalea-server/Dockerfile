@@ -22,7 +22,7 @@ WORKDIR /data
 COPY --from=build /app/target/release/azalea-server /usr/local/bin/azalea-server
 USER azalea
 ENV AZALEA_DATA_DIR=/data
-ENV AZALEA_BIND=0.0.0.0:8787
+ENV AZALEA_BIND=0.0.0.0:9482
 VOLUME ["/data"]
-EXPOSE 8787
+EXPOSE 9482
 CMD ["azalea-server", "serve"]

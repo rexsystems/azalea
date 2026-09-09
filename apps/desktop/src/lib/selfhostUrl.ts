@@ -5,7 +5,7 @@
  *
  * - `https://sync.example.com` → API `…/api`, web origin (tunnel / reverse proxy)
  * - `https://sync.example.com/api` → use that API path, web origin
- * - `http://127.0.0.1:8787` → API as-is (local / direct)
+ * - `http://127.0.0.1:9482` → API as-is (local / direct)
  */
 export function resolveSelfHostUrls(input: string): {
   base_url: string;
@@ -48,7 +48,7 @@ export function resolveSelfHostUrls(input: string): {
     };
   }
 
-  if (isLocal || url.port === "8787") {
+  if (isLocal || url.port === "9482" || url.port === "8787") {
     return { base_url: url.origin, web_url: null };
   }
 

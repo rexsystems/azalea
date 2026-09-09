@@ -81,7 +81,7 @@ services:
       - "${ports}"
     environment:
       AZALEA_DATA_DIR: /data
-      AZALEA_BIND: 0.0.0.0:8787
+      AZALEA_BIND: 0.0.0.0:9482
       RUST_LOG: azalea_server=info,tower_http=info
     volumes:
       - azalea-data:/data
@@ -105,7 +105,7 @@ services:
       - "${ports}"
     environment:
       AZALEA_DATA_DIR: /data
-      AZALEA_BIND: 0.0.0.0:8787
+      AZALEA_BIND: 0.0.0.0:9482
       RUST_LOG: azalea_server=info,tower_http=info
     volumes:
       - azalea-data:/data
@@ -154,7 +154,7 @@ mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
 domain="$(ask "Public domain (empty = IP/localhost only)" "")"
-web_url="http://127.0.0.1:8787"
+web_url="http://127.0.0.1:9482"
 if [[ -n "$domain" ]]; then
   domain="${domain#https://}"
   domain="${domain#http://}"
@@ -191,9 +191,9 @@ fi
 
 jwt_secret="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 
-ports="8787:8787"
+ports="9482:9482"
 if [[ "$bind_localhost" -eq 1 ]]; then
-  ports="127.0.0.1:8787:8787"
+  ports="127.0.0.1:9482:9482"
 fi
 
 progress "Writing .env and compose"
@@ -221,18 +221,39 @@ else
 fi
 
 progress "Starting container"
+# Previous failed runs often leave something on :9482
+if docker compose ps -q 2>/dev/null | grep -q .; then
+  docker compose down >/dev/null 2>&1 || true
+fi
+if command -v ss >/dev/null 2>&1 && ss -ltn | grep -q ':9482 '; then
+  echo "Port 9482 is in use. Stopping leftover azalea containers if any..."
+  docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | while read -r id name ports; do
+    case "$ports" in
+      *9482*) docker stop "$id" >/dev/null 2>&1 || true ;;
+    esac
+  done
+  # Also stop any compose project named azalea*
+  docker ps -a --format '{{.Names}}' | while read -r name; do
+    case "$name" in
+      *azalea*server*|azalea-*) docker rm -f "$name" >/dev/null 2>&1 || true ;;
+    esac
+  done
+fi
+if command -v ss >/dev/null 2>&1 && ss -ltn | grep -q ':9482 '; then
+  die "port 9482 still in use. Free it (ss -ltnp | grep 9482) then re-run."
+fi
 docker compose up -d
 
 progress "Waiting for health"
 ok=0
 for _ in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:8787/v1/health" >/dev/null 2>&1; then
+  if curl -fsS "http://127.0.0.1:9482/v1/health" >/dev/null 2>&1; then
     ok=1
     break
   fi
   sleep 2
 done
-[[ "$ok" -eq 1 ]] || die "server did not become healthy on :8787"
+[[ "$ok" -eq 1 ]] || die "server did not become healthy on :9482"
 
 progress "Bootstrapping admin"
 if docker compose exec -T azalea-server azalea-server bootstrap \
@@ -245,7 +266,7 @@ else
 fi
 
 printf '\n== Done ==\n'
-printf 'API health:  http://127.0.0.1:8787/v1/health\n'
+printf 'API health:  http://127.0.0.1:9482/v1/health\n'
 printf 'Admin:       %s\n' "$admin_email"
 printf 'Data dir:    docker volume azalea_azalea-data (or azalea-data)\n'
 printf 'Install dir: %s\n' "$INSTALL_DIR"
@@ -267,16 +288,16 @@ if [[ -n "$domain" ]]; then
   printf 'Caddy example:\n'
   printf '  %s {\n' "$domain"
   printf '    handle_path /api/* {\n'
-  printf '      reverse_proxy 127.0.0.1:8787\n'
+  printf '      reverse_proxy 127.0.0.1:9482\n'
   printf '    }\n'
   printf '  }\n'
   printf '\nIn Azalea desktop: Add account -> Self-hosted -> https://%s\n' "$domain"
 else
-  printf '\nIn Azalea desktop: Add account -> Self-hosted -> http://YOUR_IP:8787\n'
+  printf '\nIn Azalea desktop: Add account -> Self-hosted -> http://YOUR_IP:9482\n'
 fi
 
 if [[ "$want_web" -eq 1 ]]; then
-  api_public="http://127.0.0.1:8787"
+  api_public="http://127.0.0.1:9482"
   if [[ -n "$domain" ]]; then
     api_public="https://${domain}/api"
   fi

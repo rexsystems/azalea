@@ -326,7 +326,7 @@ export function AccountSwitcher({
                     autoFocus
                   />
                   <span className="block text-[10px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                    Public domain uses /api. Local :8787 or …/api stays as-is.
+                    Public domain uses /api. Local :9482 or …/api stays as-is.
                   </span>
                 </label>
                 {error && (

@@ -6,11 +6,11 @@ services:
       - .env
     ports:
       # Prefer binding to localhost when Caddy/Nginx/Tunnel is in front:
-      # - "127.0.0.1:8787:8787"
-      - "8787:8787"
+      # - "127.0.0.1:9482:9482"
+      - "9482:9482"
     environment:
       AZALEA_DATA_DIR: /data
-      AZALEA_BIND: 0.0.0.0:8787
+      AZALEA_BIND: 0.0.0.0:9482
       RUST_LOG: azalea_server=info,tower_http=info
     volumes:
       - azalea-data:/data
