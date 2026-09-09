@@ -1,12 +1,11 @@
-# Fresh VPS - no source tree needed. Pulls the published image.
+# Local / CI: build the image from this folder instead of pulling GHCR.
 services:
   azalea-server:
+    build: .
     image: ghcr.io/rexsystems/azalea-server:latest
     env_file:
       - .env
     ports:
-      # Prefer binding to localhost when Caddy/Nginx/Tunnel is in front:
-      # - "127.0.0.1:8787:8787"
       - "8787:8787"
     environment:
       AZALEA_DATA_DIR: /data

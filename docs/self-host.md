@@ -1,75 +1,117 @@
-# Self-host azalea-server (VPS)
+# Self-host azalea-server
 
-Run your own sync API with Docker. Desktop talks to it; optional azalea-web for
-login / admin / password reset.
+## Fresh VPS (no git, no source)
 
-## What you need
+You only need Docker. The image is built by CI and published to GHCR.
 
-- A VPS with Docker + Docker Compose
-- A domain (or Cloudflare Tunnel hostname)
-- Strong secrets for JWT + setup
-
-## 1. Build the image (local)
-
-From the monorepo:
+### 1. Install Docker (Ubuntu/Debian)
 
 ```bash
-cd services/azalea-server
-docker build -t azalea-server:local .
+sudo apt update
+sudo apt install -y ca-certificates curl
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER"
+# log out / back in so docker works without sudo
 ```
 
-Or pull from GHCR when published:
+### 2. Drop two files on the box
 
 ```bash
-docker pull ghcr.io/rexsystems/azalea-server:latest
-```
+mkdir -p ~/azalea && cd ~/azalea
 
-## 2. Deploy with Compose
+curl -fsSL -o docker-compose.yml \
+  https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/docker-compose.yml
 
-On the VPS:
+curl -fsSL -o .env.example \
+  https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/.env.example
 
-```bash
-mkdir -p ~/azalea-server && cd ~/azalea-server
-# copy docker-compose.yml + .env.example from the repo, or clone the monorepo
 cp .env.example .env
-nano .env   # set secrets (see below)
-docker compose up -d --build
-curl -s http://127.0.0.1:8787/v1/health
 ```
 
-### `.env`
+Edit secrets:
+
+```bash
+nano .env
+```
 
 ```env
-AZALEA_JWT_SECRET=$(openssl rand -hex 32)
-AZALEA_SETUP_SECRET=$(openssl rand -hex 16)
+AZALEA_JWT_SECRET=   # openssl rand -hex 32
+AZALEA_SETUP_SECRET= # openssl rand -hex 16
 
-# Optional password-reset mail (Resend)
+# optional mail
 RESEND_API_KEY=
 AZALEA_MAIL_FROM=Azalea <noreply@yourdomain.com>
 AZALEA_PUBLIC_WEB_URL=https://yourdomain.com
 ```
 
-Data lives in the `azalea-data` Docker volume (SQLite under `/data`).
+Generate secrets:
 
-## 3. Reverse proxy (recommended)
+```bash
+echo "AZALEA_JWT_SECRET=$(openssl rand -hex 32)" >> .env
+echo "AZALEA_SETUP_SECRET=$(openssl rand -hex 16)" >> .env
+# then remove the placeholder lines from .env (or overwrite cleanly)
+```
 
-Routes on the API are `/v1/...` (no `/api` prefix). Desktop self-host URLs use
-`https://yourdomain.com` → API base `https://yourdomain.com/api`.
+Cleaner one-shot:
 
-So the proxy must **strip** `/api` when forwarding.
+```bash
+cat > .env <<EOF
+AZALEA_JWT_SECRET=$(openssl rand -hex 32)
+AZALEA_SETUP_SECRET=$(openssl rand -hex 16)
+RESEND_API_KEY=
+AZALEA_MAIL_FROM=Azalea <noreply@yourdomain.com>
+AZALEA_PUBLIC_WEB_URL=https://yourdomain.com
+EOF
+```
 
-### Caddy
+### 3. Pull and run
+
+If the GHCR package is **public**:
+
+```bash
+docker compose pull
+docker compose up -d
+curl -s http://127.0.0.1:8787/v1/health
+```
+
+If pull says unauthorized (private package), either make the package public on GitHub
+(Packages → azalea-server → Package settings → Change visibility), or:
+
+```bash
+echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USER --password-stdin
+docker compose pull
+docker compose up -d
+```
+
+### 4. Create the first admin
+
+```bash
+curl -s http://127.0.0.1:8787/v1/setup/bootstrap \
+  -H 'content-type: application/json' \
+  -d "{
+    \"setup_secret\":\"$(grep AZALEA_SETUP_SECRET .env | cut -d= -f2)\",
+    \"admin_email\":\"you@example.com\",
+    \"admin_password\":\"pick-a-long-password\",
+    \"instance_name\":\"Home\"
+  }"
+```
+
+### 5. Put HTTPS in front
+
+API paths are `/v1/...`. Desktop self-host with `https://yourdomain.com` expects
+API at `https://yourdomain.com/api` (proxy must strip `/api`).
+
+**Caddy**
 
 ```caddy
 yourdomain.com {
   handle_path /api/* {
     reverse_proxy 127.0.0.1:8787
   }
-  # optional: serve azalea-web static files, or proxy another app
 }
 ```
 
-### Nginx
+**Nginx**
 
 ```nginx
 location /api/ {
@@ -81,61 +123,46 @@ location /api/ {
 }
 ```
 
-### Cloudflare Tunnel
+Then in Azalea desktop: **Add account → Self-hosted →** `https://yourdomain.com`
 
-Point the tunnel public hostname at `http://127.0.0.1:8787` **or** put Caddy/Nginx
-in front and tunnel to that. If the public URL is `https://sync.example.com` with
-no path, either:
-
-- tell desktop the API URL is `https://sync.example.com` (direct, no `/api`), or
-- put `/api` strip in front and use `https://sync.example.com` in the app so it hits `/api`.
-
-## 4. First admin (bootstrap)
+### 6. Updates later
 
 ```bash
-curl -s https://yourdomain.com/api/v1/setup/status
-# {"needs_setup":true,"mail_configured":false}
-
-curl -s https://yourdomain.com/api/v1/setup/bootstrap \
-  -H 'content-type: application/json' \
-  -d '{
-    "setup_secret":"YOUR_SETUP_SECRET",
-    "admin_email":"you@example.com",
-    "admin_password":"at-least-8-chars",
-    "instance_name":"Home"
-  }'
+cd ~/azalea
+docker compose pull
+docker compose up -d
 ```
 
-Or open azalea-web `/setup` with `NEXT_PUBLIC_AZALEA_API_URL=https://yourdomain.com/api`.
+Backup = Docker volume `azalea-data` (SQLite).
 
-## 5. Point the desktop app
+---
 
-First-run or **Add account → Self-hosted**:
+## Cloudflare Tunnel only
 
-- `https://yourdomain.com` → uses `https://yourdomain.com/api`
-- `http://VPS_IP:8787` → direct (no `/api`)
-- `https://yourdomain.com/api` → explicit API path
+Run the container (port 8787 on localhost), point the tunnel at
+`http://127.0.0.1:8787`. In the app use the tunnel hostname **directly**
+(e.g. `https://azalea-api.example.com`) - no `/api` strip needed if the
+tunnel hits the container 1:1.
 
-Then sign in from Settings.
+Or tunnel → Caddy with `/api` strip if web + API share one hostname.
 
-## 6. Updates
+---
+
+## Build from source (optional)
+
+Only if you have the repo / want a custom build:
 
 ```bash
-cd ~/azalea-server
-docker compose pull   # if using GHCR
-# or rebuild from git:
-docker compose up -d --build
+git clone https://github.com/rexsystems/azalea.git
+cd azalea/services/azalea-server
+cp .env.example .env && nano .env
+docker compose -f docker-compose.build.yml up -d --build
 ```
 
-Backup = copy the Docker volume / SQLite file under `/data`.
-
-## Firewall
-
-- Prefer exposing only 80/443 (proxy) or the tunnel; keep `8787` bound to localhost if possible.
-- If you publish `8787` directly, use TLS somehow (Caddy, Traefik, or Cloudflare).
+---
 
 ## Related
 
 - [Sync API](./sync-api-v1.md)
 - [Cloud sync overview](./cloud-sync.md)
-- Server crate: `services/azalea-server/`
+- Server: `services/azalea-server/`

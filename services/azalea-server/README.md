@@ -2,56 +2,39 @@
 
 Self-hostable Azalea sync API (Rust + SQLite + Docker). AGPL-3.0-or-later.
 
-API: [`docs/sync-api-v1.md`](../../docs/sync-api-v1.md)  
-VPS guide: [`docs/self-host.md`](../../docs/self-host.md)
+- API: [`docs/sync-api-v1.md`](../../docs/sync-api-v1.md)
+- **Install on a VPS (no source):** [`docs/self-host.md`](../../docs/self-host.md)
 
-## Dev
+## Quick: empty VPS
 
 ```bash
-cd services/azalea-server
+mkdir -p ~/azalea && cd ~/azalea
+curl -fsSL -o docker-compose.yml \
+  https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/docker-compose.yml
+cat > .env <<EOF
+AZALEA_JWT_SECRET=$(openssl rand -hex 32)
+AZALEA_SETUP_SECRET=$(openssl rand -hex 16)
+AZALEA_PUBLIC_WEB_URL=https://yourdomain.com
+EOF
+docker compose pull && docker compose up -d
+curl -s http://127.0.0.1:8787/v1/health
+```
+
+Image: `ghcr.io/rexsystems/azalea-server:latest`
+
+## Dev (from this folder)
+
+```bash
 export AZALEA_JWT_SECRET=dev-secret
 export AZALEA_SETUP_SECRET=setup
 cargo run
 ```
 
-```bash
-curl -s localhost:8787/v1/health
-```
-
-Bootstrap:
+Build image locally:
 
 ```bash
-curl -s localhost:8787/v1/setup/bootstrap -H 'content-type: application/json' -d '{
-  "setup_secret":"setup",
-  "admin_email":"admin@example.com",
-  "admin_password":"password123",
-  "instance_name":"Home"
-}'
+docker compose -f docker-compose.build.yml up -d --build
 ```
-
-## Docker image
-
-Build locally:
-
-```bash
-cd services/azalea-server
-docker build -t azalea-server:local .
-docker run --rm -p 8787:8787 \
-  -e AZALEA_JWT_SECRET=dev \
-  -e AZALEA_SETUP_SECRET=setup \
-  -v azalea-data:/data \
-  azalea-server:local
-```
-
-Compose (recommended):
-
-```bash
-cp .env.example .env
-# edit secrets
-docker compose up -d --build
-```
-
-Published image (when CI has run): `ghcr.io/rexsystems/azalea-server:latest`
 
 ### Env
 

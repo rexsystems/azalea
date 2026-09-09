@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM rust:1.85-bookworm AS build
+FROM rust:1.88-bookworm AS build
 WORKDIR /app
 
 # Cache deps when only source changes
@@ -17,7 +17,7 @@ FROM debian:bookworm-slim
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/* \
-  && useradd --system --home /data --create-home --uid 10001 azalea
+  && useradd --system --home /data --create-home --uid 999 azalea
 WORKDIR /data
 COPY --from=build /app/target/release/azalea-server /usr/local/bin/azalea-server
 USER azalea
