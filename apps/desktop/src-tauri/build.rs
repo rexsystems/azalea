@@ -9,11 +9,9 @@ fn main() {
 
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=azalea.public.env");
-    println!("cargo:rerun-if-changed=supabase.public.env");
     println!("cargo:rerun-if-changed=.env");
 
     load_env_file(&manifest_dir.join("azalea.public.env"), &mut values);
-    load_env_file(&manifest_dir.join("supabase.public.env"), &mut values);
     load_env_file(&manifest_dir.join(".env"), &mut values);
 
     for key in CONFIG_KEYS {

@@ -1,6 +1,9 @@
 # azalea-server
 
-Self-hostable Azalea sync API (Rust + SQLite). See [`docs/sync-api-v1.md`](../../docs/sync-api-v1.md).
+Self-hostable Azalea sync API (Rust + SQLite + Docker). AGPL-3.0-or-later.
+
+API: [`docs/sync-api-v1.md`](../../docs/sync-api-v1.md)  
+VPS guide: [`docs/self-host.md`](../../docs/self-host.md)
 
 ## Dev
 
@@ -8,16 +11,14 @@ Self-hostable Azalea sync API (Rust + SQLite). See [`docs/sync-api-v1.md`](../..
 cd services/azalea-server
 export AZALEA_JWT_SECRET=dev-secret
 export AZALEA_SETUP_SECRET=setup
-# optional mail (password reset):
-# export RESEND_API_KEY=re_xxx
-# export AZALEA_MAIL_FROM="Azalea <onboarding@resend.dev>"
-# export AZALEA_PUBLIC_WEB_URL=http://localhost:3000
 cargo run
 ```
 
-Health: `curl localhost:8787/v1/health`
+```bash
+curl -s localhost:8787/v1/health
+```
 
-Bootstrap admin:
+Bootstrap:
 
 ```bash
 curl -s localhost:8787/v1/setup/bootstrap -H 'content-type: application/json' -d '{
@@ -28,26 +29,40 @@ curl -s localhost:8787/v1/setup/bootstrap -H 'content-type: application/json' -d
 }'
 ```
 
-Or open your azalea-web `/setup` page after pointing `NEXT_PUBLIC_AZALEA_API_URL` at the API.
+## Docker image
 
-## Docker
+Build locally:
 
 ```bash
 cd services/azalea-server
-cp .env.example .env   # optional; edit secrets + Resend
+docker build -t azalea-server:local .
+docker run --rm -p 8787:8787 \
+  -e AZALEA_JWT_SECRET=dev \
+  -e AZALEA_SETUP_SECRET=setup \
+  -v azalea-data:/data \
+  azalea-server:local
+```
+
+Compose (recommended):
+
+```bash
+cp .env.example .env
+# edit secrets
 docker compose up -d --build
 ```
 
-### Resend (password reset)
+Published image (when CI has run): `ghcr.io/rexsystems/azalea-server:latest`
 
-Set in `.env` next to `docker-compose.yml`:
+### Env
 
-```env
-RESEND_API_KEY=re_xxxxxxxx
-AZALEA_MAIL_FROM=Azalea <noreply@yourdomain.com>
-AZALEA_PUBLIC_WEB_URL=https://your-azalea-web.example
-```
-
-Without `RESEND_API_KEY`, auth works but forgot-password returns an error that mail is not configured.
+| Variable | Required | Purpose |
+|---|---|---|
+| `AZALEA_JWT_SECRET` | yes | Access token signing |
+| `AZALEA_SETUP_SECRET` | recommended | Protects first-admin bootstrap |
+| `AZALEA_DATA_DIR` | no (default `/data`) | SQLite directory |
+| `AZALEA_BIND` | no (default `0.0.0.0:8787`) | Listen address |
+| `RESEND_API_KEY` | no | Password-reset email via Resend |
+| `AZALEA_MAIL_FROM` | no | From header for Resend |
+| `AZALEA_PUBLIC_WEB_URL` | no | Base URL for reset links |
 
 License: AGPL-3.0-or-later.

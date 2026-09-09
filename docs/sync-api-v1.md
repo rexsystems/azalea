@@ -1,6 +1,6 @@
 # Azalea Sync API v1
 
-Self-hostable zero-knowledge vault sync. Replaces Supabase Auth + PostgREST.
+Self-hostable zero-knowledge vault sync. Desktop and `azalea-web` talk to this HTTP API.
 Desktop and `azalea-web` talk to this HTTP API only.
 
 Base URL examples:

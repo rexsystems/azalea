@@ -203,7 +203,7 @@ fn delete_keyring(name: &str) {
     }
 }
 
-// ---------- Supabase auth ----------
+// ---------- Auth session ----------
 
 #[derive(Debug, Deserialize)]
 struct AuthUser {

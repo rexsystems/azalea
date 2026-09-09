@@ -1,24 +1,26 @@
 # Web app
 
-Standalone repo: **https://github.com/rexsystems/azalea-web** (private, not public) - deployed at **https://azalea.rexsystems.me** (Cloudflare Pages + custom domain).
+Standalone repo: **https://github.com/rexsystems/azalea-web** (private) - deployed at
+**https://azalea.rexsystems.me** (Cloudflare Pages).
+
+Talks to **azalea-server** (`NEXT_PUBLIC_AZALEA_API_URL`).
 
 ## Work from this monorepo
 
-The web app is linked locally via a **junction** (not committed). Clone `azalea-web` next to this repo, then:
+The web app is linked locally via a **junction** (not committed). Clone `azalea-web`
+next to this repo, then:
 
 ```powershell
 # From repo root (Windows)
 New-Item -ItemType Junction -Path apps\azalea-web -Target ..\azalea-web
 ```
 
-Then edit at `apps/azalea-web/`. Changes go to the separate repo.
-
-```powershell
-npm run dev:web          # dev server
+```bash
+npm run dev:web
 cd apps/azalea-web && npm run build   # static export -> out/
 ```
 
-`apps/web/` and `apps/azalea-web/` are in `.gitignore`.
+`apps/azalea-web/` is in `.gitignore`.
 
 ## Cloudflare Pages
 
@@ -28,9 +30,13 @@ cd apps/azalea-web && npm run build   # static export -> out/
 | Output directory | `out` |
 | Node.js | 22 |
 
-Env: `NEXT_PUBLIC_SITE_URL` (`https://azalea.rexsystems.me`), `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, optional `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `NEXT_PUBLIC_GITHUB_REPO`, optional `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL`
+Env: `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_AZALEA_API_URL`, optional
+`NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `NEXT_PUBLIC_GITHUB_REPO`,
+optional `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL`.
 
 ## Download links
 
-- `/download` - redirects to latest Windows installer (GitHub releases API) or releases page
-- Set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` if `rexsystems/azalea` stays private
+- `/download` - latest installers via GitHub releases API
+- Set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` if the azalea repo stays private
+
+Self-host API + setup: [self-host.md](./self-host.md).

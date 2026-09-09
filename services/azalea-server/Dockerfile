@@ -2,16 +2,25 @@
 
 FROM rust:1.85-bookworm AS build
 WORKDIR /app
-COPY Cargo.toml Cargo.lock* ./
+
+# Cache deps when only source changes
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && echo 'fn main(){}' > src/main.rs \
+  && cargo build --release \
+  && rm -rf src
+
 COPY src ./src
 COPY migrations ./migrations
-RUN cargo build --release
+RUN touch src/main.rs && cargo build --release
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && useradd --system --home /data --create-home --uid 10001 azalea
+WORKDIR /data
 COPY --from=build /app/target/release/azalea-server /usr/local/bin/azalea-server
+USER azalea
 ENV AZALEA_DATA_DIR=/data
 ENV AZALEA_BIND=0.0.0.0:8787
 VOLUME ["/data"]

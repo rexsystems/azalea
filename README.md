@@ -69,13 +69,12 @@ Output lives under `apps/desktop/src-tauri/target/release/bundle/` (or `target/<
 
 ```
 azalea/
-├── apps/desktop/          # Tauri 2 + React desktop app
-│   ├── src/               # UI
-│   └── src-tauri/         # Rust (SSH, SFTP, SQLite, keychain, sync)
-├── apps/azalea-web/       # Marketing / account site (optional local link)
-├── packages/shared/       # Shared TypeScript types
-├── supabase/              # Schema and plan SQL
-└── docs/                  # Sync, updater, web notes
+├── apps/desktop/              # Tauri 2 + React desktop app
+│   ├── src/                   # UI
+│   └── src-tauri/             # Rust (SSH, SFTP, SQLite, keychain, sync)
+├── services/azalea-server/    # Self-hostable sync API (Rust + SQLite + Docker)
+├── packages/shared/           # Shared TypeScript types
+└── docs/                      # Sync, self-host, updater, web notes
 ```
 
 ## Tech stack
@@ -87,14 +86,15 @@ azalea/
 | Terminal | xterm.js |
 | SSH / SFTP | russh |
 | Storage | SQLite + OS keychain |
-| Sync | Supabase + client-side encryption |
+| Sync | azalea-server (Rust) + client-side encryption |
 
 ## Docs
 
 - [Cloud sync](docs/cloud-sync.md)
+- [Self-host (VPS / Docker)](docs/self-host.md)
+- [Sync API v1](docs/sync-api-v1.md)
 - [Updater](docs/updater.md)
 - [Web app](docs/web.md)
-- [Supabase setup](supabase/SETUP.md)
 
 ## Security
 
