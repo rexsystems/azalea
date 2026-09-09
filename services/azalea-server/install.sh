@@ -25,25 +25,31 @@ need_cmd() {
 }
 
 ask() {
-  # ask "Prompt" "default"
+  # ask "Prompt" "default"  (always reads the real terminal, safe with curl|bash)
   local prompt="$1"
   local default="${2-}"
   local reply
+  if [[ ! -r /dev/tty ]]; then
+    die "no terminal available for prompts (download install.sh and run: bash install.sh)"
+  fi
   if [[ -n "$default" ]]; then
-    read -r -p "$prompt [$default]: " reply || true
-    echo "${reply:-$default}"
+    read -r -p "$prompt [$default]: " reply < /dev/tty || true
+    printf '%s\n' "${reply:-$default}"
   else
-    read -r -p "$prompt: " reply || true
-    echo "$reply"
+    read -r -p "$prompt: " reply < /dev/tty || true
+    printf '%s\n' "$reply"
   fi
 }
 
 ask_secret() {
   local prompt="$1"
   local reply
-  read -r -s -p "$prompt: " reply || true
-  echo
-  echo "$reply"
+  if [[ ! -r /dev/tty ]]; then
+    die "no terminal available for prompts (download install.sh and run: bash install.sh)"
+  fi
+  read -r -s -p "$prompt: " reply < /dev/tty || true
+  printf '\n' > /dev/tty
+  printf '%s\n' "$reply"
 }
 
 ask_yes_no() {
@@ -53,7 +59,10 @@ ask_yes_no() {
   local hint="y/N"
   [[ "$default" == "y" ]] && hint="Y/n"
   local reply
-  read -r -p "$prompt ($hint): " reply || true
+  if [[ ! -r /dev/tty ]]; then
+    die "no terminal available for prompts (download install.sh and run: bash install.sh)"
+  fi
+  read -r -p "$prompt ($hint): " reply < /dev/tty || true
   reply="${reply:-$default}"
   case "${reply,,}" in
     y|yes) return 0 ;;

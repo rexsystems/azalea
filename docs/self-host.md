@@ -9,7 +9,7 @@ server, creates the admin. Web UI is optional.
 curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/install.sh | bash
 ```
 
-Or download and run:
+Prompts read from your terminal (works with `curl | bash`). If that fails on a weird host:
 
 ```bash
 curl -fsSL -o install.sh \
