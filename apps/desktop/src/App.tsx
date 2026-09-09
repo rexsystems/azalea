@@ -24,6 +24,7 @@ import { useTerminalSettings } from "./hooks/useTerminalSettings";
 import { useTheme } from "./hooks/useTheme";
 import { AddServerDrawer } from "./components/AddServerDrawer";
 import { AutoSyncPrompt } from "./components/AutoSyncPrompt";
+import { PostConnectSyncDialog } from "./components/PostConnectSyncDialog";
 import { CommandPalette, type CommandPaletteActionId } from "./components/CommandPalette";
 import { SyncResolutionDialog } from "./components/SyncResolutionDialog";
 import { AppShell, type NavPage } from "./components/AppShell";
@@ -924,6 +925,43 @@ function App() {
     [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
   );
 
+  const [postConnectSync, setPostConnectSync] = useState<{
+    label: string;
+    email: string;
+    unlocked: boolean;
+  } | null>(null);
+  const [postConnectBusy, setPostConnectBusy] = useState(false);
+  const [postConnectError, setPostConnectError] = useState<string | null>(null);
+
+  const handleConnectSelfhost = useCallback(
+    async (input: {
+      label: string;
+      base_url: string;
+      web_url?: string | null;
+      email: string;
+      password: string;
+    }) => {
+      const result = await api.connectSelfhost(input);
+      await refreshAccounts();
+      await Promise.all([
+        refreshHosts(),
+        refreshGroups(),
+        refreshKeys(),
+        refreshSyncStatus(),
+      ]);
+      setStatusMessage(`Connected to ${result.account.label}.`);
+      if (result.vault_exists) {
+        setPostConnectError(null);
+        setPostConnectSync({
+          label: result.account.label,
+          email: result.email,
+          unlocked: false,
+        });
+      }
+    },
+    [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+  );
+
   const handleRemoveAccount = useCallback(
     async (id: string) => {
       const next = await api.removeAccount(id);
@@ -957,6 +995,21 @@ function App() {
     })();
   }, [refreshAccounts, refreshSyncStatus]);
 
+  const handlePasswordLogin = useCallback(
+    async (email: string, password: string) => {
+      await api.syncPasswordLogin(email, password);
+      await refreshSyncStatus();
+      await refreshAccounts();
+      setStatusMessage("Signed in.");
+    },
+    [refreshAccounts, refreshSyncStatus],
+  );
+
+  useEffect(() => {
+    if (!syncStatus?.auth_disconnected) return;
+    const label = activeAccount?.label ?? "this profile";
+    setStatusMessage(`Account on ${label} was disconnected. Reconnect again.`);
+  }, [syncStatus?.auth_disconnected, activeAccount?.label]);
   const handleSelectTab = (tabId: string) => {
     setActiveTabId(tabId);
     setViewingTerminal(true);
@@ -1244,6 +1297,35 @@ function App() {
     }
   };
 
+  const handlePostConnectUnlock = async (passphrase: string) => {
+    setPostConnectBusy(true);
+    setPostConnectError(null);
+    try {
+      await api.syncUnlock({ passphrase });
+      await refreshSyncStatus();
+      setPostConnectSync((prev) => (prev ? { ...prev, unlocked: true } : prev));
+    } catch (err) {
+      setPostConnectError(String(err));
+    } finally {
+      setPostConnectBusy(false);
+    }
+  };
+
+  const handlePostConnectSync = async (direction: "from" | "to") => {
+    setPostConnectBusy(true);
+    setPostConnectError(null);
+    try {
+      const resolution = direction === "from" ? "keep_cloud" : "keep_local";
+      const outcome = await api.syncNow(collectAppSettings(), resolution);
+      setPostConnectSync(null);
+      await applySyncOutcome(outcome);
+    } catch (err) {
+      setPostConnectError(String(err));
+    } finally {
+      setPostConnectBusy(false);
+    }
+  };
+
   const finishImport = async (result: ImportBackupResult | ImportResult) => {
     await Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
     if ("settings" in result) {
@@ -1461,6 +1543,7 @@ function App() {
               applyImportedSettings((settings ?? undefined) as Record<string, unknown> | undefined);
             }}
             onSyncDataRefresh={refreshSyncData}
+            accountKind={activeAccount?.kind ?? null}
             focusSync={focusSettingsSync}
             onFocusSyncHandled={() => setFocusSettingsSync(false)}
           />
@@ -1700,6 +1783,7 @@ function App() {
     <>
       {onboarded === false ? (
         <FirstRunWizard
+          onConnectSelfhost={handleConnectSelfhost}
           onDone={() => {
             setOnboarded(true);
             void refreshAccounts();
@@ -1717,9 +1801,11 @@ function App() {
         activeAccount={activeAccount}
         onSwitchAccount={handleSwitchAccount}
         onAddAccount={handleAddAccount}
+        onConnectSelfhost={handleConnectSelfhost}
         onRemoveAccount={handleRemoveAccount}
         onOpenAccount={handleOpenAccount}
         onSignInForSync={handleSignInForSync}
+        onPasswordLogin={handlePasswordLogin}
         statusMessage={isMobile ? undefined : statusMessage}
         syncStatus={syncStatus}
         showTabs={hasTabs && (viewingTerminal || !isMobile)}
@@ -1879,6 +1965,23 @@ function App() {
           onSkip={() => {
             setAutoSyncPrompt(null);
             setAutoSyncError(null);
+          }}
+        />
+      )}
+
+      {postConnectSync && (
+        <PostConnectSyncDialog
+          instanceLabel={postConnectSync.label}
+          email={postConnectSync.email}
+          busy={postConnectBusy}
+          error={postConnectError}
+          needsUnlock={!postConnectSync.unlocked}
+          onUnlock={(passphrase) => void handlePostConnectUnlock(passphrase)}
+          onSyncFromVault={() => void handlePostConnectSync("from")}
+          onSyncToVault={() => void handlePostConnectSync("to")}
+          onSkip={() => {
+            setPostConnectSync(null);
+            setPostConnectError(null);
           }}
         />
       )}

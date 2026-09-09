@@ -6,7 +6,7 @@ use tauri::{AppHandle, State};
 
 use crate::store::accounts::{account_db_path, AccountKind, AccountRecord, AccountRegistry};
 use crate::store::SharedDatabase;
-use crate::sync::SharedSyncState;
+use crate::sync::{self, SharedSyncState};
 
 pub type SharedAccountRegistry = Arc<Mutex<AccountRegistry>>;
 
@@ -42,6 +42,95 @@ pub fn set_accounts_onboarded(
         .lock()
         .set_onboarded(onboarded)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn connect_selfhost(
+    app: AppHandle,
+    registry: State<'_, SharedAccountRegistry>,
+    db: State<'_, SharedDatabase>,
+    sync: State<'_, SharedSyncState>,
+    input: ConnectSelfhostInput,
+) -> Result<sync::ConnectSelfhostResult, String> {
+    let email = input.email.trim().to_string();
+    let base_url = input.base_url.trim().trim_end_matches('/').to_string();
+    if base_url.is_empty() {
+        return Err("Server URL is required".into());
+    }
+    if email.is_empty() || input.password.is_empty() {
+        return Err("Email and password are required".into());
+    }
+
+    // Authenticate first — do not switch profiles until login succeeds.
+    let session = sync::password_login_at_url(&base_url, &email, &input.password)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let label = {
+        let trimmed = input.label.trim();
+        if trimmed.is_empty() {
+            "Self-hosted".to_string()
+        } else {
+            trimmed.to_string()
+        }
+    };
+    let web_url = input
+        .web_url
+        .map(|u| u.trim().trim_end_matches('/').to_string())
+        .filter(|u| !u.is_empty());
+
+    let account = registry
+        .lock()
+        .add(
+            AccountKind::Selfhost,
+            label,
+            Some(base_url),
+            web_url,
+        )
+        .map_err(|e| e.to_string())?;
+
+    if let Err(err) = switch_to_account(&app, &registry, &db, &sync, &account.id).await {
+        let id = account.id.clone();
+        let _ = registry.lock().remove(&id);
+        if let Ok(path) = account_db_path(&app, &id) {
+            if let Some(dir) = path.parent() {
+                let _ = std::fs::remove_dir_all(dir);
+            }
+        }
+        return Err(err);
+    }
+
+    let vault_exists = {
+        let mut state = sync.lock().await;
+        state.apply_auth_session(session);
+        let _ = registry.lock().set_email(&account.id, Some(email.clone()));
+        match sync::fetch_vault(&state).await {
+            Ok(Some(_)) => Some(true),
+            Ok(None) => Some(false),
+            Err(_) => None,
+        }
+    };
+
+    let account = registry
+        .lock()
+        .active()
+        .cloned()
+        .ok_or_else(|| "No active account".to_string())?;
+
+    Ok(sync::ConnectSelfhostResult {
+        account,
+        vault_exists,
+        email,
+    })
+}
+
+#[derive(Deserialize)]
+pub struct ConnectSelfhostInput {
+    label: String,
+    base_url: String,
+    web_url: Option<String>,
+    email: String,
+    password: String,
 }
 
 #[derive(Deserialize)]

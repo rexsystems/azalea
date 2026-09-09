@@ -182,13 +182,15 @@ impl AccountRegistry {
     pub fn set_email(&mut self, id: &str, email: Option<String>) -> anyhow::Result<()> {
         if let Some(account) = self.data.accounts.iter_mut().find(|a| a.id == id) {
             account.email = email;
-            if let Some(email) = &account.email {
-                if account.label == "Local"
-                    || account.label == "Azalea Cloud"
-                    || account.label.starts_with("Self-host")
-                {
-                    account.label = email.clone();
-                }
+        }
+        self.save()
+    }
+
+    pub fn set_label(&mut self, id: &str, label: String) -> anyhow::Result<()> {
+        if let Some(account) = self.data.accounts.iter_mut().find(|a| a.id == id) {
+            let trimmed = label.trim();
+            if !trimmed.is_empty() {
+                account.label = trimmed.to_string();
             }
         }
         self.save()

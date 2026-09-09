@@ -28,6 +28,7 @@ interface SyncSectionProps {
   onDataRefresh: () => Promise<void>;
   /** Skip outer section chrome when rendered inside a parent settings panel. */
   embedded?: boolean;
+  accountKind?: api.AccountKind | null;
 }
 
 type Busy = null | "status" | "auth" | "setup" | "unlock" | "sync";
@@ -132,10 +133,13 @@ export function SyncSection({
   onVaultApplied,
   onDataRefresh,
   embedded = false,
+  accountKind = null,
 }: SyncSectionProps) {
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
 
   const [passphrase, setPassphrase] = useState("");
   const [passphraseConfirm, setPassphraseConfirm] = useState("");
@@ -234,6 +238,15 @@ export function SyncSection({
       setNotice("Signed in.");
     });
 
+  const handlePasswordLogin = () =>
+    run("auth", async () => {
+      const email = (loginEmail.trim() || status?.email || "").trim();
+      if (!email || !loginPassword) throw new Error("Email and password are required.");
+      await api.syncPasswordLogin(email, loginPassword);
+      setLoginPassword("");
+      setNotice("Signed in.");
+    });
+
   const handleSetup = () =>
     run("setup", async () => {
       if (passphrase.length < 8) throw new Error("Passphrase must be at least 8 characters.");
@@ -310,20 +323,65 @@ export function SyncSection({
     }
 
     if (!status.logged_in) {
+      const selfhost = accountKind === "selfhost";
       return (
         <div className="space-y-3">
-          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Sign in through your browser to link this device. Account signup and password resets
-            happen on the Azalea website.
-          </p>
-          <Button
-            className="w-full"
-            disabled={busy !== null}
-            onClick={handleBrowserLogin}
-          >
-            {busy === "auth" ? spinner : <Globe size={16} />}
-            Sign in with browser
-          </Button>
+          {status.auth_disconnected && (
+            <p className="text-xs leading-relaxed" style={{ color: "#d97706" }}>
+              Account on this profile was disconnected. Reconnect again.
+            </p>
+          )}
+          {selfhost ? (
+            <>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Sign in with your self-hosted account email and password.
+              </p>
+              <input
+                className={inputClass}
+                style={inputStyle}
+                type="email"
+                autoComplete="username"
+                placeholder="Email"
+                value={loginEmail || status.email || ""}
+                onChange={(e) => setLoginEmail(e.target.value)}
+              />
+              <input
+                className={inputClass}
+                style={inputStyle}
+                type="password"
+                autoComplete="current-password"
+                placeholder="Password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handlePasswordLogin();
+                }}
+              />
+              <Button
+                className="w-full"
+                disabled={busy !== null}
+                onClick={handlePasswordLogin}
+              >
+                {busy === "auth" ? spinner : <KeyRound size={16} />}
+                {status.auth_disconnected ? "Reconnect" : "Sign in"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Sign in through your browser to link this device. Account signup and password resets
+                happen on the Azalea website.
+              </p>
+              <Button
+                className="w-full"
+                disabled={busy !== null}
+                onClick={handleBrowserLogin}
+              >
+                {busy === "auth" ? spinner : <Globe size={16} />}
+                Sign in with browser
+              </Button>
+            </>
+          )}
         </div>
       );
     }

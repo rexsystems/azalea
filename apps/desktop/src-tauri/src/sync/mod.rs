@@ -214,7 +214,7 @@ struct AuthUser {
 }
 
 #[derive(Debug, Deserialize)]
-struct AuthSession {
+pub(crate) struct AuthSession {
     access_token: String,
     refresh_token: String,
     expires_in: i64,
@@ -243,7 +243,12 @@ impl SyncState {
             &session.refresh_token,
         );
         let _ = store_keyring(&keyring_name(self, "sync-email"), &session.user.email);
+        delete_keyring(&keyring_name(self, "sync-auth-disconnected"));
         self.refresh_token = Some(session.refresh_token);
+    }
+
+    pub(crate) fn apply_auth_session(&mut self, session: AuthSession) {
+        self.apply_session(session);
     }
 
     pub fn is_unlocked(&self) -> bool {
@@ -254,6 +259,10 @@ impl SyncState {
         self.email
             .clone()
             .or_else(|| get_keyring(&keyring_name(self, "sync-email")))
+    }
+
+    pub fn account_id_clone(&self) -> Option<String> {
+        self.account_id.clone()
     }
 
     pub fn bind_account(
@@ -309,6 +318,101 @@ pub async fn login_with_refresh_token(
     Ok(())
 }
 
+/// Direct email/password login against azalea-server `/v1/auth/login`.
+pub async fn login_with_password(
+    state: &mut SyncState,
+    email: &str,
+    password: &str,
+) -> anyhow::Result<()> {
+    let base = api_base_url(state)?;
+    let session = password_login_at_url(&base, email, password).await?;
+    state.apply_session(session);
+    Ok(())
+}
+
+/// Login against an arbitrary API base without binding/switching accounts.
+pub async fn password_login_at_url(
+    base_url: &str,
+    email: &str,
+    password: &str,
+) -> anyhow::Result<AuthSession> {
+    let base = base_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        anyhow::bail!("Server URL is required");
+    }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()?;
+    let resp = client
+        .post(format!("{base}/v1/auth/login"))
+        .json(&json!({ "email": email.trim(), "password": password }))
+        .send()
+        .await
+        .map_err(|err| anyhow::anyhow!("Network error: {err}"))?;
+
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap_or(Value::Null);
+    if !status.is_success() {
+        anyhow::bail!(auth_error_message(&body));
+    }
+
+    serde_json::from_value(body).map_err(|_| anyhow::anyhow!("Unexpected auth response"))
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConnectSelfhostResult {
+    pub account: crate::store::accounts::AccountRecord,
+    pub vault_exists: Option<bool>,
+    pub email: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SelfHostProbe {
+    pub ok: bool,
+    pub instance_name: String,
+    pub version: Option<String>,
+}
+
+/// Probe a self-host API base URL (before the account is bound).
+pub async fn probe_selfhost(base_url: &str) -> anyhow::Result<SelfHostProbe> {
+    let base = base_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        anyhow::bail!("Server URL is required");
+    }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(12))
+        .build()?;
+    let resp = client
+        .get(format!("{base}/v1/health"))
+        .send()
+        .await
+        .map_err(|err| anyhow::anyhow!("Cannot reach server: {err}"))?;
+    if !resp.status().is_success() {
+        anyhow::bail!("Server health check failed ({})", resp.status());
+    }
+    let body: Value = resp.json().await.unwrap_or(Value::Null);
+    let ok = body.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+    if !ok {
+        anyhow::bail!("Server did not report healthy");
+    }
+    let instance_name = body
+        .get("instance_name")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("Azalea")
+        .to_string();
+    let version = body
+        .get("version")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    Ok(SelfHostProbe {
+        ok: true,
+        instance_name,
+        version,
+    })
+}
+
 async fn refresh_session(state: &mut SyncState) -> anyhow::Result<()> {
     let refresh_token = state
         .refresh_token
@@ -326,6 +430,7 @@ async fn refresh_session(state: &mut SyncState) -> anyhow::Result<()> {
             let hard_reject = msg.contains("invalid refresh token")
                 || msg.contains("invalid_grant")
                 || msg.contains("refresh token not found")
+                || msg.contains("refresh token expired")
                 || msg.contains("session not found")
                 || msg.contains("unauthorized");
             if hard_reject {
@@ -333,10 +438,15 @@ async fn refresh_session(state: &mut SyncState) -> anyhow::Result<()> {
                 state.refresh_token = None;
                 state.expires_at = 0;
                 delete_keyring(&keyring_name(state, "sync-refresh-token"));
+                let _ = store_keyring(&keyring_name(state, "sync-auth-disconnected"), "1");
             }
             Err(err)
         }
     }
+}
+
+fn is_auth_disconnected(state: &SyncState) -> bool {
+    get_keyring(&keyring_name(state, "sync-auth-disconnected")).as_deref() == Some("1")
 }
 
 /// Makes sure we have a valid access token; restores the session from the
@@ -359,6 +469,7 @@ fn has_persisted_login(state: &SyncState) -> bool {
 pub fn logout(state: &mut SyncState, db: &SharedDatabase) {
     let refresh_key = keyring_name(state, "sync-refresh-token");
     let email_key = keyring_name(state, "sync-email");
+    let disconnected_key = keyring_name(state, "sync-auth-disconnected");
     state.access_token = None;
     state.refresh_token = None;
     state.user_id = None;
@@ -367,6 +478,7 @@ pub fn logout(state: &mut SyncState, db: &SharedDatabase) {
     state.expires_at = 0;
     delete_keyring(&refresh_key);
     delete_keyring(&email_key);
+    delete_keyring(&disconnected_key);
     let db = db.lock();
     let _ = db.delete_sync_meta(META_LAST_VERSION);
     let _ = db.delete_sync_meta(META_LAST_HASH);
@@ -834,6 +946,7 @@ pub async fn perform_sync(
 pub struct SyncStatus {
     pub configured: bool,
     pub logged_in: bool,
+    pub auth_disconnected: bool,
     pub email: Option<String>,
     pub unlocked: bool,
     pub vault_exists: Option<bool>,
@@ -850,17 +963,20 @@ pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
     let configured = api_configured(state);
     let mut logged_in = false;
     let mut session_ok = false;
+    let mut auth_disconnected = false;
 
     if configured {
         match ensure_session(state).await {
             Ok(()) => {
                 logged_in = true;
                 session_ok = true;
+                auth_disconnected = false;
             }
             Err(_) => {
+                auth_disconnected = is_auth_disconnected(state);
                 // Network / temporary failures: keep showing signed-in if refresh
                 // token is still on disk. Hard auth rejects clear the keyring above.
-                logged_in = has_persisted_login(state);
+                logged_in = has_persisted_login(state) && !auth_disconnected;
                 session_ok = false;
             }
         }
@@ -910,10 +1026,17 @@ pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
 
     let (last_version, _) = synced_meta(db);
 
+    let email = if logged_in || auth_disconnected {
+        state.email()
+    } else {
+        None
+    };
+
     SyncStatus {
         configured,
         logged_in,
-        email: if logged_in { state.email() } else { None },
+        auth_disconnected,
+        email,
         unlocked: state.is_unlocked(),
         vault_exists,
         remote_version,

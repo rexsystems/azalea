@@ -22,9 +22,17 @@ interface AppShellProps {
     base_url?: string | null;
     web_url?: string | null;
   }) => void | Promise<void>;
+  onConnectSelfhost: (input: {
+    label: string;
+    base_url: string;
+    web_url?: string | null;
+    email: string;
+    password: string;
+  }) => void | Promise<void>;
   onRemoveAccount: (id: string) => void | Promise<void>;
   onOpenAccount?: () => void;
   onSignInForSync?: () => void;
+  onPasswordLogin?: (email: string, password: string) => void | Promise<void>;
   statusMessage?: string;
   syncStatus?: SyncStatus | null;
   showTabs?: boolean;
@@ -105,9 +113,11 @@ export function AppShell({
   activeAccount,
   onSwitchAccount,
   onAddAccount,
+  onConnectSelfhost,
   onRemoveAccount,
   onOpenAccount,
   onSignInForSync,
+  onPasswordLogin,
   statusMessage,
   syncStatus,
   showTabs,
@@ -134,9 +144,11 @@ export function AppShell({
       syncStatus={syncStatus}
       onSwitch={onSwitchAccount}
       onAdd={onAddAccount}
+      onConnectSelfhost={onConnectSelfhost}
       onRemove={onRemoveAccount}
       onManage={openAccount}
       onSignIn={onSignInForSync}
+      onPasswordLogin={onPasswordLogin}
       compact={isMobile}
     />
   );

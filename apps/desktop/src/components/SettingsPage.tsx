@@ -15,7 +15,7 @@ import { SettingToggle } from "./ui/SettingToggle";
 import { Slider } from "./ui/Slider";
 import { SyncSection } from "./SyncSection";
 import { UpdateSection } from "./UpdateSection";
-import type { SyncStatus } from "../lib/api";
+import type { AccountKind, SyncStatus } from "../lib/api";
 
 type SettingsTab = "appearance" | "connect" | "terminal" | "account" | "backup" | "about";
 
@@ -35,6 +35,7 @@ interface SettingsPageProps {
   onSyncStatusChange: (status: SyncStatus) => void;
   onSyncVaultApplied: (settings: unknown) => void;
   onSyncDataRefresh: () => Promise<void>;
+  accountKind?: AccountKind | null;
   focusSync?: boolean;
   onFocusSyncHandled?: () => void;
 }
@@ -120,6 +121,7 @@ export function SettingsPage({
   onSyncStatusChange,
   onSyncVaultApplied,
   onSyncDataRefresh,
+  accountKind = null,
   focusSync = false,
   onFocusSyncHandled,
 }: SettingsPageProps) {
@@ -327,6 +329,7 @@ export function SettingsPage({
                   getSettings={syncGetSettings}
                   onVaultApplied={onSyncVaultApplied}
                   onDataRefresh={onSyncDataRefresh}
+                  accountKind={accountKind}
                 />
               </>
             )}

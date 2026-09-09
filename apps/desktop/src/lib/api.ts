@@ -281,6 +281,7 @@ export function respondHostKey(sessionId: string, accept: boolean): Promise<void
 export interface SyncStatus {
   configured: boolean;
   logged_in: boolean;
+  auth_disconnected: boolean;
   email: string | null;
   unlocked: boolean;
   vault_exists: boolean | null;
@@ -336,6 +337,22 @@ export function syncStatus(): Promise<SyncStatus> {
  */
 export function syncBrowserLogin(): Promise<void> {
   return invoke("sync_browser_login");
+}
+
+export function syncPasswordLogin(email: string, password: string): Promise<void> {
+  return invoke("sync_password_login", {
+    input: { email, password },
+  });
+}
+
+export interface SelfHostProbe {
+  ok: boolean;
+  instance_name: string;
+  version: string | null;
+}
+
+export function probeSelfhost(baseUrl: string): Promise<SelfHostProbe> {
+  return invoke("probe_selfhost", { baseUrl });
 }
 
 export function syncLogout(): Promise<void> {
@@ -411,6 +428,31 @@ export function addAccount(input: {
       label: input.label,
       base_url: input.base_url ?? null,
       web_url: input.web_url ?? null,
+    },
+  });
+}
+
+export interface ConnectSelfhostResult {
+  account: AccountRecord;
+  vault_exists: boolean | null;
+  email: string;
+}
+
+/** Login first; only creates/switches the profile after auth succeeds. */
+export function connectSelfhost(input: {
+  label: string;
+  base_url: string;
+  web_url?: string | null;
+  email: string;
+  password: string;
+}): Promise<ConnectSelfhostResult> {
+  return invoke("connect_selfhost", {
+    input: {
+      label: input.label,
+      base_url: input.base_url,
+      web_url: input.web_url ?? null,
+      email: input.email,
+      password: input.password,
     },
   });
 }

@@ -7,7 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 use crate::store::SharedDatabase;
-use crate::sync::{self, SharedSyncState, SyncOutcome, SyncPreview, SyncStatus};
+use crate::sync::{self, SharedSyncState, SelfHostProbe, SyncOutcome, SyncPreview, SyncStatus};
 
 #[tauri::command]
 pub async fn sync_status(
@@ -196,6 +196,44 @@ pub async fn sync_logout(
 ) -> Result<(), String> {
     let mut sync = state.lock().await;
     sync::logout(&mut sync, &db);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn probe_selfhost(base_url: String) -> Result<SelfHostProbe, String> {
+    sync::probe_selfhost(&base_url)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PasswordLoginInput {
+    pub email: String,
+    pub password: String,
+}
+
+#[tauri::command]
+pub async fn sync_password_login(
+    state: tauri::State<'_, SharedSyncState>,
+    registry: tauri::State<'_, crate::commands::accounts::SharedAccountRegistry>,
+    input: PasswordLoginInput,
+) -> Result<(), String> {
+    let email = input.email.trim().to_string();
+    if email.is_empty() || input.password.is_empty() {
+        return Err("Email and password are required".into());
+    }
+
+    let account_id = {
+        let mut sync = state.lock().await;
+        sync::login_with_password(&mut sync, &email, &input.password)
+            .await
+            .map_err(|e| e.to_string())?;
+        sync.account_id_clone()
+    };
+
+    if let Some(id) = account_id {
+        let _ = registry.lock().set_email(&id, Some(email));
+    }
     Ok(())
 }
 

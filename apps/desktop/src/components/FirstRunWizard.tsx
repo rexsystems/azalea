@@ -9,15 +9,29 @@ import { Input } from "./ui/Input";
 
 interface FirstRunWizardProps {
   onDone: () => void;
+  onConnectSelfhost: (input: {
+    label: string;
+    base_url: string;
+    web_url?: string | null;
+    email: string;
+    password: string;
+  }) => void | Promise<void>;
 }
 
-export function FirstRunWizard({ onDone }: FirstRunWizardProps) {
-  const [step, setStep] = useState<"choose" | "selfhost">("choose");
+type Step = "choose" | "selfhost" | "selfhost-login";
+
+export function FirstRunWizard({ onDone, onConnectSelfhost }: FirstRunWizardProps) {
+  const [step, setStep] = useState<Step>("choose");
   const [serverUrl, setServerUrl] = useState("");
+  const [instanceName, setInstanceName] = useState<string | null>(null);
+  const [resolvedBase, setResolvedBase] = useState<string | null>(null);
+  const [resolvedWeb, setResolvedWeb] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const finish = async (kind: "cloud" | "selfhost" | "offline") => {
+  const finishSimple = async (kind: "cloud" | "offline") => {
     try {
       setBusy(true);
       setError(null);
@@ -26,22 +40,12 @@ export function FirstRunWizard({ onDone }: FirstRunWizardProps) {
         onDone();
         return;
       }
-      if (kind === "cloud") {
-        await api.addAccount({
-          kind: "cloud",
-          label: "Azalea Cloud",
-          base_url: null,
-          web_url: null,
-        });
-      } else {
-        const { base_url, web_url } = resolveSelfHostUrls(serverUrl);
-        await api.addAccount({
-          kind: "selfhost",
-          label: "Self-hosted",
-          base_url,
-          web_url,
-        });
-      }
+      await api.addAccount({
+        kind: "cloud",
+        label: "Azalea Cloud",
+        base_url: null,
+        web_url: null,
+      });
       await api.setAccountsOnboarded(true);
       onDone();
     } catch (err) {
@@ -49,6 +53,50 @@ export function FirstRunWizard({ onDone }: FirstRunWizardProps) {
       setBusy(false);
     }
   };
+
+  const continueSelfhost = async () => {
+    try {
+      setBusy(true);
+      setError(null);
+      const { base_url, web_url } = resolveSelfHostUrls(serverUrl);
+      const probe = await api.probeSelfhost(base_url);
+      setResolvedBase(base_url);
+      setResolvedWeb(web_url);
+      setInstanceName(probe.instance_name);
+      setStep("selfhost-login");
+    } catch (err) {
+      setError(String(err).replace(/^Error:\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finishSelfhost = async () => {
+    if (!resolvedBase || !instanceName) return;
+    try {
+      setBusy(true);
+      setError(null);
+      await onConnectSelfhost({
+        label: instanceName,
+        base_url: resolvedBase,
+        web_url: resolvedWeb,
+        email: email.trim(),
+        password,
+      });
+      await api.setAccountsOnboarded(true);
+      onDone();
+    } catch (err) {
+      setError(String(err).replace(/^Error:\s*/, ""));
+      setBusy(false);
+    }
+  };
+
+  const subtitle =
+    step === "choose"
+      ? "How do you want to use sync?"
+      : step === "selfhost"
+        ? "Point the app at your sync server."
+        : `Sign in to ${instanceName ?? "your server"}.`;
 
   return (
     <div
@@ -76,9 +124,7 @@ export function FirstRunWizard({ onDone }: FirstRunWizardProps) {
               Welcome to Azalea
             </h1>
             <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-              {step === "choose"
-                ? "How do you want to use sync?"
-                : "Point the app at your sync server."}
+              {subtitle}
             </p>
           </div>
 
@@ -89,7 +135,7 @@ export function FirstRunWizard({ onDone }: FirstRunWizardProps) {
                 title="Azalea Cloud"
                 description="Hosted sync"
                 disabled={busy}
-                onClick={() => void finish("cloud")}
+                onClick={() => void finishSimple("cloud")}
               />
               <ChoiceRow
                 icon={<Server size={18} />}
@@ -103,10 +149,10 @@ export function FirstRunWizard({ onDone }: FirstRunWizardProps) {
                 title="Offline"
                 description="No sync, local only"
                 disabled={busy}
-                onClick={() => void finish("offline")}
+                onClick={() => void finishSimple("offline")}
               />
             </div>
-          ) : (
+          ) : step === "selfhost" ? (
             <div className="space-y-4">
               <Input
                 label="Server URL"
@@ -131,9 +177,66 @@ export function FirstRunWizard({ onDone }: FirstRunWizardProps) {
                 <Button
                   className="flex-1"
                   disabled={busy || !serverUrl.trim()}
-                  onClick={() => void finish("selfhost")}
+                  onClick={() => void continueSelfhost()}
                 >
-                  Continue
+                  {busy ? "Checking…" : "Continue"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div
+                className="rounded-xl border px-3.5 py-3 text-left"
+                style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+              >
+                <div className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                  Server
+                </div>
+                <div className="mt-1 text-sm font-medium" style={{ color: "var(--text)" }}>
+                  {instanceName}
+                </div>
+                {resolvedBase && (
+                  <div className="mt-0.5 truncate text-xs" style={{ color: "var(--text-muted)" }}>
+                    {resolvedBase.replace(/^https?:\/\//, "")}
+                  </div>
+                )}
+              </div>
+              <Input
+                label="Email"
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@example.com"
+              />
+              <Input
+                label="Password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <div className="flex gap-2 pt-1">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  disabled={busy}
+                  onClick={() => {
+                    setError(null);
+                    setPassword("");
+                    setStep("selfhost");
+                  }}
+                >
+                  <ArrowLeft size={16} />
+                  Back
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={busy || !email.trim() || !password}
+                  onClick={() => void finishSelfhost()}
+                >
+                  {busy ? "Signing in…" : "Sign in"}
                 </Button>
               </div>
             </div>

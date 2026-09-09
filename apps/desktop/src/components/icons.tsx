@@ -1,6 +1,7 @@
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import type { CSSProperties } from "react";
 import {
+  Alert02Icon,
   Add01Icon,
   ArrowDown01Icon,
   ArrowLeft01Icon,
@@ -82,6 +83,7 @@ function makeIcon(icon: IconSvgElement, displayName: string) {
 
 export type AppIcon = ReturnType<typeof makeIcon>;
 
+export const AlertTriangle = makeIcon(Alert02Icon, "AlertTriangle");
 export const ArrowLeft = makeIcon(ArrowLeft01Icon, "ArrowLeft");
 export const ArrowLeftRight = makeIcon(ArrowLeftRightIcon, "ArrowLeftRight");
 export const ArrowUp = makeIcon(ArrowUp01Icon, "ArrowUp");
