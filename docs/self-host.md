@@ -73,7 +73,6 @@ curl -fsSL -o docker-compose.yml \
 
 cat > .env <<EOF
 AZALEA_JWT_SECRET=$(openssl rand -hex 32)
-AZALEA_SETUP_SECRET=$(openssl rand -hex 16)
 RESEND_API_KEY=
 AZALEA_MAIL_FROM=Azalea <noreply@yourdomain.com>
 AZALEA_PUBLIC_WEB_URL=https://yourdomain.com
@@ -84,11 +83,9 @@ docker compose up -d
 curl -s http://127.0.0.1:8787/v1/health
 ```
 
-If GHCR pull is unauthorized, make the package public or:
-
-```bash
-echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USER --password-stdin
-```
+If GHCR returns `unauthorized`, the installer builds from GitHub source instead.
+To pull anonymously later: GitHub -> Packages -> `azalea-server` -> Change visibility
+-> Public (CI also tries to set this after each publish).
 
 ### 3. HTTPS / Cloudflare
 
@@ -134,7 +131,7 @@ NEXT_PUBLIC_AZALEA_API_URL=https://yourdomain.com/api
 NEXT_PUBLIC_SITE_URL=https://yourdomain.com
 ```
 
-You do not need it to run sync. CLI covers users and bootstrap.
+You do not need it to run sync. Users and first admin are handled by the installer / CLI.
 
 ## Updates
 

@@ -11,7 +11,8 @@ Self-hostable Azalea sync API (Rust + SQLite + Docker). AGPL-3.0-or-later.
 curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/install.sh | bash
 ```
 
-Interactive: secrets, domain, Resend, optional web UI tip, pull image, bootstrap admin.
+Interactive: secrets, domain, Resend, optional web UI tip, pull image (or build from
+source if GHCR is private), bootstrap admin.
 
 Image: `ghcr.io/rexsystems/azalea-server:latest`
 
@@ -37,7 +38,6 @@ docker compose exec azalea-server azalea-server user list
 
 ```bash
 export AZALEA_JWT_SECRET=dev-secret
-export AZALEA_SETUP_SECRET=setup
 cargo run -- serve
 # or cargo run   (defaults to serve)
 ```
@@ -53,7 +53,6 @@ docker compose -f docker-compose.build.yml up -d --build
 | Variable | Required | Purpose |
 |---|---|---|
 | `AZALEA_JWT_SECRET` | yes | Access token signing |
-| `AZALEA_SETUP_SECRET` | recommended | Protects HTTP bootstrap if used |
 | `AZALEA_DATA_DIR` | no (default `/data`) | SQLite directory |
 | `AZALEA_BIND` | no (default `0.0.0.0:8787`) | Listen address |
 | `RESEND_API_KEY` | no | Password-reset email via Resend |

@@ -1,7 +1,6 @@
 mod admin;
 mod auth_routes;
 mod extractors;
-mod setup;
 mod vault;
 
 use axum::extract::State;
@@ -15,7 +14,6 @@ use crate::state::AppState;
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/v1/health", get(health))
-        .merge(setup::router())
         .merge(auth_routes::router())
         .merge(vault::router())
         .merge(admin::router())

@@ -45,7 +45,6 @@ async fn run_serve() -> anyhow::Result<()> {
         tracing::warn!("AZALEA_JWT_SECRET not set; using ephemeral secret (dev only)");
         hex::encode(rand::random::<[u8; 32]>())
     });
-    let setup_secret = env::var("AZALEA_SETUP_SECRET").ok();
     let bind = env::var("AZALEA_BIND").unwrap_or_else(|_| "0.0.0.0:8787".into());
 
     let db = db::Database::open(&db_path)?;
@@ -61,7 +60,6 @@ async fn run_serve() -> anyhow::Result<()> {
     let state = Arc::new(AppState {
         db,
         jwt_secret,
-        setup_secret,
         mail,
     });
 

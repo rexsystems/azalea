@@ -130,25 +130,10 @@ Deletes vault row for the user (account may remain).
 
 ## Setup (first boot)
 
-When no admin exists:
+No browser setup. First admin is created by `install.sh` or:
 
-### `GET /v1/setup/status`
-
-```json
-{ "needs_setup": true, "mail_configured": false }
-```
-
-### `POST /v1/setup/bootstrap`
-
-Creates first admin + instance settings. Requires setup secret from env `AZALEA_SETUP_SECRET` if set.
-
-```json
-{
-  "setup_secret": "...",
-  "admin_email": "...",
-  "admin_password": "...",
-  "instance_name": "Home"
-}
+```bash
+azalea-server bootstrap --email admin@example.com --password 'at-least-8' --instance Home
 ```
 
 ## Admin (role = admin)

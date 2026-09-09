@@ -14,6 +14,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/azalea-server
+  PACKAGE_NAME: azalea-server
 
 jobs:
   docker:
@@ -44,3 +45,28 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Make GHCR package public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          NAME="${{ env.PACKAGE_NAME }}"
+          set +e
+          gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            "/orgs/${OWNER}/packages/container/${NAME}/visibility" \
+            -f visibility=public
+          org_rc=$?
+          gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            "/user/packages/container/${NAME}/visibility" \
+            -f visibility=public
+          user_rc=$?
+          set -e
+          if [[ "$org_rc" -ne 0 && "$user_rc" -ne 0 ]]; then
+            echo "Could not set package public automatically."
+            echo "GitHub -> Packages -> ${NAME} -> Package settings -> Change visibility -> Public"
+          else
+            echo "Package visibility set to public (or already public)."
+          fi

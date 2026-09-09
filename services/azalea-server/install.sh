@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Interactive installer for azalea-server on a fresh Linux VPS.
-# No repo clone required. Pulls GHCR image + writes compose/.env.
+# Pulls GHCR image, or builds from GitHub if the package is private / missing.
 set -euo pipefail
 
-RAW_BASE="${AZALEA_RAW_BASE:-https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server}"
+REPO="${AZALEA_REPO:-https://github.com/rexsystems/azalea.git}"
 IMAGE="${AZALEA_IMAGE:-ghcr.io/rexsystems/azalea-server:latest}"
 INSTALL_DIR="${AZALEA_INSTALL_DIR:-$HOME/azalea}"
 
@@ -25,12 +25,11 @@ need_cmd() {
 }
 
 ask() {
-  # ask "Prompt" "default"  (always reads the real terminal, safe with curl|bash)
   local prompt="$1"
   local default="${2-}"
   local reply
   if [[ ! -r /dev/tty ]]; then
-    die "no terminal available for prompts (download install.sh and run: bash install.sh)"
+    die "no terminal for prompts; run: bash install.sh"
   fi
   if [[ -n "$default" ]]; then
     read -r -p "$prompt [$default]: " reply < /dev/tty || true
@@ -45,22 +44,22 @@ ask_secret() {
   local prompt="$1"
   local reply
   if [[ ! -r /dev/tty ]]; then
-    die "no terminal available for prompts (download install.sh and run: bash install.sh)"
+    die "no terminal for prompts; run: bash install.sh"
   fi
+  # -s hides input; newline MUST go to the terminal, not stdout (stdout is captured)
   read -r -s -p "$prompt: " reply < /dev/tty || true
-  printf '\n' > /dev/tty
+  echo >&2
   printf '%s\n' "$reply"
 }
 
 ask_yes_no() {
-  # ask_yes_no "Prompt" "y|n"
   local prompt="$1"
   local default="${2:-n}"
   local hint="y/N"
   [[ "$default" == "y" ]] && hint="Y/n"
   local reply
   if [[ ! -r /dev/tty ]]; then
-    die "no terminal available for prompts (download install.sh and run: bash install.sh)"
+    die "no terminal for prompts; run: bash install.sh"
   fi
   read -r -p "$prompt ($hint): " reply < /dev/tty || true
   reply="${reply:-$default}"
@@ -68,6 +67,66 @@ ask_yes_no() {
     y|yes) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+write_compose_pull() {
+  local ports="$1"
+  cat > docker-compose.yml <<EOF
+services:
+  azalea-server:
+    image: ${IMAGE}
+    env_file:
+      - .env
+    ports:
+      - "${ports}"
+    environment:
+      AZALEA_DATA_DIR: /data
+      AZALEA_BIND: 0.0.0.0:8787
+      RUST_LOG: azalea_server=info,tower_http=info
+    volumes:
+      - azalea-data:/data
+    restart: unless-stopped
+
+volumes:
+  azalea-data:
+EOF
+}
+
+write_compose_build() {
+  local ports="$1"
+  cat > docker-compose.yml <<EOF
+services:
+  azalea-server:
+    build: ./build
+    image: azalea-server:local
+    env_file:
+      - .env
+    ports:
+      - "${ports}"
+    environment:
+      AZALEA_DATA_DIR: /data
+      AZALEA_BIND: 0.0.0.0:8787
+      RUST_LOG: azalea_server=info,tower_http=info
+    volumes:
+      - azalea-data:/data
+    restart: unless-stopped
+
+volumes:
+  azalea-data:
+EOF
+}
+
+fetch_build_context() {
+  need_cmd git
+  local tmp
+  tmp="$(mktemp -d)"
+  printf 'Cloning %s (sparse, server only)...\n' "$REPO"
+  git clone --depth 1 --filter=blob:none --sparse "$REPO" "$tmp/azalea"
+  git -C "$tmp/azalea" sparse-checkout set services/azalea-server
+  rm -rf build
+  mkdir -p build
+  cp -a "$tmp/azalea/services/azalea-server/." build/
+  rm -rf "$tmp"
 }
 
 printf '\n== Azalea sync server installer ==\n'
@@ -79,9 +138,7 @@ if ! command -v docker >/dev/null 2>&1; then
   if ask_yes_no "Docker not found. Install via get.docker.com?" "y"; then
     need_cmd curl
     curl -fsSL https://get.docker.com | sh
-    if command -v usermod >/dev/null 2>&1 && [[ "$(id -u)" -eq 0 ]]; then
-      echo "Add your user to the docker group, then re-login."
-    elif command -v usermod >/dev/null 2>&1; then
+    if command -v usermod >/dev/null 2>&1 && [[ "$(id -u)" -ne 0 ]]; then
       sudo usermod -aG docker "$USER" || true
       echo "You may need to log out/in for docker without sudo."
     fi
@@ -108,8 +165,10 @@ fi
 admin_email="$(ask "Admin email" "admin@example.com")"
 while true; do
   admin_pass="$(ask_secret "Admin password (min 8 chars)")"
-  [[ ${#admin_pass} -ge 8 ]] && break
-  echo "Password too short."
+  if [[ ${#admin_pass} -ge 8 ]]; then
+    break
+  fi
+  echo "Password too short." >&2
 done
 instance="$(ask "Instance name" "Azalea")"
 
@@ -121,7 +180,7 @@ if ask_yes_no "Configure Resend for password-reset emails?" "n"; then
 fi
 
 want_web=0
-if ask_yes_no "Do you want the optional web UI (azalea-web: login/admin/setup pages)?" "n"; then
+if ask_yes_no "Optional azalea-web UI later (browser login / admin pages)?" "n"; then
   want_web=1
 fi
 
@@ -131,57 +190,47 @@ if [[ -n "$domain" ]] && ask_yes_no "Bind API to 127.0.0.1 only (recommended beh
 fi
 
 jwt_secret="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-setup_secret="$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 
-progress "Writing docker-compose.yml and .env"
 ports="8787:8787"
 if [[ "$bind_localhost" -eq 1 ]]; then
   ports="127.0.0.1:8787:8787"
 fi
 
-cat > docker-compose.yml <<EOF
-services:
-  azalea-server:
-    image: ${IMAGE}
-    env_file:
-      - .env
-    ports:
-      - "${ports}"
-    environment:
-      AZALEA_DATA_DIR: /data
-      AZALEA_BIND: 0.0.0.0:8787
-      RUST_LOG: azalea_server=info,tower_http=info
-    volumes:
-      - azalea-data:/data
-    restart: unless-stopped
-
-volumes:
-  azalea-data:
-EOF
-
+progress "Writing .env and compose"
 cat > .env <<EOF
 AZALEA_JWT_SECRET=${jwt_secret}
-AZALEA_SETUP_SECRET=${setup_secret}
 RESEND_API_KEY=${resend_key}
 AZALEA_MAIL_FROM=${mail_from}
 AZALEA_PUBLIC_WEB_URL=${web_url}
 EOF
 chmod 600 .env
 
-progress "Pulling image"
-docker compose pull
+write_compose_pull "$ports"
+
+progress "Pulling image (or building from source)"
+use_build=0
+if docker compose pull; then
+  :
+else
+  echo "Could not pull ${IMAGE} (private package or missing)."
+  echo "Falling back to build from GitHub source..."
+  use_build=1
+  fetch_build_context
+  write_compose_build "$ports"
+  docker compose build
+fi
 
 progress "Starting container"
 docker compose up -d
 
 progress "Waiting for health"
 ok=0
-for _ in $(seq 1 30); do
+for _ in $(seq 1 60); do
   if curl -fsS "http://127.0.0.1:8787/v1/health" >/dev/null 2>&1; then
     ok=1
     break
   fi
-  sleep 1
+  sleep 2
 done
 [[ "$ok" -eq 1 ]] || die "server did not become healthy on :8787"
 
@@ -192,14 +241,19 @@ if docker compose exec -T azalea-server azalea-server bootstrap \
   --instance "$instance"; then
   :
 else
-  echo "Bootstrap skipped or failed (maybe already done). Continuing."
+  echo "Bootstrap skipped or failed (maybe already done). Continuing." >&2
 fi
 
 printf '\n== Done ==\n'
 printf 'API health:  http://127.0.0.1:8787/v1/health\n'
 printf 'Admin:       %s\n' "$admin_email"
-printf 'Data dir:    docker volume azalea-data\n'
+printf 'Data dir:    docker volume azalea_azalea-data (or azalea-data)\n'
 printf 'Install dir: %s\n' "$INSTALL_DIR"
+if [[ "$use_build" -eq 1 ]]; then
+  printf 'Image mode:  built locally (azalea-server:local)\n'
+else
+  printf 'Image mode:  %s\n' "$IMAGE"
+fi
 
 printf '\nCLI (on this host):\n'
 printf '  cd %s\n' "$INSTALL_DIR"
@@ -227,14 +281,18 @@ if [[ "$want_web" -eq 1 ]]; then
     api_public="https://${domain}/api"
   fi
   printf '\nOptional web UI (azalea-web):\n'
-  printf '  Deploy the azalea-web site (Cloudflare Pages or Node) with:\n'
+  printf '  Deploy azalea-web with:\n'
   printf '    NEXT_PUBLIC_AZALEA_API_URL=%s\n' "$api_public"
   printf '    NEXT_PUBLIC_SITE_URL=%s\n' "$web_url"
-  printf '  Useful routes: /login /admin /forgot-password\n'
-  printf '  Terminal setup is enough for users; web admin is optional.\n'
+  printf '  Routes: /login /admin /forgot-password (no browser setup wizard)\n'
 else
   printf '\nWeb UI skipped. Manage users with the CLI above.\n'
 fi
 
 printf '\nUpdates later:\n'
-printf '  cd %s && docker compose pull && docker compose up -d\n\n' "$INSTALL_DIR"
+if [[ "$use_build" -eq 1 ]]; then
+  printf '  cd %s && rm -rf build && bash -c "$(curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/install.sh)"\n' "$INSTALL_DIR"
+  printf '  (or: git pull in build/ then docker compose build && docker compose up -d)\n\n'
+else
+  printf '  cd %s && docker compose pull && docker compose up -d\n\n' "$INSTALL_DIR"
+fi
