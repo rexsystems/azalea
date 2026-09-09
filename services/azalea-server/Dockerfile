@@ -25,4 +25,4 @@ ENV AZALEA_DATA_DIR=/data
 ENV AZALEA_BIND=0.0.0.0:8787
 VOLUME ["/data"]
 EXPOSE 8787
-CMD ["azalea-server"]
+CMD ["azalea-server", "serve"]

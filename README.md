@@ -91,7 +91,7 @@ azalea/
 ## Docs
 
 - [Cloud sync](docs/cloud-sync.md)
-- [Self-host (VPS / Docker)](docs/self-host.md)
+- [Self-host (VPS / Docker / CLI)](docs/self-host.md)
 - [Sync API v1](docs/sync-api-v1.md)
 - [Updater](docs/updater.md)
 - [Web app](docs/web.md)

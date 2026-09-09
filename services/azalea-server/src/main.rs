@@ -4,23 +4,35 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::Router;
+use clap::Parser;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
 mod auth;
+mod cli;
 mod db;
 mod error;
 mod mail;
 mod routes;
 mod state;
 
+use cli::{Cli, Command};
 use state::AppState;
 use crate::mail::MailConfig;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
+
+    let cli = Cli::parse();
+    match cli.command {
+        None | Some(Command::Serve) => run_serve().await,
+        Some(cmd) => cli::run_cli(cmd),
+    }
+}
+
+async fn run_serve() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive("azalea_server=info".parse()?))
         .init();

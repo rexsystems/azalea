@@ -3,31 +3,43 @@
 Self-hostable Azalea sync API (Rust + SQLite + Docker). AGPL-3.0-or-later.
 
 - API: [`docs/sync-api-v1.md`](../../docs/sync-api-v1.md)
-- **Install on a VPS (no source):** [`docs/self-host.md`](../../docs/self-host.md)
+- **VPS install:** [`docs/self-host.md`](../../docs/self-host.md)
 
-## Quick: empty VPS
+## Install on an empty VPS
 
 ```bash
-mkdir -p ~/azalea && cd ~/azalea
-curl -fsSL -o docker-compose.yml \
-  https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/docker-compose.yml
-cat > .env <<EOF
-AZALEA_JWT_SECRET=$(openssl rand -hex 32)
-AZALEA_SETUP_SECRET=$(openssl rand -hex 16)
-AZALEA_PUBLIC_WEB_URL=https://yourdomain.com
-EOF
-docker compose pull && docker compose up -d
-curl -s http://127.0.0.1:8787/v1/health
+curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/install.sh | bash
 ```
+
+Interactive: secrets, domain, Resend, optional web UI tip, pull image, bootstrap admin.
 
 Image: `ghcr.io/rexsystems/azalea-server:latest`
 
-## Dev (from this folder)
+## CLI (users without web admin)
+
+```bash
+azalea-server bootstrap --email admin@x.com --password 'secret123' --instance Home
+azalea-server user list
+azalea-server user create --email u@x.com --password 'secret123'
+azalea-server user set-password --email u@x.com --password 'newpass'
+azalea-server user disable --email u@x.com
+azalea-server settings signup --enabled false
+azalea-server serve   # or just: azalea-server
+```
+
+With Docker Compose:
+
+```bash
+docker compose exec azalea-server azalea-server user list
+```
+
+## Dev
 
 ```bash
 export AZALEA_JWT_SECRET=dev-secret
 export AZALEA_SETUP_SECRET=setup
-cargo run
+cargo run -- serve
+# or cargo run   (defaults to serve)
 ```
 
 Build image locally:
@@ -41,7 +53,7 @@ docker compose -f docker-compose.build.yml up -d --build
 | Variable | Required | Purpose |
 |---|---|---|
 | `AZALEA_JWT_SECRET` | yes | Access token signing |
-| `AZALEA_SETUP_SECRET` | recommended | Protects first-admin bootstrap |
+| `AZALEA_SETUP_SECRET` | recommended | Protects HTTP bootstrap if used |
 | `AZALEA_DATA_DIR` | no (default `/data`) | SQLite directory |
 | `AZALEA_BIND` | no (default `0.0.0.0:8787`) | Listen address |
 | `RESEND_API_KEY` | no | Password-reset email via Resend |
