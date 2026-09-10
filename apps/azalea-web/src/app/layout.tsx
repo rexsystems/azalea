@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { Space_Grotesk, Inter } from "next/font/google";
 import {
   getSiteUrl,
@@ -38,38 +37,9 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
-  openGraph: {
-    type: "website",
-    locale: "en_US",
-    url: siteUrl,
-    siteName: SITE_NAME,
-    title: `${SITE_NAME} — Modern SSH terminal client`,
-    description: SITE_DESCRIPTION,
-    images: [
-      {
-        url: "/og.jpg",
-        width: 1200,
-        height: 630,
-        alt: "Azalea — open-source SSH terminal client",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: `${SITE_NAME} — Modern SSH terminal client`,
-    description: SITE_DESCRIPTION,
-    images: ["/og.jpg"],
-  },
   robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-      "max-video-preview": -1,
-    },
+    index: false,
+    follow: false,
   },
   icons: {
     icon: [
@@ -92,12 +62,6 @@ export default function RootLayout({
         style={{ fontFamily: "var(--font-body), sans-serif" }}
       >
         {children}
-        <Script
-          defer
-          src="https://stats.694206767.xyz/script.js"
-          data-website-id="bff92ae2-65b6-4a33-b24d-2dca63e1c010"
-          strategy="afterInteractive"
-        />
       </body>
     </html>
   );

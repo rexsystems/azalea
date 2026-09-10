@@ -8,16 +8,57 @@ WEB_IMAGE="${AZALEA_WEB_IMAGE:-ghcr.io/rexsystems/azalea-web:latest}"
 REPO="${AZALEA_REPO:-https://github.com/rexsystems/azalea.git}"
 INSTALL_DIR="${AZALEA_INSTALL_DIR:-$HOME/azalea}"
 
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  C_RESET=$'\033[0m'
+  C_BOLD=$'\033[1m'
+  C_DIM=$'\033[2m'
+  C_CYAN=$'\033[38;5;81m'
+  C_GREEN=$'\033[38;5;114m'
+  C_YELLOW=$'\033[38;5;221m'
+  C_RED=$'\033[38;5;203m'
+  C_MAGENTA=$'\033[38;5;183m'
+  C_WHITE=$'\033[97m'
+else
+  C_RESET="" C_BOLD="" C_DIM="" C_CYAN="" C_GREEN="" C_YELLOW="" C_RED="" C_MAGENTA="" C_WHITE=""
+fi
+
 step=0
 total=7
 
+banner() {
+  printf '\n'
+  printf '%s' "${C_CYAN}${C_BOLD}"
+  cat <<'EOF'
+     _                _
+    / \    _____ __ _| | ___  __ _
+   / _ \  |_  / / _` | |/ _ \/ _` |
+  / ___ \  / / | (_| | |  __/ (_| |
+ /_/   \_\/___| \__,_|_|\___|\__,_|
+EOF
+  printf '%s\n' "${C_RESET}"
+  printf '  %sSelf-host installer%s  %ssync API + optional dashboard%s\n' \
+    "${C_WHITE}${C_BOLD}" "${C_RESET}" "${C_DIM}" "${C_RESET}"
+  printf '  %sInstall dir:%s %s%s%s\n\n' \
+    "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$INSTALL_DIR" "${C_RESET}"
+}
+
 progress() {
   step=$((step + 1))
-  printf '\n[%s/%s] %s\n' "$step" "$total" "$1"
+  printf '\n%s[%s/%s]%s %s%s%s\n' \
+    "${C_MAGENTA}${C_BOLD}" "$step" "$total" "${C_RESET}" \
+    "${C_WHITE}${C_BOLD}" "$1" "${C_RESET}"
+}
+
+ok() {
+  printf '  %s✓%s %s\n' "${C_GREEN}${C_BOLD}" "${C_RESET}" "$1"
+}
+
+warn() {
+  printf '  %s!%s %s\n' "${C_YELLOW}${C_BOLD}" "${C_RESET}" "$1" >&2
 }
 
 die() {
-  printf 'error: %s\n' "$1" >&2
+  printf '\n%s✗ error:%s %s\n\n' "${C_RED}${C_BOLD}" "${C_RESET}" "$1" >&2
   exit 1
 }
 
@@ -33,10 +74,10 @@ ask() {
     die "no terminal for prompts; run: bash install.sh"
   fi
   if [[ -n "$default" ]]; then
-    read -r -p "$prompt [$default]: " reply < /dev/tty || true
+    read -r -p "$(printf '%s?%s %s [%s%s%s]: ' "${C_CYAN}" "${C_RESET}" "$prompt" "${C_DIM}" "$default" "${C_RESET}")" reply < /dev/tty || true
     printf '%s\n' "${reply:-$default}"
   else
-    read -r -p "$prompt: " reply < /dev/tty || true
+    read -r -p "$(printf '%s?%s %s: ' "${C_CYAN}" "${C_RESET}" "$prompt")" reply < /dev/tty || true
     printf '%s\n' "$reply"
   fi
 }
@@ -47,7 +88,7 @@ ask_secret() {
   if [[ ! -r /dev/tty ]]; then
     die "no terminal for prompts; run: bash install.sh"
   fi
-  read -r -s -p "$prompt: " reply < /dev/tty || true
+  read -r -s -p "$(printf '%s?%s %s: ' "${C_CYAN}" "${C_RESET}" "$prompt")" reply < /dev/tty || true
   echo >&2
   printf '%s\n' "$reply"
 }
@@ -61,7 +102,7 @@ ask_yes_no() {
   if [[ ! -r /dev/tty ]]; then
     die "no terminal for prompts; run: bash install.sh"
   fi
-  read -r -p "$prompt ($hint): " reply < /dev/tty || true
+  read -r -p "$(printf '%s?%s %s (%s%s%s): ' "${C_CYAN}" "${C_RESET}" "$prompt" "${C_DIM}" "$hint" "${C_RESET}")" reply < /dev/tty || true
   reply="${reply:-$default}"
   case "${reply,,}" in
     y|yes) return 0 ;;
@@ -214,27 +255,26 @@ fetch_build_context() {
 
 try_pull_images() {
   local want_web="$1"
-  printf 'Pulling %s...\n' "$SERVER_IMAGE"
+  printf '  %s→%s Pulling %s%s%s\n' "${C_CYAN}" "${C_RESET}" "${C_DIM}" "$SERVER_IMAGE" "${C_RESET}"
   if ! docker pull "$SERVER_IMAGE"; then
-    printf 'Could not pull %s\n' "$SERVER_IMAGE" >&2
-    printf 'Make the GHCR package Public:\n' >&2
-    printf '  https://github.com/orgs/rexsystems/packages/container/package/azalea-server\n' >&2
+    warn "Could not pull ${SERVER_IMAGE}"
+    printf '    Make the GHCR package Public:\n' >&2
+    printf '    https://github.com/orgs/rexsystems/packages/container/package/azalea-server\n' >&2
     return 1
   fi
   if [[ "$want_web" -eq 1 ]]; then
-    printf 'Pulling %s...\n' "$WEB_IMAGE"
+    printf '  %s→%s Pulling %s%s%s\n' "${C_CYAN}" "${C_RESET}" "${C_DIM}" "$WEB_IMAGE" "${C_RESET}"
     if ! docker pull "$WEB_IMAGE"; then
-      printf 'Could not pull %s\n' "$WEB_IMAGE" >&2
-      printf 'Make the GHCR package Public:\n' >&2
-      printf '  https://github.com/orgs/rexsystems/packages/container/package/azalea-web\n' >&2
+      warn "Could not pull ${WEB_IMAGE}"
+      printf '    Make the GHCR package Public:\n' >&2
+      printf '    https://github.com/orgs/rexsystems/packages/container/package/azalea-web\n' >&2
       return 1
     fi
   fi
   return 0
 }
 
-printf '\n== Azalea installer ==\n'
-printf 'Install dir: %s\n\n' "$INSTALL_DIR"
+banner
 
 progress "Checking Docker"
 if ! command -v docker >/dev/null 2>&1; then
@@ -243,7 +283,7 @@ if ! command -v docker >/dev/null 2>&1; then
     curl -fsSL https://get.docker.com | sh
     if command -v usermod >/dev/null 2>&1 && [[ "$(id -u)" -ne 0 ]]; then
       sudo usermod -aG docker "$USER" || true
-      echo "You may need to log out/in for docker without sudo."
+      warn "You may need to log out/in for docker without sudo."
     fi
   else
     die "Docker is required"
@@ -251,6 +291,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 need_cmd docker
 docker compose version >/dev/null 2>&1 || die "docker compose plugin required"
+ok "Docker ready"
 
 progress "Gathering config"
 mkdir -p "$INSTALL_DIR"
@@ -271,7 +312,7 @@ while true; do
   if [[ ${#admin_pass} -ge 8 ]]; then
     break
   fi
-  echo "Password too short." >&2
+  warn "Password too short."
 done
 instance="$(ask "Instance name" "Azalea")"
 
@@ -311,6 +352,7 @@ if [[ "$want_web" -eq 0 ]]; then
     public_web_for_mail="https://${domain}"
   fi
 fi
+ok "Config saved"
 
 progress "Writing .env"
 cat > .env <<EOF
@@ -320,18 +362,20 @@ AZALEA_MAIL_FROM=${mail_from}
 AZALEA_PUBLIC_WEB_URL=${public_web_for_mail}
 EOF
 chmod 600 .env
+ok ".env written"
 
 progress "Pulling Docker images"
 install_mode="image"
 if try_pull_images "$want_web"; then
   write_compose "$api_ports" "$want_web" "$web_ports" image
-  printf 'Using published images.\n'
+  ok "Using published images"
 else
-  printf '\nFalling back to local image build from GitHub source...\n' >&2
+  warn "Falling back to local image build from GitHub source..."
   install_mode="build"
   write_compose "$api_ports" "$want_web" "$web_ports" build
   fetch_build_context "$want_web"
   docker compose build
+  ok "Local images built"
 fi
 
 progress "Starting containers"
@@ -353,57 +397,62 @@ docker ps -a --format '{{.Names}}' | while read -r name; do
   esac
 done
 docker compose up -d
+ok "Containers up"
 
 progress "Waiting for API health"
-ok=0
+healthy=0
 for _ in $(seq 1 60); do
   if curl -fsS "http://127.0.0.1:9482/v1/health" >/dev/null 2>&1; then
-    ok=1
+    healthy=1
     break
   fi
   sleep 2
 done
-[[ "$ok" -eq 1 ]] || die "API did not become healthy on :9482"
+[[ "$healthy" -eq 1 ]] || die "API did not become healthy on :9482"
+ok "API healthy on :9482"
 
 progress "Bootstrapping admin"
 if docker compose exec -T azalea-server azalea-server bootstrap \
   --email "$admin_email" \
   --password "$admin_pass" \
   --instance "$instance"; then
-  :
+  ok "Admin ready"
 else
-  echo "Bootstrap skipped or failed (maybe already done). Continuing." >&2
+  warn "Bootstrap skipped or failed (maybe already done). Continuing."
 fi
 
-printf '\n== Done ==\n'
-printf 'Mode:        %s\n' "$install_mode"
-printf 'API:         http://127.0.0.1:9482/v1/health\n'
-printf 'Admin user:  %s\n' "$admin_email"
-printf 'Install dir: %s\n' "$INSTALL_DIR"
+printf '\n%s══ Done ══%s\n' "${C_GREEN}${C_BOLD}" "${C_RESET}"
+printf '  %sMode%s         %s\n' "${C_DIM}" "${C_RESET}" "$install_mode"
+printf '  %sAPI%s          %shttp://127.0.0.1:9482/v1/health%s\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "${C_RESET}"
+printf '  %sAdmin%s        %s\n' "${C_DIM}" "${C_RESET}" "$admin_email"
+printf '  %sInstall dir%s  %s\n' "${C_DIM}" "${C_RESET}" "$INSTALL_DIR"
 
 if [[ "$want_web" -eq 1 ]]; then
-  printf 'Web dashboard: http://YOUR_IP/  (or %s)\n' "${web_url}"
-  printf 'Desktop self-host URL: http://YOUR_IP  (uses /api)\n'
+  printf '  %sDashboard%s    %shttp://YOUR_IP/%s  (or %s)\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "${C_RESET}" "$web_url"
+  printf '  %sDesktop URL%s  %shttp://YOUR_IP%s  (uses /api)\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "${C_RESET}"
+  printf '  %sSign in%s      %s/login%s · %sAuthorize%s /authorize\n' \
+    "${C_DIM}" "${C_RESET}" "${C_MAGENTA}" "${C_RESET}" "${C_MAGENTA}" "${C_RESET}"
 else
-  printf 'Web dashboard: not installed (CLI only)\n'
-  printf 'Desktop self-host URL: http://YOUR_IP:9482\n'
+  printf '  %sDashboard%s    not installed (CLI only)\n' "${C_DIM}" "${C_RESET}"
+  printf '  %sDesktop URL%s  %shttp://YOUR_IP:9482%s\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "${C_RESET}"
 fi
 
-printf '\nCLI:\n'
+printf '\n%sCLI%s\n' "${C_WHITE}${C_BOLD}" "${C_RESET}"
 printf '  cd %s\n' "$INSTALL_DIR"
 printf '  docker compose exec azalea-server azalea-server user list\n'
 printf '  docker compose exec azalea-server azalea-server user create --email u@x.com --password secret123\n'
 
 if [[ -n "$domain" && "$want_web" -eq 1 ]]; then
-  printf '\nPoint DNS A record for %s to this VPS. HTTP :80 is already serving the UI.\n' "$domain"
-  printf 'For HTTPS, put Caddy/Nginx in front or use Cloudflare.\n'
+  printf '\n%sDNS%s  Point A record for %s%s%s to this VPS. HTTP :80 is serving the UI.\n' \
+    "${C_WHITE}${C_BOLD}" "${C_RESET}" "${C_CYAN}" "$domain" "${C_RESET}"
+  printf '     For HTTPS, put Caddy/Nginx in front or use Cloudflare.\n'
 fi
 
-printf '\nWipe + reinstall:\n'
+printf '\n%sWipe + reinstall%s\n' "${C_WHITE}${C_BOLD}" "${C_RESET}"
 printf '  cd %s && docker compose down -v\n' "$INSTALL_DIR"
-printf '  docker rm -f \$(docker ps -aq --filter name=azalea) 2>/dev/null || true\n'
+printf '  docker rm -f $(docker ps -aq --filter name=azalea) 2>/dev/null || true\n'
 printf '  rm -rf %s\n' "$INSTALL_DIR"
 printf '  curl -fsSL https://azalea.rexsystems.me/script.sh | bash\n'
 
-printf '\nUpdates:\n'
+printf '\n%sUpdates%s\n' "${C_WHITE}${C_BOLD}" "${C_RESET}"
 printf '  cd %s && docker compose pull && docker compose up -d\n\n' "$INSTALL_DIR"

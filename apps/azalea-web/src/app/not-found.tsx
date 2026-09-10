@@ -5,11 +5,11 @@ export default function NotFound() {
     <ErrorShell
       code="404"
       title="Page not found"
-      message="This URL does not exist or was moved. Check the address, or head back to the site."
-      primaryHref="/"
-      primaryLabel="Back home"
-      secondaryHref="/download"
-      secondaryLabel="Download Azalea"
+      message="This URL does not exist. Sign in or open your account."
+      primaryHref="/login"
+      primaryLabel="Sign in"
+      secondaryHref="/account"
+      secondaryLabel="Account"
     />
   );
 }
