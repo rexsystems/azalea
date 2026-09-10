@@ -9,6 +9,7 @@ import type {
   ImportResult,
   PortForwardStatus,
 } from "@azalea/shared";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ArrowLeftRight, Columns2, ExternalLink, FolderTree, SquareTerminal, Zap } from "./components/icons";
@@ -22,6 +23,13 @@ import { useConnectScreen } from "./hooks/useConnectScreen";
 import { useSyncStatus } from "./hooks/useSyncStatus";
 import { useTerminalSettings } from "./hooks/useTerminalSettings";
 import { useTheme } from "./hooks/useTheme";
+import {
+  flushCrashQueue,
+  flushPendingNativeCrash,
+  getTelemetryAsked,
+  maybeTelemetryPing,
+  setTelemetryEnabled,
+} from "./lib/telemetry";
 import { AddServerDrawer } from "./components/AddServerDrawer";
 import { AutoSyncPrompt } from "./components/AutoSyncPrompt";
 import { PostConnectSyncDialog } from "./components/PostConnectSyncDialog";
@@ -32,6 +40,7 @@ import { ConnectionScreen } from "./components/ConnectionScreen";
 import { ReconnectOverlay, type ReconnectInfo, type ReconnectPhase } from "./components/ReconnectOverlay";
 import { FileBrowserPanel } from "./components/FileBrowserPanel";
 import { FirstRunWizard } from "./components/FirstRunWizard";
+import { TelemetryConsentDialog } from "./components/TelemetryConsentDialog";
 import { ForwardsPopover } from "./components/ForwardsPopover";
 import { HomePage } from "./components/HomePage";
 import { HostsPage } from "./components/HostsPage";
@@ -170,6 +179,7 @@ function App() {
   const [autoSyncPrompt, setAutoSyncPrompt] = useState<{ email: string | null } | null>(null);
   const [autoSyncPreview, setAutoSyncPreview] = useState<api.SyncPreview | null>(null);
   const [autoSyncBusy, setAutoSyncBusy] = useState(false);
+  const [showTelemetryConsent, setShowTelemetryConsent] = useState(false);
 
   useEffect(() => {
     if (connectionError) setPendingConfirm(null);
@@ -190,6 +200,19 @@ function App() {
       }
     });
   }, [isMobile]);
+
+  useEffect(() => {
+    if (onboarded !== true) return;
+    if (!getTelemetryAsked()) {
+      setShowTelemetryConsent(true);
+      return;
+    }
+    void getVersion()
+      .then((version) => maybeTelemetryPing(version))
+      .catch(() => undefined);
+    void flushPendingNativeCrash();
+    void flushCrashQueue();
+  }, [onboarded]);
 
   const DEFAULT_COLS = 120;
   const DEFAULT_ROWS = 30;
@@ -2141,6 +2164,22 @@ function App() {
         accountKind={activeAccount?.kind ?? null}
         onAction={handleCommandPaletteAction}
       />
+
+      {showTelemetryConsent && onboarded === true && (
+        <TelemetryConsentDialog
+          onChoice={(enabled) => {
+            setTelemetryEnabled(enabled);
+            setShowTelemetryConsent(false);
+            if (enabled) {
+              void getVersion()
+                .then((version) => maybeTelemetryPing(version))
+                .catch(() => undefined);
+              void flushPendingNativeCrash();
+              void flushCrashQueue();
+            }
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={unknownHostKey !== null}

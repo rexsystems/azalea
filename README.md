@@ -102,7 +102,7 @@ azalea/
 - Unknown server keys require confirmation on first connect, and key changes must be approved before the saved fingerprint is replaced
 - Cloud vault is encrypted client-side (Argon2id + AES-256-GCM) before upload
 - The webview runs under a restrictive CSP and cannot read or write arbitrary files
-- No telemetry
+- Optional anonymous telemetry (off by default): daily install ping and short crash reports, no host or key data
 - Backup export files are **not** encrypted: they contain private keys and host passwords in plain text
 
 ## Contributing

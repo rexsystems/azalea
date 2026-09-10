@@ -21,6 +21,7 @@ import { SyncSection } from "./SyncSection";
 import { ImportSection } from "./ImportSection";
 import { UpdateSection } from "./UpdateSection";
 import type { AccountKind, SyncStatus } from "../lib/api";
+import { isTelemetryEnabled, setTelemetryEnabled } from "../lib/telemetry";
 
 type SettingsTab =
   | "appearance"
@@ -29,6 +30,7 @@ type SettingsTab =
   | "account"
   | "import"
   | "backup"
+  | "privacy"
   | "about";
 
 interface SettingsPageProps {
@@ -60,6 +62,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "account", label: "Account" },
   { id: "import", label: "Import" },
   { id: "backup", label: "Backup" },
+  { id: "privacy", label: "Privacy" },
   { id: "about", label: "About" },
 ];
 
@@ -143,6 +146,7 @@ export function SettingsPage({
   const { iconPack, changeIconPack } = useIconPack();
   const [tab, setTab] = useState<SettingsTab>("appearance");
   const [appVersion, setAppVersion] = useState("…");
+  const [telemetryOn, setTelemetryOn] = useState(() => isTelemetryEnabled());
 
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => setAppVersion("-"));
@@ -430,6 +434,24 @@ export function SettingsPage({
                     </p>
                   </div>
                 </SettingRow>
+              </>
+            )}
+
+            {tab === "privacy" && (
+              <>
+                <PanelHeader
+                  title="Privacy"
+                  description="Optional anonymous counts and crash reports. Off by default."
+                />
+                <SettingToggle
+                  label="Anonymous usage & crash reports"
+                  description="Daily install ping plus short crash reports (error kind, redacted message, app version, OS). No hostnames, emails, keys, or commands."
+                  checked={telemetryOn}
+                  onChange={(on) => {
+                    setTelemetryEnabled(on);
+                    setTelemetryOn(on);
+                  }}
+                />
               </>
             )}
 

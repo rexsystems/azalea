@@ -16,3 +16,5 @@ apps/desktop/src-tauri/gen/
 
 .private/
 .cursor/
+
+/azalea-telemetry

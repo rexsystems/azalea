@@ -1,4 +1,5 @@
 mod commands;
+mod crash_report;
 mod keys;
 mod models;
 mod sessions;
@@ -38,6 +39,9 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
+            if let Err(err) = crash_report::install_panic_hook(app.handle()) {
+                eprintln!("crash_report hook: {err}");
+            }
             let registry = accounts::init_accounts(&app.handle())?;
             let active = registry.lock().active().cloned();
             let active_id = active
@@ -127,6 +131,7 @@ pub fn run() {
             accounts::add_account,
             accounts::switch_account,
             accounts::remove_account,
+            crash_report::take_pending_crash,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
