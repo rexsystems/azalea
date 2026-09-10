@@ -8,6 +8,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();
 
   return [
-    { url: `${siteUrl}/login`, lastModified, changeFrequency: "monthly", priority: 0.8 },
+    { url: siteUrl, lastModified, changeFrequency: "weekly", priority: 1 },
+    { url: `${siteUrl}/download`, lastModified, changeFrequency: "weekly", priority: 0.9 },
+    { url: `${siteUrl}/self-host`, lastModified, changeFrequency: "weekly", priority: 0.85 },
   ];
 }

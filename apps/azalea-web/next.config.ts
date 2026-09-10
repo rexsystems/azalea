@@ -22,16 +22,13 @@ const publicEnv = loadPublicEnvFile();
 const nextConfig: NextConfig = {
   output: "export",
   images: { unoptimized: true },
-  turbopack: { root: path.resolve(__dirname) },
+  // Workspace install puts next at repo root.
+  turbopack: { root: path.join(__dirname, "../..") },
   env: {
-    NEXT_PUBLIC_AZALEA_API_URL:
-      process.env.NEXT_PUBLIC_AZALEA_API_URL ?? publicEnv.NEXT_PUBLIC_AZALEA_API_URL ?? "",
     NEXT_PUBLIC_SITE_URL:
       process.env.NEXT_PUBLIC_SITE_URL ?? publicEnv.NEXT_PUBLIC_SITE_URL ?? "",
     NEXT_PUBLIC_GITHUB_REPO:
       process.env.NEXT_PUBLIC_GITHUB_REPO ?? publicEnv.NEXT_PUBLIC_GITHUB_REPO ?? "",
-    NEXT_PUBLIC_TURNSTILE_SITE_KEY:
-      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? publicEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "",
   },
 };
 
