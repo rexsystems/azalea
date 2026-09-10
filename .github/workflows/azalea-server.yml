@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - "services/azalea-server/**"
+      - "apps/azalea-web/**"
       - ".github/workflows/azalea-server.yml"
   workflow_dispatch:
 
@@ -13,11 +14,11 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/azalea-server
-  PACKAGE_NAME: azalea-server
+  SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/azalea-server
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/azalea-web
 
 jobs:
-  docker:
+  docker-server:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -33,7 +34,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE }}
+          images: ${{ env.SERVER_IMAGE }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
@@ -49,8 +50,6 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.description=Azalea sync API (azalea-server)
 
-      # GITHUB_TOKEN often cannot change org package visibility (404).
-      # If this fails, set Public once in the UI (see docs/self-host.md).
       - name: Make GHCR package public
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -68,5 +67,58 @@ jobs:
             echo "::warning::Could not set GHCR package public via API."
             echo "Do this once: https://github.com/orgs/${OWNER}/packages/container/package/${NAME}"
             echo "Package settings -> Change visibility -> Public"
-            echo "Until then, install.sh falls back to building from source."
+          fi
+
+  docker-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.WEB_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/azalea-web
+          push: true
+          build-args: |
+            NEXT_PUBLIC_AZALEA_API_URL=/api
+            NEXT_PUBLIC_SITE_URL=
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=Azalea self-host web front (nginx + /api proxy)
+
+      - name: Make GHCR package public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          NAME="azalea-web"
+          set +e
+          out=$(gh api --method PUT \
+            -H "Accept: application/vnd.github+json" \
+            "/orgs/${OWNER}/packages/container/${NAME}/visibility" \
+            --input - <<<'{"visibility":"public"}' 2>&1)
+          rc=$?
+          echo "$out"
+          if [[ "$rc" -ne 0 ]]; then
+            echo "::warning::Could not set GHCR package public via API."
+            echo "Do this once: https://github.com/orgs/${OWNER}/packages/container/package/${NAME}"
+            echo "Package settings -> Change visibility -> Public"
           fi

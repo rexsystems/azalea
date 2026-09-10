@@ -2,8 +2,9 @@
 
 ## Fresh VPS (recommended): one script
 
-No git clone. Asks questions, writes compose/.env, builds from source, starts the
-server, creates the admin. Web dashboard is optional.
+No git clone. Asks questions, writes compose/.env, **pulls published Docker
+images**, starts the server, creates the admin. Web front is optional.
+Falls back to a local source build only if GHCR pull fails.
 
 ```bash
 curl -fsSL https://azalea.rexsystems.me/script.sh | bash
@@ -28,14 +29,28 @@ The script asks for:
 - public domain (optional)
 - admin email / password
 - Resend mail (optional)
-- whether you want the **optional** web dashboard (login / admin)
+- whether you want the **optional** web front on :80 (`/api` proxy)
 - bind to localhost vs public :9482
 
-Default install dir: `~/azalea`.
+Default install dir: `~/azalea` (or `/root/azalea` when run as root).
+
+## Wipe and reinstall from zero
+
+```bash
+cd ~/azalea   # or /root/azalea
+docker compose down -v
+docker rm -f $(docker ps -aq --filter name=azalea) 2>/dev/null || true
+docker image rm ghcr.io/rexsystems/azalea-server:latest ghcr.io/rexsystems/azalea-web:latest \
+  azalea-server:local azalea-web:local 2>/dev/null || true
+rm -rf ~/azalea   # or /root/azalea
+curl -fsSL https://azalea.rexsystems.me/script.sh | bash
+```
+
+`down -v` deletes the SQLite volume (users / vaults). Skip `-v` if you want to keep data.
 
 ## Admin without web UI (CLI)
 
-Web admin on azalea-web is optional. Prefer CLI on the server:
+Prefer CLI on the server:
 
 ```bash
 cd ~/azalea
@@ -86,20 +101,21 @@ EOF
 
 docker compose pull
 docker compose up -d
+# optional web on :80:
+# docker compose --profile web up -d
 curl -s http://127.0.0.1:9482/v1/health
 ```
 
-If you want anonymous `docker pull` from GHCR later (optional; installer builds from
-source by default):
+Images must be **Public** on GHCR for anonymous pull:
 
-1. Org must allow public packages:  
-   https://github.com/organizations/rexsystems/settings/packages  
+1. Org packages: https://github.com/organizations/rexsystems/settings/packages  
    Under **Package creation**, enable **Public**.
-2. Open the package (from the repo sidebar **Packages**, or  
-   https://github.com/orgs/rexsystems/packages?repo_name=azalea ).
-3. **Package settings** (right side) → scroll to **Danger Zone** → **Change visibility** → Public.
+2. Open each package:  
+   https://github.com/orgs/rexsystems/packages/container/package/azalea-server  
+   https://github.com/orgs/rexsystems/packages/container/package/azalea-web  
+3. **Package settings** → **Danger Zone** → **Change visibility** → Public.
 
-Until that is Public, `docker pull ghcr.io/rexsystems/azalea-server:latest` stays unauthorized. That is normal.
+Until then, `docker pull` stays unauthorized and the installer falls back to building from source.
 
 ### 3. HTTPS / Cloudflare
 
@@ -135,17 +151,10 @@ API URL in the app (no `/api` strip). Or tunnel into Caddy with `/api`.
 
 Add account -> Self-hosted -> `https://yourdomain.com` (or `http://IP:9482`).
 
-## Optional web dashboard (monorepo `apps/azalea-web`)
+## Optional web front (monorepo `apps/azalea-web`)
 
-Installer can build a **dashboard-only** UI (login / account / admin). No marketing
-landing. Point it at your API (Docker bake uses `/api` by default):
-
-```env
-NEXT_PUBLIC_AZALEA_API_URL=https://yourdomain.com/api
-NEXT_PUBLIC_SITE_URL=https://yourdomain.com
-```
-
-You do not need it to run sync. Users and first admin are handled by the installer / CLI.
+Installer can pull `ghcr.io/rexsystems/azalea-web:latest` on port 80. Nginx proxies
+`/api` to `azalea-server`. Sync itself does not need the web container.
 
 Public product site (landing, download): **https://azalea.rexsystems.me** (separate repo).
 

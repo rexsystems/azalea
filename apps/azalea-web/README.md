@@ -1,7 +1,9 @@
-﻿# Azalea Web (self-host dashboard)
+﻿# azalea-web (self-host front)
 
-Dashboard shipped with azalea-server installs: login, account, admin, and desktop
-`/authorize` handoff. **No marketing landing** (`/` → `/login`).
+Static Next export served by Nginx in Docker. Proxies `/api/` to
+`azalea-server`. Used by the self-host installer when you opt into the web front.
+
+Published image: `ghcr.io/rexsystems/azalea-web:latest`
 
 Public product site (landing / download / `script.sh`): separate repo
 `rexsystems/azalea-web` at https://azalea.rexsystems.me
@@ -9,17 +11,13 @@ Public product site (landing / download / `script.sh`): separate repo
 ## Local
 
 ```bash
-npm install
-cp .env.example .env.local
-npm run dev
+cd apps/azalea-web && npm install && npm run build
 ```
 
-## Docker (via install.sh)
+## Docker
 
-Built as `azalea-web:local`. Nginx serves the static export and proxies `/api/`
-to azalea-server.
-
-## Routes
-
-`/login` · `/signup` · `/forgot-password` · `/reset-password` ·
-`/account` · `/admin` · `/authorize`
+```bash
+docker build -t azalea-web:local \
+  --build-arg NEXT_PUBLIC_AZALEA_API_URL=/api \
+  .
+```

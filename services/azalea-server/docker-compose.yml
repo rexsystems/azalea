@@ -1,4 +1,4 @@
-# Fresh VPS - no source tree needed. Pulls the published image.
+# Fresh VPS - no source tree needed. Pulls published GHCR images.
 services:
   azalea-server:
     image: ghcr.io/rexsystems/azalea-server:latest
@@ -14,6 +14,16 @@ services:
       RUST_LOG: azalea_server=info,tower_http=info
     volumes:
       - azalea-data:/data
+    restart: unless-stopped
+
+  # Optional reverse-proxy UI on :80 (enable with: docker compose --profile web up -d)
+  azalea-web:
+    profiles: ["web"]
+    image: ghcr.io/rexsystems/azalea-web:latest
+    ports:
+      - "80:80"
+    depends_on:
+      - azalea-server
     restart: unless-stopped
 
 volumes:

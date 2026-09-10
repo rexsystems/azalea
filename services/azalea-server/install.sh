@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Interactive installer: azalea-server (+ optional web dashboard) on a fresh VPS.
-# Builds from the monorepo on GitHub.
+# Interactive installer: azalea-server (+ optional web) on a fresh VPS.
+# Prefers prebuilt GHCR images. Falls back to source build only if pull fails.
 set -euo pipefail
 
+SERVER_IMAGE="${AZALEA_SERVER_IMAGE:-ghcr.io/rexsystems/azalea-server:latest}"
+WEB_IMAGE="${AZALEA_WEB_IMAGE:-ghcr.io/rexsystems/azalea-web:latest}"
 REPO="${AZALEA_REPO:-https://github.com/rexsystems/azalea.git}"
 INSTALL_DIR="${AZALEA_INSTALL_DIR:-$HOME/azalea}"
 
 step=0
-total=8
+total=7
 
 progress() {
   step=$((step + 1))
@@ -71,6 +73,62 @@ write_compose() {
   local api_ports="$1"
   local want_web="$2"
   local web_ports="${3:-80:80}"
+  local mode="$4" # image | build
+
+  if [[ "$mode" == "image" ]]; then
+    if [[ "$want_web" -eq 1 ]]; then
+      cat > docker-compose.yml <<EOF
+services:
+  azalea-server:
+    image: ${SERVER_IMAGE}
+    env_file:
+      - .env
+    expose:
+      - "9482"
+    ports:
+      - "${api_ports}"
+    environment:
+      AZALEA_DATA_DIR: /data
+      AZALEA_BIND: 0.0.0.0:9482
+      RUST_LOG: azalea_server=info,tower_http=info
+    volumes:
+      - azalea-data:/data
+    restart: unless-stopped
+
+  azalea-web:
+    image: ${WEB_IMAGE}
+    ports:
+      - "${web_ports}"
+    depends_on:
+      - azalea-server
+    restart: unless-stopped
+
+volumes:
+  azalea-data:
+EOF
+    else
+      cat > docker-compose.yml <<EOF
+services:
+  azalea-server:
+    image: ${SERVER_IMAGE}
+    env_file:
+      - .env
+    ports:
+      - "${api_ports}"
+    environment:
+      AZALEA_DATA_DIR: /data
+      AZALEA_BIND: 0.0.0.0:9482
+      RUST_LOG: azalea_server=info,tower_http=info
+    volumes:
+      - azalea-data:/data
+    restart: unless-stopped
+
+volumes:
+  azalea-data:
+EOF
+    fi
+    return
+  fi
 
   if [[ "$want_web" -eq 1 ]]; then
     cat > docker-compose.yml <<EOF
@@ -154,6 +212,27 @@ fetch_build_context() {
   rm -rf "$tmp"
 }
 
+try_pull_images() {
+  local want_web="$1"
+  printf 'Pulling %s...\n' "$SERVER_IMAGE"
+  if ! docker pull "$SERVER_IMAGE"; then
+    printf 'Could not pull %s\n' "$SERVER_IMAGE" >&2
+    printf 'Make the GHCR package Public:\n' >&2
+    printf '  https://github.com/orgs/rexsystems/packages/container/package/azalea-server\n' >&2
+    return 1
+  fi
+  if [[ "$want_web" -eq 1 ]]; then
+    printf 'Pulling %s...\n' "$WEB_IMAGE"
+    if ! docker pull "$WEB_IMAGE"; then
+      printf 'Could not pull %s\n' "$WEB_IMAGE" >&2
+      printf 'Make the GHCR package Public:\n' >&2
+      printf '  https://github.com/orgs/rexsystems/packages/container/package/azalea-web\n' >&2
+      return 1
+    fi
+  fi
+  return 0
+}
+
 printf '\n== Azalea installer ==\n'
 printf 'Install dir: %s\n\n' "$INSTALL_DIR"
 
@@ -233,7 +312,7 @@ if [[ "$want_web" -eq 0 ]]; then
   fi
 fi
 
-progress "Writing .env and compose"
+progress "Writing .env"
 cat > .env <<EOF
 AZALEA_JWT_SECRET=${jwt_secret}
 RESEND_API_KEY=${resend_key}
@@ -242,19 +321,23 @@ AZALEA_PUBLIC_WEB_URL=${public_web_for_mail}
 EOF
 chmod 600 .env
 
-write_compose "$api_ports" "$want_web" "$web_ports"
-
-progress "Fetching source from GitHub"
-fetch_build_context "$want_web"
-
-progress "Building images (this can take a few minutes)"
-docker compose build
+progress "Pulling Docker images"
+install_mode="image"
+if try_pull_images "$want_web"; then
+  write_compose "$api_ports" "$want_web" "$web_ports" image
+  printf 'Using published images.\n'
+else
+  printf '\nFalling back to local image build from GitHub source...\n' >&2
+  install_mode="build"
+  write_compose "$api_ports" "$want_web" "$web_ports" build
+  fetch_build_context "$want_web"
+  docker compose build
+fi
 
 progress "Starting containers"
 if docker compose ps -q 2>/dev/null | grep -q .; then
   docker compose down >/dev/null 2>&1 || true
 fi
-# free common ports from leftover runs
 for p in 9482 80 8787; do
   if command -v ss >/dev/null 2>&1 && ss -ltn | grep -q ":${p} "; then
     docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | while read -r id name ports; do
@@ -293,14 +376,13 @@ else
 fi
 
 printf '\n== Done ==\n'
+printf 'Mode:        %s\n' "$install_mode"
 printf 'API:         http://127.0.0.1:9482/v1/health\n'
 printf 'Admin user:  %s\n' "$admin_email"
 printf 'Install dir: %s\n' "$INSTALL_DIR"
 
 if [[ "$want_web" -eq 1 ]]; then
   printf 'Web dashboard: http://YOUR_IP/  (or %s)\n' "${web_url}"
-  printf '  login:  /login\n'
-  printf '  admin:  /admin\n'
   printf 'Desktop self-host URL: http://YOUR_IP  (uses /api)\n'
 else
   printf 'Web dashboard: not installed (CLI only)\n'
@@ -317,6 +399,11 @@ if [[ -n "$domain" && "$want_web" -eq 1 ]]; then
   printf 'For HTTPS, put Caddy/Nginx in front or use Cloudflare.\n'
 fi
 
-printf '\nUpdates:\n'
+printf '\nWipe + reinstall:\n'
+printf '  cd %s && docker compose down -v\n' "$INSTALL_DIR"
+printf '  docker rm -f \$(docker ps -aq --filter name=azalea) 2>/dev/null || true\n'
+printf '  rm -rf %s\n' "$INSTALL_DIR"
 printf '  curl -fsSL https://azalea.rexsystems.me/script.sh | bash\n'
-printf '  # or: cd %s && bash <(curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/install.sh)\n\n' "$INSTALL_DIR"
+
+printf '\nUpdates:\n'
+printf '  cd %s && docker compose pull && docker compose up -d\n\n' "$INSTALL_DIR"
