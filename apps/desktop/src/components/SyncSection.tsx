@@ -168,6 +168,12 @@ export function SyncSection({
     }
   }, [refreshStatus, status]);
 
+  useEffect(() => {
+    if (status?.email && !loginEmail) {
+      setLoginEmail(status.email);
+    }
+  }, [status?.email]); // eslint-disable-line react-hooks/exhaustive-deps -- seed once from server email
+
   const applyOutcome = useCallback(
     async (outcome: api.SyncOutcome) => {
       switch (outcome.status) {
@@ -240,7 +246,7 @@ export function SyncSection({
 
   const handlePasswordLogin = () =>
     run("auth", async () => {
-      const email = (loginEmail.trim() || status?.email || "").trim();
+      const email = loginEmail.trim() || status?.email?.trim() || "";
       if (!email || !loginPassword) throw new Error("Email and password are required.");
       await api.syncPasswordLogin(email, loginPassword);
       setLoginPassword("");
@@ -322,6 +328,15 @@ export function SyncSection({
       );
     }
 
+    if (accountKind === "offline") {
+      return (
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          This profile is local only. Sync and sign-in are not used here. Add a Cloud or Self-hosted
+          account from the account switcher if you want sync.
+        </p>
+      );
+    }
+
     if (!status.logged_in) {
       const selfhost = accountKind === "selfhost";
       return (
@@ -342,7 +357,7 @@ export function SyncSection({
                 type="email"
                 autoComplete="username"
                 placeholder="Email"
-                value={loginEmail || status.email || ""}
+                value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
               />
               <input

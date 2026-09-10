@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Download, Upload } from "./icons";
+import { Download } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ThemeId } from "../lib/theme";
 import { themes } from "../lib/theme";
@@ -14,10 +14,18 @@ import { Button } from "./ui/Button";
 import { SettingToggle } from "./ui/SettingToggle";
 import { Slider } from "./ui/Slider";
 import { SyncSection } from "./SyncSection";
+import { ImportSection } from "./ImportSection";
 import { UpdateSection } from "./UpdateSection";
 import type { AccountKind, SyncStatus } from "../lib/api";
 
-type SettingsTab = "appearance" | "connect" | "terminal" | "account" | "backup" | "about";
+type SettingsTab =
+  | "appearance"
+  | "connect"
+  | "terminal"
+  | "account"
+  | "import"
+  | "backup"
+  | "about";
 
 interface SettingsPageProps {
   theme: ThemeId;
@@ -30,6 +38,7 @@ interface SettingsPageProps {
   onExportBackup: () => void;
   onImportBackup: () => void;
   onImportBackupReplace: () => void;
+  onImportDataRefresh?: () => Promise<void>;
   syncGetSettings: () => unknown;
   syncStatus: SyncStatus | null;
   onSyncStatusChange: (status: SyncStatus) => void;
@@ -45,6 +54,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "connect", label: "Connect" },
   { id: "terminal", label: "Terminal" },
   { id: "account", label: "Account" },
+  { id: "import", label: "Import" },
   { id: "backup", label: "Backup" },
   { id: "about", label: "About" },
 ];
@@ -116,6 +126,7 @@ export function SettingsPage({
   onExportBackup,
   onImportBackup,
   onImportBackupReplace,
+  onImportDataRefresh,
   syncGetSettings,
   syncStatus,
   onSyncStatusChange,
@@ -334,6 +345,21 @@ export function SettingsPage({
               </>
             )}
 
+            {tab === "import" && (
+              <>
+                <PanelHeader
+                  title="Import"
+                  description="Bring in keys and hosts from ~/.ssh, or restore from an Azalea backup / config file."
+                />
+                <ImportSection
+                  busy={backupBusy}
+                  onImportBackup={onImportBackup}
+                  onImportBackupReplace={onImportBackupReplace}
+                  onDataChanged={onImportDataRefresh ?? (async () => undefined)}
+                />
+              </>
+            )}
+
             {tab === "backup" && (
               <>
                 <PanelHeader
@@ -346,19 +372,9 @@ export function SettingsPage({
                       <Download size={16} />
                       Export Azalea backup
                     </Button>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button variant="secondary" disabled={backupBusy} onClick={onImportBackup}>
-                        <Upload size={16} />
-                        Import backup
-                      </Button>
-                      <Button
-                        variant="danger"
-                        disabled={backupBusy}
-                        onClick={onImportBackupReplace}
-                      >
-                        Replace &amp; import
-                      </Button>
-                    </div>
+                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      To import a backup or OpenSSH files, use the Import tab.
+                    </p>
                   </div>
                 </SettingRow>
               </>

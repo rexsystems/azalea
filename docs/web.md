@@ -1,42 +1,29 @@
-# Web app
+# Web apps
 
-Standalone repo: **https://github.com/rexsystems/azalea-web** (private) - deployed at
-**https://azalea.rexsystems.me** (Cloudflare Pages).
+## Self-host dashboard (this monorepo)
 
-Talks to **azalea-server** (`NEXT_PUBLIC_AZALEA_API_URL`).
-
-## Work from this monorepo
-
-The web app is linked locally via a **junction** (not committed). Clone `azalea-web`
-next to this repo, then:
-
-```powershell
-# From repo root (Windows)
-New-Item -ItemType Junction -Path apps\azalea-web -Target ..\azalea-web
-```
+[`apps/azalea-web`](../apps/azalea-web) is the **self-host dashboard** shipped by
+`install.sh`: login, account, admin, and desktop `/authorize` handoff.
+There is **no marketing landing** here (`/` redirects to `/login`).
 
 ```bash
 npm run dev:web
 cd apps/azalea-web && npm run build   # static export -> out/
 ```
 
-`apps/azalea-web/` is in `.gitignore`.
+Docker: nginx serves `out/` and proxies `/api/` to azalea-server.
 
-## Cloudflare Pages
+## Public marketing site
 
-| Setting | Value |
-|---|---|
-| Build command | `npm run build` |
-| Output directory | `out` |
-| Node.js | 22 |
+Standalone repo: **https://github.com/rexsystems/azalea-web** (private),
+deployed at **https://azalea.rexsystems.me** (Cloudflare Pages).
 
-Env: `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_AZALEA_API_URL`, optional
-`NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `NEXT_PUBLIC_GITHUB_REPO`,
-optional `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL`.
+That site keeps the landing page, download, pricing, and the short installer:
 
-## Download links
+```bash
+curl -fsSL https://azalea.rexsystems.me/script.sh | bash
+```
 
-- `/download` - latest installers via GitHub releases API
-- Set `NEXT_PUBLIC_WINDOWS_DOWNLOAD_URL` if the azalea repo stays private
+`script.sh` pulls `services/azalea-server/install.sh` from the monorepo on GitHub.
 
-Self-host API + setup: [self-host.md](./self-host.md).
+Self-host API: [self-host.md](./self-host.md).

@@ -979,9 +979,17 @@ function App() {
   );
 
   const handleSignInForSync = useCallback(() => {
+    if (activeAccount?.kind === "offline") return;
+
     setNavPage("settings");
     setViewingTerminal(false);
     setFocusSettingsSync(true);
+
+    if (activeAccount?.kind === "selfhost") {
+      setStatusMessage("Sign in with your self-hosted email and password in Account settings.");
+      return;
+    }
+
     void (async () => {
       try {
         setStatusMessage("Opening browser to sign in…");
@@ -993,7 +1001,7 @@ function App() {
         setStatusMessage(`Sign in failed: ${String(err).replace(/^Error:\s*/, "")}`);
       }
     })();
-  }, [refreshAccounts, refreshSyncStatus]);
+  }, [activeAccount?.kind, refreshAccounts, refreshSyncStatus]);
 
   const handlePasswordLogin = useCallback(
     async (email: string, password: string) => {
@@ -1535,6 +1543,7 @@ function App() {
             onExportBackup={() => void handleExportBackup()}
             onImportBackup={handleImportBackup}
             onImportBackupReplace={handleImportBackupReplace}
+            onImportDataRefresh={refreshSyncData}
             syncGetSettings={collectAppSettings}
             syncStatus={syncStatus}
             onSyncStatusChange={setSyncStatus}
@@ -2085,6 +2094,7 @@ function App() {
         keys={keys}
         isMobile={isMobile}
         signedIn={Boolean(syncStatus?.logged_in)}
+        accountKind={activeAccount?.kind ?? null}
         onAction={handleCommandPaletteAction}
       />
 

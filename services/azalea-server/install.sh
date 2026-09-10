@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Interactive installer: azalea-server (+ optional azalea-web UI) on a fresh VPS.
+# Interactive installer: azalea-server (+ optional web dashboard) on a fresh VPS.
 # Builds from the monorepo on GitHub.
 set -euo pipefail
 
@@ -204,7 +204,7 @@ if ask_yes_no "Configure Resend for password-reset emails?" "n"; then
 fi
 
 want_web=0
-if ask_yes_no "Install web UI too (login / admin in the browser)?" "y"; then
+if ask_yes_no "Install web dashboard too (browser login / admin)?" "y"; then
   want_web=1
 fi
 
@@ -298,12 +298,12 @@ printf 'Admin user:  %s\n' "$admin_email"
 printf 'Install dir: %s\n' "$INSTALL_DIR"
 
 if [[ "$want_web" -eq 1 ]]; then
-  printf 'Web UI:      http://YOUR_IP/  (or %s)\n' "${web_url}"
+  printf 'Web dashboard: http://YOUR_IP/  (or %s)\n' "${web_url}"
   printf '  login:  /login\n'
   printf '  admin:  /admin\n'
   printf 'Desktop self-host URL: http://YOUR_IP  (uses /api)\n'
 else
-  printf 'Web UI:      not installed (CLI only)\n'
+  printf 'Web dashboard: not installed (CLI only)\n'
   printf 'Desktop self-host URL: http://YOUR_IP:9482\n'
 fi
 
@@ -318,4 +318,5 @@ if [[ -n "$domain" && "$want_web" -eq 1 ]]; then
 fi
 
 printf '\nUpdates:\n'
-printf '  cd %s && bash <(curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/install.sh)\n\n' "$INSTALL_DIR"
+printf '  curl -fsSL https://azalea.rexsystems.me/script.sh | bash\n'
+printf '  # or: cd %s && bash <(curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/install.sh)\n\n' "$INSTALL_DIR"

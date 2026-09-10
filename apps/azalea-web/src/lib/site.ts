@@ -6,10 +6,10 @@ export function getSiteUrl(): string {
 
 export const SITE_NAME = "Azalea";
 
-export const SITE_TAGLINE = "Open-source SSH terminal client for Windows, Linux, and macOS";
+export const SITE_TAGLINE = "Self-hosted sync dashboard";
 
 export const SITE_DESCRIPTION =
-  "Azalea is a modern open-source SSH client and terminal for Windows, Linux, and macOS. Multi-tab SSH, SFTP, port forwarding, SSH key manager, local terminal, and zero-knowledge encrypted sync.";
+  "Azalea self-hosted account and admin dashboard for your sync server.";
 
 export const SITE_KEYWORDS = [
   "SSH client",

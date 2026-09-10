@@ -273,6 +273,30 @@ fn record_from_private_key(
     })
 }
 
+/// Key type + fingerprint without storing anything (for ~/.ssh scans).
+pub fn peek_private_key_meta(
+    pem: &str,
+    passphrase: Option<&str>,
+) -> anyhow::Result<(String, String)> {
+    let private_key = parse_private_key(pem, passphrase)?;
+    let public_key = private_key.public_key();
+    let fingerprint = public_key.fingerprint(HashAlg::Sha256).to_string();
+    let key_type = algorithm_label(&private_key.algorithm());
+    Ok((key_type, fingerprint))
+}
+
+pub fn private_key_needs_passphrase(pem: &str) -> bool {
+    match parse_private_key(pem, None) {
+        Ok(_) => false,
+        Err(err) => {
+            let msg = err.to_string();
+            msg.contains("KEY_NEEDS_PASSPHRASE")
+                || msg.to_lowercase().contains("passphrase")
+                || msg.to_lowercase().contains("encrypted")
+        }
+    }
+}
+
 fn store_private_key_material(id: &str, private_key: &PrivateKey, original_pem: &str) -> anyhow::Result<()> {
     match private_key.to_openssh(LineEnding::LF) {
         Ok(openssh) => keyring::store_private_key(id, &openssh),

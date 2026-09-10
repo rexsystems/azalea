@@ -7,7 +7,7 @@ mod sync;
 
 use crate::commands::{
     accounts, backup, files, forwards, groups, hosts, keys as key_commands, known_hosts,
-    local_terminal, sftp, snippets, ssh as ssh_commands, sync as sync_commands, wol,
+    local_terminal, sftp, snippets, ssh as ssh_commands, ssh_import, sync as sync_commands, wol,
 };
 use sessions::{init_local_terminal_manager, init_session_manager};
 use store::init_database;
@@ -76,6 +76,8 @@ pub fn run() {
             key_commands::delete_key,
             key_commands::export_private_key,
             key_commands::install_public_key,
+            ssh_import::scan_ssh_dir,
+            ssh_import::import_ssh_dir,
             ssh_commands::prepare_ssh,
             ssh_commands::start_ssh,
             ssh_commands::reconnect_ssh,

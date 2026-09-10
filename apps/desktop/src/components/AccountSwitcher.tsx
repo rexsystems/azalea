@@ -226,12 +226,13 @@ export function AccountSwitcher({
       setBusy(true);
       setError(null);
       if (active?.kind === "selfhost") {
+        const loginEmail = email.trim() || displayEmail || "";
         if (onPasswordLogin) {
-          await onPasswordLogin(email.trim() || displayEmail || "", password);
+          await onPasswordLogin(loginEmail, password);
         } else {
-          await api.syncPasswordLogin(email.trim() || displayEmail || "", password);
+          await api.syncPasswordLogin(loginEmail, password);
         }
-      } else if (onSignIn) {
+      } else if (active?.kind === "cloud" && onSignIn) {
         onSignIn();
         close();
         return;
@@ -554,7 +555,7 @@ export function AccountSwitcher({
                         className={fieldClass}
                         style={fieldStyle}
                         type="email"
-                        value={email || displayEmail || ""}
+                        value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         autoFocus
                       />
@@ -570,7 +571,9 @@ export function AccountSwitcher({
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && password) void finishReauth();
+                          if (e.key === "Enter" && (email.trim() || displayEmail) && password) {
+                            void finishReauth();
+                          }
                         }}
                       />
                     </label>
@@ -588,7 +591,7 @@ export function AccountSwitcher({
                       {busy ? "Reconnecting…" : "Reconnect"}
                     </button>
                   </>
-                ) : (
+                ) : active?.kind === "cloud" ? (
                   <button
                     type="button"
                     disabled={busy}
@@ -600,6 +603,10 @@ export function AccountSwitcher({
                   >
                     Sign in with browser
                   </button>
+                ) : (
+                  <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+                    This profile is local only. Switch to Cloud or Self-hosted to connect an account.
+                  </p>
                 )}
               </div>
             ) : (
@@ -753,7 +760,7 @@ export function AccountSwitcher({
                     <User size={14} />
                     Account settings
                   </button>
-                  {authDisconnected ? (
+                  {authDisconnected && active?.kind !== "offline" ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -768,10 +775,10 @@ export function AccountSwitcher({
                       <AlertTriangle size={14} />
                       Reconnect
                     </button>
-                  ) : (
-                    onSignIn &&
+                  ) : null}
+                  {!authDisconnected &&
                     !syncStatus?.logged_in &&
-                    active?.kind !== "offline" && (
+                    (active?.kind === "cloud" || active?.kind === "selfhost") && (
                       <button
                         type="button"
                         onClick={() => {
@@ -782,17 +789,25 @@ export function AccountSwitcher({
                             setStep("reauth");
                             return;
                           }
+                          if (!onSignIn) return;
                           close();
                           onSignIn();
                         }}
-                        className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-ui hover-subtle"
-                        style={{ color: "var(--text-secondary)" }}
+                        className="home-action-primary mx-1.5 mb-1 mt-0.5 flex w-[calc(100%-0.75rem)] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium"
                       >
-                        <Globe size={14} />
-                        Sign in
+                        {active?.kind === "selfhost" ? (
+                          <>
+                            <Server size={14} />
+                            Connect account
+                          </>
+                        ) : (
+                          <>
+                            <Globe size={14} />
+                            Sign in with browser
+                          </>
+                        )}
                       </button>
-                    )
-                  )}
+                    )}
                 </div>
               </>
             )}

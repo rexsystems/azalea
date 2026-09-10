@@ -464,3 +464,54 @@ export function switchAccount(id: string): Promise<AccountRecord> {
 export function removeAccount(id: string): Promise<AccountRecord> {
   return invoke("remove_account", { id });
 }
+
+export interface SshDirKeyCandidate {
+  path: string;
+  name: string;
+  key_type: string | null;
+  fingerprint: string | null;
+  encrypted: boolean;
+  already_imported: boolean;
+}
+
+export interface SshDirHostCandidate {
+  name: string;
+  hostname: string;
+  port: number;
+  username: string;
+  identity_file: string | null;
+  already_imported: boolean;
+}
+
+export interface SshDirScanResult {
+  ssh_dir: string;
+  exists: boolean;
+  keys: SshDirKeyCandidate[];
+  hosts: SshDirHostCandidate[];
+}
+
+export interface ImportSshDirResult {
+  keys_imported: number;
+  keys_skipped: number;
+  keys_failed: string[];
+  hosts_imported: number;
+  hosts_skipped: number;
+}
+
+export function scanSshDir(): Promise<SshDirScanResult> {
+  return invoke("scan_ssh_dir");
+}
+
+export function importSshDir(input: {
+  key_paths: string[];
+  hosts: SshDirHostCandidate[];
+  passphrase?: string | null;
+}): Promise<ImportSshDirResult> {
+  return invoke("import_ssh_dir", {
+    input: {
+      key_paths: input.key_paths,
+      hosts: input.hosts,
+      passphrase: input.passphrase ?? null,
+    },
+  });
+}

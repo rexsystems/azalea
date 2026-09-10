@@ -10,5 +10,6 @@ pub mod local_terminal;
 pub mod sftp;
 pub mod snippets;
 pub mod ssh;
+pub mod ssh_import;
 pub mod sync;
 pub mod wol;

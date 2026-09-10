@@ -31,6 +31,8 @@ interface CommandPaletteProps {
   keys: SshKey[];
   isMobile?: boolean;
   signedIn?: boolean;
+  /** Active account kind; sign-in is hidden for offline. */
+  accountKind?: "cloud" | "selfhost" | "offline" | null;
   onAction: (id: CommandPaletteActionId) => void;
 }
 
@@ -60,12 +62,23 @@ export function CommandPalette({
   keys,
   isMobile = false,
   signedIn = false,
+  accountKind = null,
   onAction,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const canSignIn =
+    !signedIn && (accountKind === "cloud" || accountKind === "selfhost");
+  const signInLabel =
+    accountKind === "selfhost" ? "Connect self-hosted account" : "Sign in with browser";
+  const signInDescription =
+    accountKind === "selfhost"
+      ? "Email and password for your sync server"
+      : "Open the browser to link Azalea Cloud";
+
 
   const items = useMemo<CommandItem[]>(() => {
     const nav: CommandItem[] = [
@@ -132,15 +145,15 @@ export function CommandPalette({
             },
           ]
         : []),
-      ...(!signedIn
+      ...(canSignIn
         ? [
             {
               id: "action-sign-in" as const,
-              label: "Sign in",
-              description: "Cloud sync account",
+              label: signInLabel,
+              description: signInDescription,
               group: "Actions",
               icon: Settings,
-              keywords: "login sync account",
+              keywords: "login sync account connect browser",
             },
           ]
         : []),
@@ -165,7 +178,7 @@ export function CommandPalette({
     }));
 
     return [...nav, ...actions, ...hostItems, ...keyItems];
-  }, [hosts, keys, isMobile, signedIn]);
+  }, [hosts, keys, isMobile, canSignIn, signInLabel, signInDescription]);
 
   const filtered = useMemo(
     () => items.filter((item) => matches(item, query.trim())),

@@ -127,15 +127,20 @@ async fn wait_for_callback(listener: TcpListener, expected_state: &str) -> anyho
             Some(payload)
                 if payload.state == expected_state && !payload.refresh_token.is_empty() =>
             {
-                payload.refresh_token
+                Some(payload.refresh_token)
             }
             _ => {
                 let _ = stream
                     .write_all(json_response("400 Bad Request", r#"{"ok":false}"#).as_bytes())
                     .await;
                 let _ = stream.shutdown().await;
-                anyhow::bail!("Login handshake failed (state mismatch or missing token).");
+                // Keep waiting for a valid callback instead of aborting the whole handshake.
+                None
             }
+        };
+
+        let Some(refresh) = refresh else {
+            continue;
         };
 
         let _ = stream

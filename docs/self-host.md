@@ -2,8 +2,14 @@
 
 ## Fresh VPS (recommended): one script
 
-No git clone. Asks questions, writes compose/.env, pulls the image, starts the
-server, creates the admin. Web UI is optional.
+No git clone. Asks questions, writes compose/.env, builds from source, starts the
+server, creates the admin. Web dashboard is optional.
+
+```bash
+curl -fsSL https://azalea.rexsystems.me/script.sh | bash
+```
+
+Or straight from GitHub:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/install.sh | bash
@@ -22,7 +28,7 @@ The script asks for:
 - public domain (optional)
 - admin email / password
 - Resend mail (optional)
-- whether you want the **optional** azalea-web UI
+- whether you want the **optional** web dashboard (login / admin)
 - bind to localhost vs public :9482
 
 Default install dir: `~/azalea`.
@@ -129,10 +135,10 @@ API URL in the app (no `/api` strip). Or tunnel into Caddy with `/api`.
 
 Add account -> Self-hosted -> `https://yourdomain.com` (or `http://IP:9482`).
 
-## Optional web UI (azalea-web)
+## Optional web dashboard (monorepo `apps/azalea-web`)
 
-Keep azalea-web as the marketing / account site if you want browser login,
-admin pages, or password-reset links. Point it at your API:
+Installer can build a **dashboard-only** UI (login / account / admin). No marketing
+landing. Point it at your API (Docker bake uses `/api` by default):
 
 ```env
 NEXT_PUBLIC_AZALEA_API_URL=https://yourdomain.com/api
@@ -140,6 +146,8 @@ NEXT_PUBLIC_SITE_URL=https://yourdomain.com
 ```
 
 You do not need it to run sync. Users and first admin are handled by the installer / CLI.
+
+Public product site (landing, download): **https://azalea.rexsystems.me** (separate repo).
 
 ## Updates
 
