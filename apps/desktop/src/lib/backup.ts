@@ -11,10 +11,13 @@ import {
 } from "./settings";
 import type { ThemeId } from "./theme";
 import { getStoredTheme, setStoredTheme } from "./theme";
+import type { IconPackId } from "./iconPack";
+import { getStoredIconPack, setStoredIconPack } from "./iconPack";
 import * as api from "./api";
 
 export interface AppSettingsExport {
   theme: ThemeId;
+  iconPack?: IconPackId;
   connectScreen: ConnectScreenMode;
   terminalSettings: TerminalSettings;
   autoSync: boolean;
@@ -23,6 +26,7 @@ export interface AppSettingsExport {
 export function collectAppSettings(): AppSettingsExport {
   return {
     theme: getStoredTheme(),
+    iconPack: getStoredIconPack(),
     connectScreen: getStoredConnectScreen(),
     terminalSettings: getStoredTerminalSettings(),
     autoSync: getStoredAutoSync(),
@@ -31,6 +35,7 @@ export function collectAppSettings(): AppSettingsExport {
 
 export function applyAppSettings(settings: Partial<AppSettingsExport>) {
   if (settings.theme) setStoredTheme(settings.theme);
+  if (settings.iconPack) setStoredIconPack(settings.iconPack);
   if (settings.connectScreen) setStoredConnectScreen(settings.connectScreen);
   if (settings.terminalSettings) setStoredTerminalSettings(settings.terminalSettings);
   if (typeof settings.autoSync === "boolean") setStoredAutoSync(settings.autoSync);

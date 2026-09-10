@@ -16,6 +16,7 @@ export interface ThemeDefinition {
   id: ThemeId;
   name: string;
   preview: string;
+  experimental?: boolean;
 }
 
 export const themes: ThemeDefinition[] = [
@@ -38,6 +39,7 @@ const STORAGE_KEY = "azalea-theme";
 export function getStoredTheme(): ThemeId {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === "glossy") return "midnight";
+  if (stored === "fluent") return "dark";
   if (stored && themes.some((t) => t.id === stored)) {
     return stored as ThemeId;
   }

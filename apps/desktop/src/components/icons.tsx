@@ -1,136 +1,69 @@
-import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import type { CSSProperties } from "react";
-import {
-  Alert02Icon,
-  Add01Icon,
-  ArrowDown01Icon,
-  ArrowLeft01Icon,
-  ArrowLeftRightIcon,
-  ArrowUp01Icon,
-  Cancel01Icon,
-  CancelCircleIcon,
-  CheckmarkCircle02Icon,
-  ClipboardCopyIcon,
-  CloudUploadIcon,
-  ComputerTerminalIcon,
-  Delete03Icon,
-  Download01Icon,
-  DownloadCircle01Icon,
-  Edit02Icon,
-  ExternalLinkIcon,
-  File01Icon,
-  FileCodeIcon,
-  FileTextIcon,
-  FingerPrintScanIcon,
-  FloppyDiskIcon,
-  Folder01Icon,
-  FolderKeyIcon,
-  FolderOffIcon,
-  FolderTreeIcon,
-  Globe02Icon,
-  Home01Icon,
-  Key02Icon,
-  LayoutTwoColumnIcon,
-  Loading03Icon,
-  Logout01Icon,
-  MinusSignIcon,
-  NetworkIcon,
-  PlayIcon,
-  Refresh01Icon,
-  Search01Icon,
-  ServerStackIcon,
-  Settings01Icon,
-  SquareIcon,
-  SquareLock02Icon,
-  SquareTerminalIcon,
-  Tag01Icon,
-  Tick01Icon,
-  Upload04Icon,
-  UsbIcon,
-  UserIcon,
-  ZapIcon,
-} from "@hugeicons/core-free-icons";
+import type { JSX } from "react";
+import type { AppIconProps } from "./icons/types";
+import { hugeiconsPack, type IconName } from "./icons/hugeiconsPack";
+import { pixelartPack } from "./icons/pixelartPack";
+import { useIconPack } from "./IconPackProvider";
 
-export type AppIconProps = {
-  size?: number;
-  strokeWidth?: number;
-  className?: string;
-  color?: string;
-  style?: CSSProperties;
-};
+export type { AppIconProps };
+export type AppIcon = (props: AppIconProps) => JSX.Element;
 
-function makeIcon(icon: IconSvgElement, displayName: string) {
-  function Icon({
-    size = 16,
-    strokeWidth = 1.75,
-    className,
-    color = "currentColor",
-    style,
-  }: AppIconProps) {
-    return (
-      <HugeiconsIcon
-        icon={icon}
-        size={size}
-        strokeWidth={strokeWidth}
-        className={className}
-        color={color}
-        style={style}
-      />
-    );
+function makePackIcon(name: IconName, displayName: string): AppIcon {
+  function Icon(props: AppIconProps) {
+    const { iconPack } = useIconPack();
+    const Impl = iconPack === "pixelart" ? pixelartPack[name] : hugeiconsPack[name];
+    return <Impl {...props} />;
   }
   Icon.displayName = displayName;
   return Icon;
 }
 
-export type AppIcon = ReturnType<typeof makeIcon>;
-
-export const AlertTriangle = makeIcon(Alert02Icon, "AlertTriangle");
-export const ArrowLeft = makeIcon(ArrowLeft01Icon, "ArrowLeft");
-export const ArrowLeftRight = makeIcon(ArrowLeftRightIcon, "ArrowLeftRight");
-export const ArrowUp = makeIcon(ArrowUp01Icon, "ArrowUp");
-export const Check = makeIcon(CheckmarkCircle02Icon, "Check");
-export const ChevronDown = makeIcon(ArrowDown01Icon, "ChevronDown");
-export const ChevronUp = makeIcon(ArrowUp01Icon, "ChevronUp");
-export const Columns2 = makeIcon(LayoutTwoColumnIcon, "Columns2");
-export const Copy = makeIcon(ClipboardCopyIcon, "Copy");
-export const Download = makeIcon(Download01Icon, "Download");
-export const EthernetPort = makeIcon(UsbIcon, "EthernetPort");
-export const ExternalLink = makeIcon(ExternalLinkIcon, "ExternalLink");
-export const File = makeIcon(File01Icon, "File");
-export const FileCode = makeIcon(FileCodeIcon, "FileCode");
-export const FileKey = makeIcon(FolderKeyIcon, "FileKey");
-export const FileKey2 = makeIcon(DownloadCircle01Icon, "FileKey2");
-export const FileText = makeIcon(FileTextIcon, "FileText");
-export const Fingerprint = makeIcon(FingerPrintScanIcon, "Fingerprint");
-export const Folder = makeIcon(Folder01Icon, "Folder");
-export const FolderTree = makeIcon(FolderTreeIcon, "FolderTree");
-export const FolderX = makeIcon(FolderOffIcon, "FolderX");
-export const Globe = makeIcon(Globe02Icon, "Globe");
-export const HardDriveUpload = makeIcon(CloudUploadIcon, "HardDriveUpload");
-export const Home = makeIcon(Home01Icon, "Home");
-export const KeyRound = makeIcon(Key02Icon, "KeyRound");
-export const Loader2 = makeIcon(Loading03Icon, "Loader2");
-export const Lock = makeIcon(SquareLock02Icon, "Lock");
-export const LogOut = makeIcon(Logout01Icon, "LogOut");
-export const Minus = makeIcon(MinusSignIcon, "Minus");
-export const Network = makeIcon(NetworkIcon, "Network");
-export const Pencil = makeIcon(Edit02Icon, "Pencil");
-export const Play = makeIcon(PlayIcon, "Play");
-export const Plus = makeIcon(Add01Icon, "Plus");
-export const RefreshCw = makeIcon(Refresh01Icon, "RefreshCw");
-export const Save = makeIcon(FloppyDiskIcon, "Save");
-export const Search = makeIcon(Search01Icon, "Search");
-export const Server = makeIcon(ServerStackIcon, "Server");
-export const Settings = makeIcon(Settings01Icon, "Settings");
-export const Square = makeIcon(SquareIcon, "Square");
-export const SquareTerminal = makeIcon(SquareTerminalIcon, "SquareTerminal");
-export const Tag = makeIcon(Tag01Icon, "Tag");
-export const Tick = makeIcon(Tick01Icon, "Tick");
-export const TerminalSquare = makeIcon(ComputerTerminalIcon, "TerminalSquare");
-export const Trash2 = makeIcon(Delete03Icon, "Trash2");
-export const Upload = makeIcon(Upload04Icon, "Upload");
-export const User = makeIcon(UserIcon, "User");
-export const X = makeIcon(CancelCircleIcon, "X");
+export const AlertTriangle = makePackIcon("AlertTriangle", "AlertTriangle");
+export const ArrowLeft = makePackIcon("ArrowLeft", "ArrowLeft");
+export const ArrowLeftRight = makePackIcon("ArrowLeftRight", "ArrowLeftRight");
+export const ArrowUp = makePackIcon("ArrowUp", "ArrowUp");
+export const Check = makePackIcon("Check", "Check");
+export const ChevronDown = makePackIcon("ChevronDown", "ChevronDown");
+export const ChevronUp = makePackIcon("ChevronUp", "ChevronUp");
+export const Columns2 = makePackIcon("Columns2", "Columns2");
+export const Copy = makePackIcon("Copy", "Copy");
+export const Download = makePackIcon("Download", "Download");
+export const EthernetPort = makePackIcon("EthernetPort", "EthernetPort");
+export const ExternalLink = makePackIcon("ExternalLink", "ExternalLink");
+export const File = makePackIcon("File", "File");
+export const FileCode = makePackIcon("FileCode", "FileCode");
+export const FileKey = makePackIcon("FileKey", "FileKey");
+export const FileKey2 = makePackIcon("FileKey2", "FileKey2");
+export const FileText = makePackIcon("FileText", "FileText");
+export const Fingerprint = makePackIcon("Fingerprint", "Fingerprint");
+export const Folder = makePackIcon("Folder", "Folder");
+export const FolderTree = makePackIcon("FolderTree", "FolderTree");
+export const FolderX = makePackIcon("FolderX", "FolderX");
+export const Globe = makePackIcon("Globe", "Globe");
+export const HardDriveUpload = makePackIcon("HardDriveUpload", "HardDriveUpload");
+export const Home = makePackIcon("Home", "Home");
+export const KeyRound = makePackIcon("KeyRound", "KeyRound");
+export const Loader2 = makePackIcon("Loader2", "Loader2");
+export const Lock = makePackIcon("Lock", "Lock");
+export const LogOut = makePackIcon("LogOut", "LogOut");
+export const Minus = makePackIcon("Minus", "Minus");
+export const Network = makePackIcon("Network", "Network");
+export const Pencil = makePackIcon("Pencil", "Pencil");
+export const Play = makePackIcon("Play", "Play");
+export const Plus = makePackIcon("Plus", "Plus");
+export const RefreshCw = makePackIcon("RefreshCw", "RefreshCw");
+export const Save = makePackIcon("Save", "Save");
+export const Search = makePackIcon("Search", "Search");
+export const Server = makePackIcon("Server", "Server");
+export const Settings = makePackIcon("Settings", "Settings");
+export const Square = makePackIcon("Square", "Square");
+export const SquareTerminal = makePackIcon("SquareTerminal", "SquareTerminal");
+export const Tag = makePackIcon("Tag", "Tag");
+export const Tick = makePackIcon("Tick", "Tick");
+export const TerminalSquare = makePackIcon("TerminalSquare", "TerminalSquare");
+export const Trash2 = makePackIcon("Trash2", "Trash2");
+export const Upload = makePackIcon("Upload", "Upload");
+export const User = makePackIcon("User", "User");
+export const X = makePackIcon("X", "X");
 /** Plain X for window chrome (no circle). */
-export const WindowClose = makeIcon(Cancel01Icon, "WindowClose");
-export const Zap = makeIcon(ZapIcon, "Zap");
+export const WindowClose = makePackIcon("WindowClose", "WindowClose");
+export const Zap = makePackIcon("Zap", "Zap");

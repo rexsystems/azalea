@@ -84,7 +84,7 @@ export function HostsPage({
         {
           id: "connect",
           label: "Connect",
-          icon: <Play size={14} />,
+          icon: <Play size={16} />,
           onClick: () => onConnect(host),
         },
         ...(!isMobile && host.mac_address
@@ -92,7 +92,7 @@ export function HostsPage({
               {
                 id: "wake",
                 label: "Wake up",
-                icon: <Zap size={14} />,
+                icon: <Zap size={16} />,
                 onClick: () => onWakeHost(host),
               },
             ]
@@ -100,13 +100,13 @@ export function HostsPage({
         {
           id: "edit",
           label: "Edit",
-          icon: <Pencil size={14} />,
+          icon: <Pencil size={16} />,
           onClick: () => onEditHost(host),
         },
         {
           id: "add-to-group",
           label: host.group_id ? "Move to group…" : "Add to group…",
-          icon: <Tag size={14} />,
+          icon: <Tag size={16} />,
           onClick: () => setGroupPickHost(host),
         },
       ],
@@ -116,7 +116,7 @@ export function HostsPage({
         {
           id: "delete",
           label: "Delete",
-          icon: <Trash2 size={14} />,
+          icon: <Trash2 size={16} />,
           danger: true,
           onClick: () => onDeleteHost(host),
         },
@@ -132,7 +132,7 @@ export function HostsPage({
             {
               id: "add",
               label: "Add server",
-              icon: <Server size={14} />,
+              icon: <Server size={16} />,
               onClick: () => onAddServer(null),
             },
           ],
@@ -145,13 +145,13 @@ export function HostsPage({
           {
             id: "add",
             label: "Add server",
-            icon: <Server size={14} />,
+            icon: <Server size={16} />,
             onClick: () => onAddServer(group.id),
           },
           {
             id: "rename",
             label: "Rename",
-            icon: <Pencil size={14} />,
+            icon: <Pencil size={16} />,
             onClick: () => onRenameGroup(group),
           },
         ],
@@ -161,7 +161,7 @@ export function HostsPage({
           {
             id: "del",
             label: "Delete group",
-            icon: <Trash2 size={14} />,
+            icon: <Trash2 size={16} />,
             danger: true,
             onClick: () => onDeleteGroup(group),
           },
@@ -182,13 +182,13 @@ export function HostsPage({
               {
                 id: "add-server",
                 label: "New Host",
-                icon: <Server size={14} />,
+                icon: <Server size={16} />,
                 onClick: () => onAddServer(),
               },
               {
                 id: "add-group",
                 label: "New Group",
-                icon: <Folder size={14} />,
+                icon: <Folder size={16} />,
                 onClick: onAddGroup,
               },
             ],

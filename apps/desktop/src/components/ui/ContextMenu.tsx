@@ -73,7 +73,7 @@ export function ContextMenu({ x, y, sections, onClose }: ContextMenuProps) {
                 item.onClick();
                 onClose();
               }}
-              className="transition-ui flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-40"
+              className="transition-ui flex w-full cursor-pointer items-center gap-3 px-3.5 py-2.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-40"
               style={{
                 color: item.danger ? "var(--danger)" : "var(--text-secondary)",
               }}
@@ -91,7 +91,7 @@ export function ContextMenu({ x, y, sections, onClose }: ContextMenuProps) {
               }}
             >
               {item.icon && (
-                <span className="inline-flex w-4 shrink-0 items-center justify-center" aria-hidden>
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center" aria-hidden>
                   {item.icon}
                 </span>
               )}

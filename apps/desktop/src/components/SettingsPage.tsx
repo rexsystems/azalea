@@ -4,6 +4,10 @@ import { Download } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ThemeId } from "../lib/theme";
 import { themes } from "../lib/theme";
+import { iconPacks, type IconPackId } from "../lib/iconPack";
+import { useIconPack } from "./IconPackProvider";
+import { hugeiconsPack } from "./icons/hugeiconsPack";
+import { pixelartPack } from "./icons/pixelartPack";
 import {
   clampFontSize,
   connectScreenOptions,
@@ -136,6 +140,7 @@ export function SettingsPage({
   focusSync = false,
   onFocusSyncHandled,
 }: SettingsPageProps) {
+  const { iconPack, changeIconPack } = useIconPack();
   const [tab, setTab] = useState<SettingsTab>("appearance");
   const [appVersion, setAppVersion] = useState("…");
 
@@ -226,6 +231,17 @@ export function SettingsPage({
                               background: `linear-gradient(145deg, ${t.preview} 0%, color-mix(in srgb, ${t.preview} 55%, #000) 100%)`,
                             }}
                           >
+                            {t.experimental && (
+                              <span
+                                className="absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
+                                style={{
+                                  background: "color-mix(in srgb, var(--bg-base) 75%, transparent)",
+                                  color: "var(--text)",
+                                }}
+                              >
+                                Experimental
+                              </span>
+                            )}
                             {selected && (
                               <span
                                 className="absolute right-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
@@ -240,6 +256,43 @@ export function SettingsPage({
                           </div>
                           <div className="px-3 py-2.5 text-sm font-medium" style={{ color: "var(--text)" }}>
                             {t.name}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </SettingRow>
+
+                <SettingRow
+                  label="Icons"
+                  description="Switch the app icon pack. Pixelarticons is experimental."
+                >
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {iconPacks.map((pack) => {
+                      const selected = iconPack === pack.id;
+                      const Preview = pack.id === "pixelart" ? pixelartPack : hugeiconsPack;
+                      return (
+                        <button
+                          key={pack.id}
+                          type="button"
+                          onClick={() => changeIconPack(pack.id as IconPackId)}
+                          className="hover-subtle transition-ui rounded-xl border px-3.5 py-3.5 text-left"
+                          style={{
+                            background: selected ? "var(--accent-muted)" : "var(--bg-card)",
+                            borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
+                          }}
+                        >
+                          <div className="mb-2.5 flex items-center gap-2.5" style={{ color: "var(--text)" }}>
+                            <Preview.Home size={18} />
+                            <Preview.Server size={18} />
+                            <Preview.KeyRound size={18} />
+                            <Preview.Settings size={18} />
+                          </div>
+                          <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                            {pack.name}
+                          </div>
+                          <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                            {pack.description}
                           </div>
                         </button>
                       );

@@ -430,7 +430,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
       {
         id: "open",
         label: entry.is_dir ? "Open folder" : isLikelyTextFile(entry.name) ? "Edit" : "Download",
-        icon: entry.is_dir ? <Folder size={14} /> : isLikelyTextFile(entry.name) ? <Pencil size={14} /> : <Download size={14} />,
+        icon: entry.is_dir ? <Folder size={16} /> : isLikelyTextFile(entry.name) ? <Pencil size={16} /> : <Download size={16} />,
         onClick: () => openEntry(entry),
       },
     ];
@@ -439,14 +439,14 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
       items.push({
         id: "download",
         label: "Download",
-        icon: <Download size={14} />,
+        icon: <Download size={16} />,
         onClick: () => void downloadFile(entry),
       });
       if (isLikelyTextFile(entry.name)) {
         items.push({
           id: "edit",
           label: "Edit in panel",
-          icon: <Pencil size={14} />,
+          icon: <Pencil size={16} />,
           onClick: () => void openEditor(entry),
         });
       }
@@ -455,7 +455,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
     items.push({
       id: "copy-path",
       label: "Copy path",
-      icon: <Copy size={14} />,
+      icon: <Copy size={16} />,
       onClick: () => {
         void copyText(remote).then(() => setNotice("Path copied"));
       },
@@ -465,7 +465,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
       items.push({
         id: "cd",
         label: "cd in terminal",
-        icon: <TerminalSquare size={14} />,
+        icon: <TerminalSquare size={16} />,
         onClick: () => onCdTerminal(remote),
       });
     }
@@ -760,7 +760,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
                 }
               >
                 <Icon
-                  size={14}
+                  size={16}
                   className="shrink-0"
                   style={{ color: entry.is_dir ? "var(--accent)" : "var(--text-muted)" }}
                 />
