@@ -274,6 +274,13 @@ select.field option {
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
+.custom-select-label {
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: visible;
+}
+
 .custom-select-trigger:hover {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border-strong));
 }
@@ -298,7 +305,10 @@ select.field option {
   z-index: 30;
   top: calc(100% + 0.375rem);
   left: 0;
-  right: 0;
+  right: auto;
+  min-width: 100%;
+  width: max-content;
+  max-width: min(22rem, 90vw);
   margin: 0;
   padding: 0.375rem;
   list-style: none;
@@ -348,14 +358,63 @@ select.field option {
   opacity: 0.7;
 }
 
-@media (min-width: 540px) {
+.download-row {
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  padding: 1rem 1.1rem;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.download-row[data-detected="true"] {
+  border-color: var(--border-strong);
+  background: var(--bg-panel);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.download-row-icon {
+  display: flex;
+  height: 2.35rem;
+  width: 2.35rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.65rem;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+.download-pill {
+  border-radius: 0.35rem;
+  border: 1px solid var(--border-strong);
+  padding: 0.15rem 0.45rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.download-unavailable {
+  border-radius: 0.65rem;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  padding: 0.45rem 0.85rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+@media (min-width: 720px) {
   .linux-download-bar {
     flex-direction: row;
     align-items: stretch;
   }
 
   .linux-download-bar .custom-select {
-    flex: 1 1 14rem;
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 15.5rem;
   }
 
   .linux-download-btn {
@@ -364,7 +423,7 @@ select.field option {
   }
 }
 
-.approval-toggle {
+.approval-toggle.approval-toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.625rem;

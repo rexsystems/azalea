@@ -20,41 +20,35 @@ import {
   resolveMacosDownloadOptions,
   resolveWindowsDownload,
   formatReleaseVersion,
+  fileExtLabel,
   type LinuxDownloadOptions,
   type MacosDownloadOptions,
   type ReleaseAsset,
 } from "@/lib/downloads";
 import { CustomSelect } from "@/components/CustomSelect";
 
-type PlatformDownload = { url: string; version: string | null };
+type PlatformDownload = { url: string; version: string | null; direct: boolean };
 
 type LinuxFormatId = "rpm" | "deb" | "appimage";
 type MacArchId = "arm64" | "x64";
 
-function LinuxDownloadActions({
-  options,
-}: {
-  options: LinuxDownloadOptions;
-}) {
+function LinuxDownloadActions({ options }: { options: LinuxDownloadOptions }) {
   const versionLabel = formatReleaseVersion(options.version);
 
   const formats = [
     {
       id: "rpm" as const,
       label: "Fedora / RHEL / openSUSE",
-      ext: ".rpm",
       asset: options.rpm,
     },
     {
       id: "deb" as const,
       label: "Debian / Ubuntu",
-      ext: ".deb",
       asset: options.deb,
     },
     {
       id: "appimage" as const,
       label: "Universal AppImage",
-      ext: ".AppImage",
       asset: options.appimage,
     },
   ].filter((entry) => entry.asset);
@@ -88,7 +82,7 @@ function LinuxDownloadActions({
 
   if (formats.length === 0) {
     return (
-      <a href={RELEASES_PAGE} className="btn btn-primary w-full sm:w-auto" rel="noopener noreferrer">
+      <a href={RELEASES_PAGE} className="btn btn-primary w-full" rel="noopener noreferrer">
         <PlatformIcon platform="linux" size={16} />
         View releases
       </a>
@@ -96,6 +90,7 @@ function LinuxDownloadActions({
   }
 
   const current = formats.find((entry) => entry.id === selected) ?? formats[0];
+  const ext = fileExtLabel(current.asset!.name);
 
   return (
     <div className="linux-download-bar">
@@ -114,7 +109,7 @@ function LinuxDownloadActions({
         rel="noopener noreferrer"
       >
         <PlatformIcon platform="linux" size={16} />
-        <span>Download {current.ext}</span>
+        <span>Download {ext}</span>
         {versionLabel ? <span className="linux-download-version">{versionLabel}</span> : null}
       </a>
     </div>
@@ -130,6 +125,8 @@ function MacosDownloadActions({ options }: { options: MacosDownloadOptions }) {
   }
   if (options.x64 && options.x64.name !== options.arm64?.name) {
     arches.push({ id: "x64", label: "Intel", asset: options.x64 });
+  } else if (options.x64 && !options.arm64) {
+    arches.push({ id: "x64", label: "Intel", asset: options.x64 });
   }
 
   const [selected, setSelected] = useState<MacArchId>("arm64");
@@ -141,7 +138,7 @@ function MacosDownloadActions({ options }: { options: MacosDownloadOptions }) {
 
   if (arches.length === 0) {
     return (
-      <a href={RELEASES_PAGE} className="btn btn-primary w-full sm:w-auto" rel="noopener noreferrer">
+      <a href={RELEASES_PAGE} className="btn btn-primary w-full" rel="noopener noreferrer">
         <PlatformIcon platform="macos" size={16} />
         View releases
       </a>
@@ -149,6 +146,7 @@ function MacosDownloadActions({ options }: { options: MacosDownloadOptions }) {
   }
 
   const current = arches.find((entry) => entry.id === selected) ?? arches[0];
+  const ext = fileExtLabel(current.asset.name);
 
   return (
     <div className="linux-download-bar">
@@ -167,7 +165,7 @@ function MacosDownloadActions({ options }: { options: MacosDownloadOptions }) {
         rel="noopener noreferrer"
       >
         <PlatformIcon platform="macos" size={16} />
-        <span>Download .dmg</span>
+        <span>Download {ext}</span>
         {versionLabel ? <span className="linux-download-version">{versionLabel}</span> : null}
       </a>
     </div>
@@ -175,9 +173,10 @@ function MacosDownloadActions({ options }: { options: MacosDownloadOptions }) {
 }
 
 function platformDescription(id: PlatformId, available: boolean): string {
-  if (!available) return "Currently unavailable.";
-  if (id === "linux") return "Pick a package format for your distro, then download.";
-  if (id === "macos") return "Pick Apple Silicon or Intel, then download the DMG.";
+  if (!available) return "Not shipping yet.";
+  if (id === "linux") return "Choose .deb, .rpm, or AppImage.";
+  if (id === "macos") return "Apple Silicon or Intel build.";
+  if (id === "windows") return "Windows installer (.exe).";
   return "Ready to install.";
 }
 
@@ -191,122 +190,118 @@ export default function DownloadPage() {
     setDetected(detectPlatform());
 
     void resolveWindowsDownload().then((info) => {
-      setWindowsDownload({ url: info.url, version: info.version });
+      setWindowsDownload({ url: info.url, version: info.version, direct: info.direct });
     });
 
     void resolveLinuxDownloadOptions().then(setLinuxOptions);
     void resolveMacosDownloadOptions().then(setMacosOptions);
   }, []);
 
+  const desktopPlatforms = PLATFORMS.filter(
+    (p) => p.id === "windows" || p.id === "linux" || p.id === "macos",
+  );
+  const mobilePlatforms = PLATFORMS.filter((p) => p.id === "ios" || p.id === "android");
+
   return (
     <main className="min-h-screen">
       <SiteNav />
 
-      <section className="mx-auto max-w-2xl px-5 py-14 md:py-20">
-        <div className="mb-10 text-center">
+      <section className="mx-auto max-w-4xl px-5 py-12 md:py-16">
+        <div className="mb-8 md:mb-10">
+          <p
+            className="mb-2 text-xs uppercase tracking-[0.18em]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Install
+          </p>
           <h1
             className="text-3xl font-semibold tracking-tight md:text-4xl"
             style={{ fontFamily: "var(--font-display)" }}
           >
-            Download Azalea
+            Download
           </h1>
-          <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
-            Windows, Linux, and macOS.
+          <p className="mt-2 text-sm md:text-base" style={{ color: "var(--text-secondary)" }}>
+            Direct installers for Windows, Linux, and macOS.
+            {windowsDownload?.version || linuxOptions?.version || macosOptions?.version ? (
+              <>
+                {" "}
+                Latest{" "}
+                <span style={{ color: "var(--text)" }}>
+                  {formatReleaseVersion(
+                    windowsDownload?.version || linuxOptions?.version || macosOptions?.version || null,
+                  )}
+                </span>
+                .
+              </>
+            ) : null}
           </p>
         </div>
 
-        <div className="space-y-3">
-          {PLATFORMS.map((platform) => {
+        <div className="space-y-2.5">
+          {desktopPlatforms.map((platform) => {
             const isDetected = detected === platform.id;
 
             return (
               <div
                 key={platform.id}
-                className="rounded-xl border p-4 md:p-5"
-                style={{
-                  borderColor: isDetected ? "var(--border-strong)" : "var(--border)",
-                  background: isDetected ? "var(--bg-panel)" : "var(--bg-raised)",
-                }}
+                className="download-row"
+                data-detected={isDetected ? "true" : "false"}
               >
-                <div className="flex flex-col gap-4">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border"
-                      style={{ borderColor: "var(--border)", background: "var(--bg-panel)" }}
-                    >
-                      <PlatformIcon platform={platform.id} size={20} />
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="download-row-icon">
+                      <PlatformIcon platform={platform.id} size={18} />
                     </div>
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="font-medium">{platform.name}</h2>
-                        {isDetected && (
-                          <span
-                            className="rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide"
-                            style={{
-                              border: "1px solid var(--border-strong)",
-                              color: "var(--text-secondary)",
-                            }}
-                          >
-                            your device
-                          </span>
-                        )}
+                        <h2 className="text-[0.95rem] font-medium">{platform.name}</h2>
+                        {isDetected ? (
+                          <span className="download-pill">Your device</span>
+                        ) : null}
                       </div>
-                      <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                      <p className="mt-0.5 text-sm" style={{ color: "var(--text-muted)" }}>
                         {platformDescription(platform.id, platform.available)}
                       </p>
                     </div>
                   </div>
 
-                  <div className="w-full">
-                    {platform.available ? (
-                      platform.id === "linux" ? (
-                        linuxOptions ? (
-                          <LinuxDownloadActions options={linuxOptions} />
-                        ) : (
-                          <span className="btn btn-primary pointer-events-none w-full opacity-70">
-                            <Loader2 size={16} className="animate-spin" />
-                            Loading…
-                          </span>
-                        )
-                      ) : platform.id === "macos" ? (
-                        macosOptions ? (
-                          <MacosDownloadActions options={macosOptions} />
-                        ) : (
-                          <span className="btn btn-primary pointer-events-none w-full opacity-70">
-                            <Loader2 size={16} className="animate-spin" />
-                            Loading…
-                          </span>
-                        )
-                      ) : windowsDownload ? (
-                        <a
-                          href={windowsDownload.url}
-                          className="btn btn-primary w-full sm:w-auto"
-                          rel="noopener noreferrer"
-                        >
-                          <PlatformIcon platform={platform.id} size={16} />
-                          Download
-                          {windowsDownload.version && (
-                            <span className="text-xs opacity-70">
-                              {formatReleaseVersion(windowsDownload.version)}
-                            </span>
-                          )}
-                        </a>
+                  <div className="w-full shrink-0 lg:max-w-none lg:w-auto lg:min-w-[28rem]">
+                    {platform.id === "linux" ? (
+                      linuxOptions ? (
+                        <LinuxDownloadActions options={linuxOptions} />
                       ) : (
-                        <span className="btn btn-primary pointer-events-none w-full opacity-70 sm:w-auto">
+                        <span className="btn btn-primary pointer-events-none w-full opacity-70">
                           <Loader2 size={16} className="animate-spin" />
                           Loading…
                         </span>
                       )
-                    ) : (
-                      <span
-                        className="inline-flex w-full items-center justify-center rounded-xl border px-4 py-2.5 text-sm sm:w-auto"
-                        style={{
-                          borderColor: "var(--border)",
-                          color: "var(--text-muted)",
-                          background: "var(--bg-panel)",
-                        }}
+                    ) : platform.id === "macos" ? (
+                      macosOptions ? (
+                        <MacosDownloadActions options={macosOptions} />
+                      ) : (
+                        <span className="btn btn-primary pointer-events-none w-full opacity-70">
+                          <Loader2 size={16} className="animate-spin" />
+                          Loading…
+                        </span>
+                      )
+                    ) : windowsDownload ? (
+                      <a
+                        href={windowsDownload.url}
+                        className="btn btn-primary w-full"
+                        rel="noopener noreferrer"
                       >
-                        Currently unavailable
+                        <PlatformIcon platform={platform.id} size={16} />
+                        Download {fileExtLabel(windowsDownload.url)}
+                        {windowsDownload.version ? (
+                          <span className="text-xs opacity-70">
+                            {formatReleaseVersion(windowsDownload.version)}
+                          </span>
+                        ) : null}
+                      </a>
+                    ) : (
+                      <span className="btn btn-primary pointer-events-none w-full opacity-70">
+                        <Loader2 size={16} className="animate-spin" />
+                        Loading…
                       </span>
                     )}
                   </div>
@@ -316,17 +311,43 @@ export default function DownloadPage() {
           })}
         </div>
 
-        <p className="mt-8 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-          Installers are also on{" "}
+        <div className="mt-8 space-y-2.5">
+          <p
+            className="mb-1 text-xs uppercase tracking-[0.18em]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Coming later
+          </p>
+          {mobilePlatforms.map((platform) => (
+            <div key={platform.id} className="download-row" data-detected="false">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="download-row-icon">
+                    <PlatformIcon platform={platform.id} size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-[0.95rem] font-medium">{platform.name}</h2>
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                      Not available yet
+                    </p>
+                  </div>
+                </div>
+                <span className="download-unavailable">Soon</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-10 text-center text-xs" style={{ color: "var(--text-muted)" }}>
+          Also on{" "}
           <a
             href={RELEASES_PAGE}
-            className="underline transition-colors hover:text-white"
+            className="underline underline-offset-2 transition-colors hover:text-white"
             style={{ color: "var(--text-secondary)" }}
           >
             GitHub Releases
           </a>
-          . macOS builds are unsigned for Gatekeeper — right-click the app and choose Open the first
-          time.{" "}
+          . macOS builds are unsigned for Gatekeeper: right-click Open the first time.{" "}
           <Link
             href="/"
             className="transition-colors hover:text-white"

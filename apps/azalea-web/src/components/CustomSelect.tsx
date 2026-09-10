@@ -56,7 +56,7 @@ export function CustomSelect<T extends string>({
         aria-label={ariaLabel}
         onClick={() => setOpen((current) => !current)}
       >
-        <span className="truncate">{selected?.label ?? "Select…"}</span>
+        <span className="custom-select-label">{selected?.label ?? "Select…"}</span>
         <ChevronDown size={16} className={`custom-select-chevron${open ? " open" : ""}`} aria-hidden />
       </button>
 
@@ -76,7 +76,7 @@ export function CustomSelect<T extends string>({
                     setOpen(false);
                   }}
                 >
-                  <span className="truncate">{option.label}</span>
+                  <span className="custom-select-label">{option.label}</span>
                   {isSelected ? <Check size={14} aria-hidden /> : null}
                 </button>
               </li>
