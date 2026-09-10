@@ -50,23 +50,33 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.description=Azalea sync API (azalea-server)
 
-      - name: Make GHCR package public
+      - name: Ensure GHCR package is public
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Org packages default to private on first publish. GITHUB_TOKEN often
+          # cannot flip visibility; if this fails, set Public once in the UI.
+          # Re-pushing tags does NOT reset visibility once Public.
           OWNER="${{ github.repository_owner }}"
           NAME="azalea-server"
           set +e
-          out=$(gh api --method PUT \
+          status=$(gh api "orgs/${OWNER}/packages/container/${NAME}" --jq '.visibility' 2>/dev/null || echo unknown)
+          echo "Current visibility: ${status}"
+          if [[ "$status" == "public" ]]; then
+            echo "Already public."
+            exit 0
+          fi
+          out=$(gh api --method PATCH \
             -H "Accept: application/vnd.github+json" \
-            "/orgs/${OWNER}/packages/container/${NAME}/visibility" \
-            --input - <<<'{"visibility":"public"}' 2>&1)
+            "orgs/${OWNER}/packages/container/${NAME}" \
+            -f visibility=public 2>&1)
           rc=$?
           echo "$out"
           if [[ "$rc" -ne 0 ]]; then
-            echo "::warning::Could not set GHCR package public via API."
-            echo "Do this once: https://github.com/orgs/${OWNER}/packages/container/package/${NAME}"
-            echo "Package settings -> Change visibility -> Public"
+            echo "::warning::CI cannot make this package public (common for org packages)."
+            echo "Do this once (sticks across rebuilds):"
+            echo "  https://github.com/orgs/${OWNER}/packages/container/package/${NAME}"
+            echo "  Package settings -> Danger Zone -> Change visibility -> Public"
           fi
 
   docker-web:
@@ -104,21 +114,28 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.description=Azalea self-host web front (nginx + /api proxy)
 
-      - name: Make GHCR package public
+      - name: Ensure GHCR package is public
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           OWNER="${{ github.repository_owner }}"
           NAME="azalea-web"
           set +e
-          out=$(gh api --method PUT \
+          status=$(gh api "orgs/${OWNER}/packages/container/${NAME}" --jq '.visibility' 2>/dev/null || echo unknown)
+          echo "Current visibility: ${status}"
+          if [[ "$status" == "public" ]]; then
+            echo "Already public."
+            exit 0
+          fi
+          out=$(gh api --method PATCH \
             -H "Accept: application/vnd.github+json" \
-            "/orgs/${OWNER}/packages/container/${NAME}/visibility" \
-            --input - <<<'{"visibility":"public"}' 2>&1)
+            "orgs/${OWNER}/packages/container/${NAME}" \
+            -f visibility=public 2>&1)
           rc=$?
           echo "$out"
           if [[ "$rc" -ne 0 ]]; then
-            echo "::warning::Could not set GHCR package public via API."
-            echo "Do this once: https://github.com/orgs/${OWNER}/packages/container/package/${NAME}"
-            echo "Package settings -> Change visibility -> Public"
+            echo "::warning::CI cannot make this package public (common for org packages)."
+            echo "Do this once (sticks across rebuilds):"
+            echo "  https://github.com/orgs/${OWNER}/packages/container/package/${NAME}"
+            echo "  Package settings -> Danger Zone -> Change visibility -> Public"
           fi

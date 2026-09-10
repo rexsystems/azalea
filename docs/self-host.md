@@ -115,7 +115,13 @@ Images must be **Public** on GHCR for anonymous pull:
    https://github.com/orgs/rexsystems/packages/container/package/azalea-web  
 3. **Package settings** → **Danger Zone** → **Change visibility** → Public.
 
-Until then, `docker pull` stays unauthorized and the installer falls back to building from source.
+Notes:
+- Org packages start **private** on first publish. CI usually cannot flip that.
+- Rebuilding / pushing new tags does **not** flip a Public package back to private.
+- If it looks private again, you probably got a **new** package name (e.g. first
+  `azalea-web` publish) or the package was deleted and recreated.
+
+Until Public, `docker pull` stays unauthorized and the installer falls back to building from source.
 
 ### 3. HTTPS / Cloudflare
 
