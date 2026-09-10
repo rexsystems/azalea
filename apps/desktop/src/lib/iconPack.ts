@@ -9,12 +9,12 @@ export interface IconPackDefinition {
 export const iconPacks: IconPackDefinition[] = [
   {
     id: "hugeicons",
-    name: "Hugeicons",
+    name: "Simple Icons",
     description: "Default rounded stroke icons.",
   },
   {
     id: "pixelart",
-    name: "Pixelarticons",
+    name: "Pixel Icons",
     description: "Experimental 24×24 pixel set.",
   },
 ];

@@ -269,7 +269,7 @@ export function SettingsPage({
 
                 <SettingRow
                   label="Icons"
-                  description="Switch the app icon pack. Pixelarticons is experimental."
+                  description="Switch the app icon pack. Pixel Icons is experimental."
                 >
                   <div className="grid gap-3 sm:grid-cols-2">
                     {iconPacks.map((pack) => {
