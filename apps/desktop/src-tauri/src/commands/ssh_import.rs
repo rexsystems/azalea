@@ -109,6 +109,60 @@ fn expand_tilde(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
+/// OpenSSH configs (esp. copied from Windows) often use `\`; treat as `/`.
+fn normalize_ssh_path(path: &str) -> PathBuf {
+    let trimmed = path.trim().trim_matches('"').trim_matches('\'');
+    let unified = trimmed.replace('\\', "/");
+    expand_tilde(&unified)
+}
+
+fn path_lookup_keys(path: &Path) -> Vec<String> {
+    let mut keys = Vec::new();
+    let display = path.display().to_string();
+    keys.push(display.clone());
+    if let Ok(canon) = path.canonicalize() {
+        let c = canon.display().to_string();
+        if c != display {
+            keys.push(c);
+        }
+    }
+    keys
+}
+
+fn remember_path_key(
+    map: &mut std::collections::HashMap<String, String>,
+    path: &Path,
+    key_id: &str,
+) {
+    for k in path_lookup_keys(path) {
+        map.insert(k, key_id.to_string());
+    }
+}
+
+fn resolve_identity_key_id(
+    identity: &str,
+    path_to_key_id: &std::collections::HashMap<String, String>,
+) -> Option<String> {
+    let expanded = normalize_ssh_path(identity);
+    for k in path_lookup_keys(&expanded) {
+        if let Some(id) = path_to_key_id.get(&k) {
+            return Some(id.clone());
+        }
+    }
+    let want_name = expanded.file_name()?.to_str()?;
+    let mut by_name: Option<String> = None;
+    for (p, id) in path_to_key_id {
+        let candidate = normalize_ssh_path(p);
+        if candidate.as_path() == expanded.as_path() {
+            return Some(id.clone());
+        }
+        if candidate.file_name().and_then(|s| s.to_str()) == Some(want_name) {
+            by_name = Some(id.clone());
+        }
+    }
+    by_name
+}
+
 fn parse_config_hosts(config: &str) -> Vec<SshDirHostCandidate> {
     let mut out = Vec::new();
     let mut current_name: Option<String> = None;
@@ -172,7 +226,9 @@ fn parse_config_hosts(config: &str) -> Vec<SshDirHostCandidate> {
             "hostname" => current_hostname = Some(value),
             "user" => current_user = value,
             "port" => current_port = value.parse().unwrap_or(22),
-            "identityfile" => current_identity = Some(value),
+            "identityfile" => {
+                current_identity = Some(normalize_ssh_path(&value).display().to_string())
+            }
             _ => {}
         }
     }
@@ -283,86 +339,167 @@ pub fn import_ssh_dir(
     db: tauri::State<'_, SharedDatabase>,
     input: ImportSshDirInput,
 ) -> Result<ImportSshDirResult, String> {
-    let existing_keys = db.lock().list_keys().map_err(|e| e.to_string())?;
-    let existing_hosts = db.lock().list_hosts().map_err(|e| e.to_string())?;
-
     let mut keys_imported = 0usize;
     let mut keys_skipped = 0usize;
     let mut keys_failed = Vec::new();
     let mut path_to_key_id: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
 
-    for path_str in &input.key_paths {
-        let path = PathBuf::from(path_str);
-        let name = key_name_from_path(&path);
-        let contents = match fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(err) => {
-                keys_failed.push(format!("{name}: {err}"));
-                continue;
+    let ensure_key_for_path =
+        |path: &Path,
+         passphrase: Option<&str>,
+         path_to_key_id: &mut std::collections::HashMap<String, String>,
+         keys_imported: &mut usize,
+         keys_skipped: &mut usize,
+         keys_failed: &mut Vec<String>,
+         db: &SharedDatabase|
+         -> Option<String> {
+            for k in path_lookup_keys(path) {
+                if let Some(id) = path_to_key_id.get(&k) {
+                    return Some(id.clone());
+                }
             }
-        };
 
-        let passphrase = input.passphrase.as_deref();
-        let meta = match peek_private_key_meta(&contents, passphrase) {
-            Ok(m) => m,
-            Err(err) => {
-                keys_failed.push(format!("{name}: {err}"));
-                continue;
-            }
-        };
-        let fingerprint = meta.1;
-
-        if let Some(existing) = existing_keys.iter().find(|k| k.fingerprint == fingerprint) {
-            keys_skipped += 1;
-            path_to_key_id.insert(path_str.clone(), existing.id.clone());
-            continue;
-        }
-
-        match import_private_key(&name, &contents, passphrase) {
-            Ok(key) => {
-                if let Err(err) = db.lock().insert_key(&key) {
+            let name = key_name_from_path(path);
+            let contents = match fs::read_to_string(path) {
+                Ok(c) => c,
+                Err(err) => {
                     keys_failed.push(format!("{name}: {err}"));
+                    return None;
+                }
+            };
+
+            let meta = match peek_private_key_meta(&contents, passphrase) {
+                Ok(m) => m,
+                Err(err) => {
+                    keys_failed.push(format!("{name}: {err}"));
+                    return None;
+                }
+            };
+            let fingerprint = meta.1;
+
+            let existing_keys = match db.lock().list_keys() {
+                Ok(k) => k,
+                Err(err) => {
+                    keys_failed.push(format!("{name}: {err}"));
+                    return None;
+                }
+            };
+
+            if let Some(existing) = existing_keys.iter().find(|k| k.fingerprint == fingerprint) {
+                *keys_skipped += 1;
+                remember_path_key(path_to_key_id, path, &existing.id);
+                return Some(existing.id.clone());
+            }
+
+            match import_private_key(&name, &contents, passphrase) {
+                Ok(key) => {
+                    if let Err(err) = db.lock().insert_key(&key) {
+                        keys_failed.push(format!("{name}: {err}"));
+                        return None;
+                    }
+                    remember_path_key(path_to_key_id, path, &key.id);
+                    *keys_imported += 1;
+                    Some(key.id)
+                }
+                Err(err) => {
+                    keys_failed.push(format!("{name}: {err}"));
+                    None
+                }
+            }
+        };
+
+    let passphrase = input.passphrase.as_deref();
+    for path_str in &input.key_paths {
+        let path = normalize_ssh_path(path_str);
+        let _ = ensure_key_for_path(
+            &path,
+            passphrase,
+            &mut path_to_key_id,
+            &mut keys_imported,
+            &mut keys_skipped,
+            &mut keys_failed,
+            &db,
+        );
+    }
+
+    // Index every on-disk private key that already matches a vault fingerprint,
+    // so IdentityFile links work even when the key wasn't re-selected this run.
+    let ssh_dir = default_ssh_dir();
+    if ssh_dir.is_dir() {
+        let vault_keys = db.lock().list_keys().map_err(|e| e.to_string())?;
+        if let Ok(entries) = fs::read_dir(&ssh_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_file() {
                     continue;
                 }
-                path_to_key_id.insert(path_str.clone(), key.id.clone());
-                keys_imported += 1;
+                let file_name = path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("");
+                if skip_ssh_filename(file_name) {
+                    continue;
+                }
+                let Ok(contents) = fs::read_to_string(&path) else {
+                    continue;
+                };
+                if !looks_like_private_key(&contents) {
+                    continue;
+                }
+                let Ok((_, fp)) = peek_private_key_meta(&contents, passphrase)
+                    .or_else(|_| peek_private_key_meta(&contents, None))
+                else {
+                    continue;
+                };
+                if let Some(existing) = vault_keys.iter().find(|k| k.fingerprint == fp) {
+                    remember_path_key(&mut path_to_key_id, &path, &existing.id);
+                }
             }
-            Err(err) => keys_failed.push(format!("{name}: {err}")),
         }
     }
 
     let mut hosts_imported = 0usize;
     let mut hosts_skipped = 0usize;
+    let existing_hosts = db.lock().list_hosts().map_err(|e| e.to_string())?;
 
     for host in &input.hosts {
-        if existing_hosts.iter().any(|h| {
+        let mut key_id = None;
+        if let Some(identity) = &host.identity_file {
+            let identity_path = normalize_ssh_path(identity);
+            key_id = resolve_identity_key_id(identity, &path_to_key_id);
+            if key_id.is_none() && identity_path.is_file() {
+                key_id = ensure_key_for_path(
+                    &identity_path,
+                    passphrase,
+                    &mut path_to_key_id,
+                    &mut keys_imported,
+                    &mut keys_skipped,
+                    &mut keys_failed,
+                    &db,
+                );
+            }
+        }
+
+        if let Some(existing) = existing_hosts.iter().find(|h| {
             h.hostname.eq_ignore_ascii_case(&host.hostname)
                 && h.port == host.port
                 && h.username == host.username
         }) {
             hosts_skipped += 1;
-            continue;
-        }
-
-        let mut key_id = None;
-        if let Some(identity) = &host.identity_file {
-            let expanded = expand_tilde(identity);
-            let expanded_str = expanded.display().to_string();
-            key_id = path_to_key_id
-                .get(&expanded_str)
-                .cloned()
-                .or_else(|| path_to_key_id.get(identity).cloned());
-            if key_id.is_none() {
-                if let Some(file_name) = expanded.file_name().and_then(|s| s.to_str()) {
-                    for (p, id) in &path_to_key_id {
-                        if Path::new(p).file_name().and_then(|s| s.to_str()) == Some(file_name) {
-                            key_id = Some(id.clone());
-                            break;
-                        }
-                    }
+            // Repair prior imports that missed IdentityFile linking.
+            if existing.key_id.is_none() {
+                if let Some(kid) = key_id {
+                    let mut updated = existing.clone();
+                    updated.key_id = Some(kid);
+                    updated.auth_type = "key".to_string();
+                    updated.updated_at = chrono::Utc::now().timestamp();
+                    db.lock()
+                        .update_host(&updated)
+                        .map_err(|e| e.to_string())?;
                 }
             }
+            continue;
         }
 
         let now = chrono::Utc::now().timestamp();
@@ -386,6 +523,50 @@ pub fn import_ssh_dir(
             .insert_host(&record)
             .map_err(|e| e.to_string())?;
         hosts_imported += 1;
+    }
+
+    // Repair any vault host still missing a key when ~/.ssh/config has IdentityFile.
+    let config_path = default_ssh_dir().join("config");
+    if config_path.is_file() {
+        if let Ok(config) = fs::read_to_string(&config_path) {
+            let config_hosts = parse_config_hosts(&config);
+            let vault_hosts = db.lock().list_hosts().map_err(|e| e.to_string())?;
+            for ch in &config_hosts {
+                let Some(identity) = &ch.identity_file else {
+                    continue;
+                };
+                let Some(existing) = vault_hosts.iter().find(|h| {
+                    h.key_id.is_none()
+                        && h.hostname.eq_ignore_ascii_case(&ch.hostname)
+                        && h.port == ch.port
+                        && h.username == ch.username
+                }) else {
+                    continue;
+                };
+                let identity_path = normalize_ssh_path(identity);
+                let mut kid = resolve_identity_key_id(identity, &path_to_key_id);
+                if kid.is_none() && identity_path.is_file() {
+                    kid = ensure_key_for_path(
+                        &identity_path,
+                        passphrase,
+                        &mut path_to_key_id,
+                        &mut keys_imported,
+                        &mut keys_skipped,
+                        &mut keys_failed,
+                        &db,
+                    );
+                }
+                if let Some(kid) = kid {
+                    let mut updated = existing.clone();
+                    updated.key_id = Some(kid);
+                    updated.auth_type = "key".to_string();
+                    updated.updated_at = chrono::Utc::now().timestamp();
+                    db.lock()
+                        .update_host(&updated)
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+        }
     }
 
     Ok(ImportSshDirResult {

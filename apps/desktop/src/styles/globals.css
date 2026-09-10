@@ -331,6 +331,16 @@ textarea,
   border-radius: 999px;
 }
 
+/* Keep Import list scrollbars clipped inside the card radius. */
+.import-scroll {
+  overscroll-behavior: contain;
+}
+
+.import-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
 .xterm {
   width: 100%;
   padding: 0;

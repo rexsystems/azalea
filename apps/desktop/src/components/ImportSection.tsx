@@ -1,13 +1,30 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Folder, KeyRound, Loader2, Server, Upload } from "./icons";
 import * as api from "../lib/api";
 import { Button } from "./ui/Button";
+import { Checkbox } from "./ui/Checkbox";
 
 interface ImportSectionProps {
   busy?: boolean;
   onImportBackup: () => void;
   onImportBackupReplace: () => void;
   onDataChanged: () => Promise<void>;
+}
+
+function ScrollCard({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="relative isolate overflow-hidden rounded-xl border"
+      style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
+    >
+      <div
+        className="import-scroll max-h-48 space-y-0.5 overflow-y-auto overflow-x-hidden py-2 pl-2 pr-1.5"
+        style={{ scrollbarGutter: "stable" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
 export function ImportSection({
@@ -36,15 +53,11 @@ export function ImportSection({
       const result = await api.scanSshDir();
       setScan(result);
       setSelectedKeys(
-        new Set(
-          result.keys.filter((k) => !k.already_imported).map((k) => k.path),
-        ),
+        new Set(result.keys.filter((k) => !k.already_imported).map((k) => k.path)),
       );
       setSelectedHosts(
         new Set(
-          result.hosts
-            .filter((h) => !h.already_imported)
-            .map((h) => hostKey(h)),
+          result.hosts.filter((h) => !h.already_imported).map((h) => hostKey(h)),
         ),
       );
       if (!result.exists) {
@@ -65,10 +78,7 @@ export function ImportSection({
   }, [runScan]);
 
   const needsPassphrase = useMemo(
-    () =>
-      Boolean(
-        scan?.keys.some((k) => selectedKeys.has(k.path) && k.encrypted),
-      ),
+    () => Boolean(scan?.keys.some((k) => selectedKeys.has(k.path) && k.encrypted)),
     [scan, selectedKeys],
   );
 
@@ -154,35 +164,27 @@ export function ImportSection({
               <KeyRound size={14} />
               Keys ({scan.keys.length})
             </div>
-            <div
-              className="max-h-48 space-y-1 overflow-y-auto rounded-xl border p-2"
-              style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
-            >
-              {scan.keys.map((key) => (
-                <label
-                  key={key.path}
-                  className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-xs transition-ui hover-subtle"
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={selectedKeys.has(key.path)}
-                    disabled={key.already_imported || disabled}
+            <ScrollCard>
+              {scan.keys.map((key) => {
+                const checked = selectedKeys.has(key.path);
+                const rowDisabled = key.already_imported || disabled;
+                return (
+                  <Checkbox
+                    key={key.path}
+                    className="rounded-lg px-2 py-1.5 hover-subtle"
+                    label={`${key.name}${key.already_imported ? " (already imported)" : ""}${
+                      key.encrypted ? " (encrypted)" : ""
+                    }`}
+                    description={
+                      [key.key_type, key.fingerprint].filter(Boolean).join(" · ") || key.path
+                    }
+                    checked={checked}
+                    disabled={rowDisabled}
                     onChange={() => toggleKey(key.path)}
                   />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium" style={{ color: "var(--text)" }}>
-                      {key.name}
-                      {key.already_imported ? " (already imported)" : ""}
-                      {key.encrypted ? " (encrypted)" : ""}
-                    </span>
-                    <span className="block truncate" style={{ color: "var(--text-muted)" }}>
-                      {[key.key_type, key.fingerprint].filter(Boolean).join(" · ") || key.path}
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
+                );
+              })}
+            </ScrollCard>
           </div>
         )}
 
@@ -192,38 +194,26 @@ export function ImportSection({
               <Server size={14} />
               Config hosts ({scan.hosts.length})
             </div>
-            <div
-              className="max-h-48 space-y-1 overflow-y-auto rounded-xl border p-2"
-              style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
-            >
+            <ScrollCard>
               {scan.hosts.map((host) => {
                 const key = hostKey(host);
+                const checked = selectedHosts.has(key);
+                const rowDisabled = host.already_imported || disabled;
                 return (
-                  <label
+                  <Checkbox
                     key={key}
-                    className="flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-xs transition-ui hover-subtle"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={selectedHosts.has(key)}
-                      disabled={host.already_imported || disabled}
-                      onChange={() => toggleHost(key)}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium" style={{ color: "var(--text)" }}>
-                        {host.name}
-                        {host.already_imported ? " (already imported)" : ""}
-                      </span>
-                      <span className="block truncate" style={{ color: "var(--text-muted)" }}>
-                        {host.username}@{host.hostname}:{host.port}
-                        {host.identity_file ? ` · ${host.identity_file}` : ""}
-                      </span>
-                    </span>
-                  </label>
+                    className="rounded-lg px-2 py-1.5 hover-subtle"
+                    label={`${host.name}${host.already_imported ? " (already imported)" : ""}`}
+                    description={`${host.username}@${host.hostname}:${host.port}${
+                      host.identity_file ? ` · ${host.identity_file}` : ""
+                    }`}
+                    checked={checked}
+                    disabled={rowDisabled}
+                    onChange={() => toggleHost(key)}
+                  />
                 );
               })}
-            </div>
+            </ScrollCard>
           </div>
         )}
 

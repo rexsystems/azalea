@@ -44,6 +44,7 @@ import {
   SquareLock02Icon,
   SquareTerminalIcon,
   Tag01Icon,
+  Tick01Icon,
   Upload04Icon,
   UsbIcon,
   UserIcon,
@@ -124,6 +125,7 @@ export const Settings = makeIcon(Settings01Icon, "Settings");
 export const Square = makeIcon(SquareIcon, "Square");
 export const SquareTerminal = makeIcon(SquareTerminalIcon, "SquareTerminal");
 export const Tag = makeIcon(Tag01Icon, "Tag");
+export const Tick = makeIcon(Tick01Icon, "Tick");
 export const TerminalSquare = makeIcon(ComputerTerminalIcon, "TerminalSquare");
 export const Trash2 = makeIcon(Delete03Icon, "Trash2");
 export const Upload = makeIcon(Upload04Icon, "Upload");

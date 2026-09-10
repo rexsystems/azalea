@@ -304,7 +304,10 @@ export function AccountSwitcher({
           {syncStatus?.logged_in ? (
             <PlanBadge plan={syncStatus.plan} />
           ) : (
-            <span className="truncate text-[10px]" style={{ color: authDisconnected ? "var(--warning, #d97706)" : "var(--text-muted)" }}>
+            <span
+              className="truncate text-[10px] font-semibold"
+              style={{ color: authDisconnected ? "var(--warning, #d97706)" : "var(--text-muted)" }}
+            >
               {authDisconnected ? "Disconnected" : subtitle}
             </span>
           )}
@@ -683,7 +686,7 @@ export function AccountSwitcher({
                               )}
                             </span>
                             <span
-                              className="block truncate text-[10px]"
+                              className="block truncate text-[10px] font-semibold"
                               style={{ color: "var(--text-muted)" }}
                             >
                               {account.email
