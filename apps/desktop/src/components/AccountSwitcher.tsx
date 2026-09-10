@@ -37,6 +37,11 @@ interface AccountSwitcherProps {
     email: string;
     password: string;
   }) => void | Promise<void>;
+  onConnectSelfhostBrowser: (input: {
+    label: string;
+    base_url: string;
+    web_url: string;
+  }) => void | Promise<void>;
   onRemove: (id: string) => void | Promise<void>;
   onManage: () => void;
   onSignIn?: () => void;
@@ -73,6 +78,7 @@ export function AccountSwitcher({
   onSwitch,
   onAdd,
   onConnectSelfhost,
+  onConnectSelfhostBrowser,
   onRemove,
   onManage,
   onSignIn,
@@ -188,10 +194,24 @@ export function AccountSwitcher({
       setBusy(true);
       setError(null);
       const { base_url, web_url } = resolveSelfHostUrls(serverUrl);
-      const probe = await api.probeSelfhost(base_url);
+      const probe = await api.probeSelfhost({ baseUrl: base_url, webUrl: web_url });
       setResolvedBase(base_url);
-      setResolvedWeb(web_url);
+      setResolvedWeb(probe.has_web_ui ? probe.web_url ?? web_url : null);
       setInstanceName(probe.instance_name);
+
+      if (probe.has_web_ui && (probe.web_url || web_url)) {
+        const web = probe.web_url ?? web_url;
+        if (!web) throw new Error("Web UI URL missing.");
+        await onConnectSelfhostBrowser({
+          label: probe.instance_name,
+          base_url,
+          web_url: web,
+        });
+        resetSelfhostForm();
+        close();
+        return;
+      }
+
       setStep("selfhost-login");
     } catch (err) {
       setError(String(err).replace(/^Error:\s*/, ""));
@@ -226,6 +246,11 @@ export function AccountSwitcher({
       setBusy(true);
       setError(null);
       if (active?.kind === "selfhost") {
+        if (active.web_url) {
+          close();
+          onSignIn?.();
+          return;
+        }
         const loginEmail = email.trim() || displayEmail || "";
         if (onPasswordLogin) {
           await onPasswordLogin(loginEmail, password);
@@ -463,6 +488,9 @@ export function AccountSwitcher({
                     Sign in
                   </span>
                 </div>
+                <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                  No web dashboard on this server. Sign in with email and password.
+                </p>
                 <div
                   className="rounded-lg border px-2.5 py-2"
                   style={{ borderColor: "var(--border-subtle)", background: "var(--bg-input)" }}
@@ -548,7 +576,19 @@ export function AccountSwitcher({
                 <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
                   Account on {active?.label ?? "this profile"} was disconnected. Sign in again.
                 </p>
-                {active?.kind === "selfhost" ? (
+                {active?.kind === "selfhost" && active.web_url ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      close();
+                      onSignIn?.();
+                    }}
+                    className="home-action-primary transition-ui w-full rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
+                  >
+                    Sign in with browser
+                  </button>
+                ) : active?.kind === "selfhost" ? (
                   <>
                     <label className="block space-y-1">
                       <span className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
@@ -785,7 +825,7 @@ export function AccountSwitcher({
                       <button
                         type="button"
                         onClick={() => {
-                          if (active?.kind === "selfhost") {
+                          if (active?.kind === "selfhost" && !active.web_url) {
                             setError(null);
                             setEmail(displayEmail ?? "");
                             setPassword("");
@@ -798,7 +838,7 @@ export function AccountSwitcher({
                         }}
                         className="home-action-primary mx-1.5 mb-1 mt-0.5 flex w-[calc(100%-0.75rem)] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium"
                       >
-                        {active?.kind === "selfhost" ? (
+                        {active?.kind === "selfhost" && !active.web_url ? (
                           <>
                             <Server size={14} />
                             Connect account

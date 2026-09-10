@@ -1,4 +1,4 @@
-import { HostMark, hostMarkAccent } from "./HostMark";
+import { HelpCircle } from "./icons";
 
 interface HostOsIconProps {
   osId?: string | null;
@@ -127,27 +127,50 @@ function resolveIcon(osId: string): { key: string; src: string } | null {
   return { key, src };
 }
 
-/** Accent that matches the connect-screen avatar (OS brand or HostMark). */
-export function hostConnectAccent(osId: string | null | undefined, seed: string): string {
+function UnknownHostIcon({ size, rounded }: { size: number; rounded: number }) {
+  const iconSize = Math.max(22, Math.round(size * 0.52));
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: rounded,
+        background: "var(--bg-input)",
+        boxShadow: "inset 0 0 0 1px var(--border-subtle)",
+        color: "var(--text-muted)",
+      }}
+      title="Unknown host"
+      aria-label="Unknown host"
+    >
+      <HelpCircle size={iconSize} />
+    </div>
+  );
+}
+
+/** Accent that matches the connect-screen avatar (OS brand or muted unknown). */
+export function hostConnectAccent(osId: string | null | undefined, _seed: string): string {
+  void _seed;
   const raw = (osId || "").toLowerCase();
   if (raw) {
     const resolved = resolveIcon(raw);
     if (resolved) {
-      return OS_ACCENT[resolved.key] ?? hostMarkAccent(seed);
+      return OS_ACCENT[resolved.key] ?? "var(--text-muted)";
     }
   }
-  return hostMarkAccent(seed);
+  return "var(--text-muted)";
 }
 
-export function HostOsIcon({ osId, seed, size = 48, rounded = 10 }: HostOsIconProps) {
+export function HostOsIcon({ osId, seed: _seed, size = 48, rounded = 10 }: HostOsIconProps) {
+  void _seed;
   const raw = (osId || "").toLowerCase();
   if (!raw) {
-    return <HostMark seed={seed} size={size} rounded={rounded} />;
+    return <UnknownHostIcon size={size} rounded={rounded} />;
   }
 
   const resolved = resolveIcon(raw);
   if (!resolved) {
-    return <HostMark seed={seed} size={size} rounded={rounded} />;
+    return <UnknownHostIcon size={size} rounded={rounded} />;
   }
 
   const pad = Math.max(6, Math.round(size * 0.16));

@@ -16,11 +16,20 @@ interface FirstRunWizardProps {
     email: string;
     password: string;
   }) => void | Promise<void>;
+  onConnectSelfhostBrowser: (input: {
+    label: string;
+    base_url: string;
+    web_url: string;
+  }) => void | Promise<void>;
 }
 
 type Step = "choose" | "selfhost" | "selfhost-login";
 
-export function FirstRunWizard({ onDone, onConnectSelfhost }: FirstRunWizardProps) {
+export function FirstRunWizard({
+  onDone,
+  onConnectSelfhost,
+  onConnectSelfhostBrowser,
+}: FirstRunWizardProps) {
   const [step, setStep] = useState<Step>("choose");
   const [serverUrl, setServerUrl] = useState("");
   const [instanceName, setInstanceName] = useState<string | null>(null);
@@ -59,10 +68,24 @@ export function FirstRunWizard({ onDone, onConnectSelfhost }: FirstRunWizardProp
       setBusy(true);
       setError(null);
       const { base_url, web_url } = resolveSelfHostUrls(serverUrl);
-      const probe = await api.probeSelfhost(base_url);
+      const probe = await api.probeSelfhost({ baseUrl: base_url, webUrl: web_url });
       setResolvedBase(base_url);
-      setResolvedWeb(web_url);
+      setResolvedWeb(probe.has_web_ui ? probe.web_url ?? web_url : null);
       setInstanceName(probe.instance_name);
+
+      if (probe.has_web_ui && (probe.web_url || web_url)) {
+        const web = probe.web_url ?? web_url;
+        if (!web) throw new Error("Web UI URL missing.");
+        await onConnectSelfhostBrowser({
+          label: probe.instance_name,
+          base_url,
+          web_url: web,
+        });
+        await api.setAccountsOnboarded(true);
+        onDone();
+        return;
+      }
+
       setStep("selfhost-login");
     } catch (err) {
       setError(String(err).replace(/^Error:\s*/, ""));
@@ -93,82 +116,75 @@ export function FirstRunWizard({ onDone, onConnectSelfhost }: FirstRunWizardProp
 
   const subtitle =
     step === "choose"
-      ? "How do you want to use sync?"
+      ? "Pick how you want to use Azalea."
       : step === "selfhost"
-        ? "Point the app at your sync server."
+        ? "Enter your azalea-server URL."
         : `Sign in to ${instanceName ?? "your server"}.`;
 
   return (
-    <div
-      className="flex h-full flex-col overflow-hidden"
-      style={{ background: "var(--bg-base)" }}
-    >
+    <div className="flex h-full min-h-0 flex-col" style={{ background: "var(--bg-base)" }}>
       <TitleBar />
-
-      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-6 py-10">
-        <div
-          className="pointer-events-none absolute inset-0"
-          aria-hidden
-          style={{
-            background:
-              "radial-gradient(ellipse 80% 55% at 50% 18%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%)",
-          }}
-        />
-        <div className="relative z-10 w-full max-w-md">
-          <div className="mb-8 flex flex-col items-center text-center">
-            <Logo size={36} style={{ color: "var(--accent)" }} />
+      <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-10">
+        <div className="w-full max-w-md space-y-6">
+          <div className="flex flex-col items-center text-center">
+            <Logo size={40} />
             <h1
-              className="mt-5 text-2xl font-semibold tracking-tight"
-              style={{ color: "var(--text)" }}
+              className="mt-4 text-2xl font-semibold tracking-tight"
+              style={{ color: "var(--text)", fontFamily: "var(--font-display)" }}
             >
               Welcome to Azalea
             </h1>
-            <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+            <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
               {subtitle}
             </p>
           </div>
 
           {step === "choose" ? (
             <div className="space-y-2">
-              <ChoiceRow
+              <Choice
                 icon={<Globe size={18} />}
                 title="Azalea Cloud"
-                description="Hosted sync"
+                description="Sync through our hosted service."
                 disabled={busy}
                 onClick={() => void finishSimple("cloud")}
               />
-              <ChoiceRow
+              <Choice
                 icon={<Server size={18} />}
                 title="Self-hosted"
-                description="Your own server"
+                description="Your own azalea-server instance."
                 disabled={busy}
                 onClick={() => setStep("selfhost")}
               />
-              <ChoiceRow
+              <Choice
                 icon={<SquareTerminal size={18} />}
                 title="Offline"
-                description="No sync, local only"
+                description="Local only. No sync account."
                 disabled={busy}
                 onClick={() => void finishSimple("offline")}
               />
             </div>
           ) : step === "selfhost" ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <Input
                 label="Server URL"
                 value={serverUrl}
                 onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="https://azalea.example.com"
-                hint="Public domain uses /api. Local :9482 or a path ending in /api stays as-is."
+                placeholder="https://sync.example.com or http://IP:9482"
+                autoFocus
               />
-              <div className="flex gap-2 pt-1">
+              {error && (
+                <p className="text-sm" style={{ color: "var(--danger)" }}>
+                  {error}
+                </p>
+              )}
+              <div className="flex gap-2">
                 <Button
                   variant="secondary"
                   className="flex-1"
                   disabled={busy}
                   onClick={() => {
-                    setError(null);
                     setStep("choose");
+                    setError(null);
                   }}
                 >
                   <ArrowLeft size={16} />
@@ -184,48 +200,45 @@ export function FirstRunWizard({ onDone, onConnectSelfhost }: FirstRunWizardProp
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div
-                className="rounded-xl border px-3.5 py-3 text-left"
-                style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
-              >
-                <div className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
-                  Server
-                </div>
-                <div className="mt-1 text-sm font-medium" style={{ color: "var(--text)" }}>
+            <div className="space-y-3">
+              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                No web dashboard detected. Sign in with email and password.
+              </p>
+              {instanceName && (
+                <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
                   {instanceName}
-                </div>
-                {resolvedBase && (
-                  <div className="mt-0.5 truncate text-xs" style={{ color: "var(--text-muted)" }}>
-                    {resolvedBase.replace(/^https?:\/\//, "")}
-                  </div>
-                )}
-              </div>
+                </p>
+              )}
               <Input
                 label="Email"
                 type="email"
-                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@example.com"
+                autoFocus
               />
               <Input
                 label="Password"
                 type="password"
-                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && email.trim() && password) void finishSelfhost();
+                }}
               />
-              <div className="flex gap-2 pt-1">
+              {error && (
+                <p className="text-sm" style={{ color: "var(--danger)" }}>
+                  {error}
+                </p>
+              )}
+              <div className="flex gap-2">
                 <Button
                   variant="secondary"
                   className="flex-1"
                   disabled={busy}
                   onClick={() => {
+                    setStep("selfhost");
                     setError(null);
                     setPassword("");
-                    setStep("selfhost");
                   }}
                 >
                   <ArrowLeft size={16} />
@@ -241,19 +254,13 @@ export function FirstRunWizard({ onDone, onConnectSelfhost }: FirstRunWizardProp
               </div>
             </div>
           )}
-
-          {error && (
-            <p className="mt-4 text-center text-sm" style={{ color: "var(--danger)" }}>
-              {error}
-            </p>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
-function ChoiceRow({
+function Choice({
   icon,
   title,
   description,
@@ -271,27 +278,20 @@ function ChoiceRow({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="transition-ui flex w-full items-center gap-3.5 rounded-xl px-3.5 py-3 text-left disabled:opacity-50"
-      style={{ background: "var(--bg-panel)" }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "var(--bg-card-hover)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "var(--bg-panel)";
-      }}
+      className="hover-subtle transition-ui flex w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left disabled:opacity-50"
+      style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
     >
       <span
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
         style={{ background: "var(--accent-muted)", color: "var(--accent)" }}
-        aria-hidden
       >
         {icon}
       </span>
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0">
         <span className="block text-sm font-medium" style={{ color: "var(--text)" }}>
           {title}
         </span>
-        <span className="mt-0.5 block text-xs" style={{ color: "var(--text-muted)" }}>
+        <span className="block text-xs" style={{ color: "var(--text-muted)" }}>
           {description}
         </span>
       </span>

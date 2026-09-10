@@ -156,6 +156,7 @@ async fn wait_for_callback(listener: TcpListener, expected_state: &str) -> anyho
 pub async fn sync_browser_login(
     app: tauri::AppHandle,
     state: tauri::State<'_, SharedSyncState>,
+    registry: tauri::State<'_, crate::commands::accounts::SharedAccountRegistry>,
 ) -> Result<(), String> {
     // Bind the loopback server first so we know which port to advertise.
     let listener = TcpListener::bind("127.0.0.1:0")
@@ -188,10 +189,18 @@ pub async fn sync_browser_login(
     .map_err(|_| "Timed out waiting for the browser sign-in.".to_string())?
     .map_err(|e| e.to_string())?;
 
-    let mut sync = state.lock().await;
-    sync::login_with_refresh_token(&mut sync, &refresh)
-        .await
-        .map_err(|e| e.to_string())
+    let (account_id, email) = {
+        let mut sync = state.lock().await;
+        sync::login_with_refresh_token(&mut sync, &refresh)
+            .await
+            .map_err(|e| e.to_string())?;
+        (sync.account_id_clone(), sync.email())
+    };
+
+    if let (Some(id), Some(email)) = (account_id, email) {
+        let _ = registry.lock().set_email(&id, Some(email));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -205,8 +214,8 @@ pub async fn sync_logout(
 }
 
 #[tauri::command]
-pub async fn probe_selfhost(base_url: String) -> Result<SelfHostProbe, String> {
-    sync::probe_selfhost(&base_url)
+pub async fn probe_selfhost(input: sync::ProbeSelfhostInput) -> Result<SelfHostProbe, String> {
+    sync::probe_selfhost(&input.base_url, input.web_url.as_deref())
         .await
         .map_err(|e| e.to_string())
 }

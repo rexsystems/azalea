@@ -962,6 +962,49 @@ function App() {
     [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
   );
 
+  const handleConnectSelfhostBrowser = useCallback(
+    async (input: { label: string; base_url: string; web_url: string }) => {
+      const created = await api.addAccount({
+        kind: "selfhost",
+        label: input.label,
+        base_url: input.base_url,
+        web_url: input.web_url,
+      });
+      try {
+        setStatusMessage("Opening browser to sign in…");
+        await api.syncBrowserLogin();
+        await refreshAccounts();
+        const status = await api.syncStatus();
+        setSyncStatus(status);
+        await Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
+        setStatusMessage(`Connected to ${created.label}.`);
+        if (status.vault_exists) {
+          setPostConnectError(null);
+          setPostConnectSync({
+            label: created.label,
+            email: status.email ?? "",
+            unlocked: false,
+          });
+        }
+      } catch (err) {
+        try {
+          await api.removeAccount(created.id);
+          await refreshAccounts();
+          await Promise.all([
+            refreshHosts(),
+            refreshGroups(),
+            refreshKeys(),
+            refreshSyncStatus(),
+          ]);
+        } catch {
+          /* ignore cleanup errors */
+        }
+        throw err;
+      }
+    },
+    [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+  );
+
   const handleRemoveAccount = useCallback(
     async (id: string) => {
       const next = await api.removeAccount(id);
@@ -981,12 +1024,11 @@ function App() {
   const handleSignInForSync = useCallback(() => {
     if (activeAccount?.kind === "offline") return;
 
-    setNavPage("settings");
-    setViewingTerminal(false);
-    setFocusSettingsSync(true);
+    const selfhostNeedsPassword =
+      activeAccount?.kind === "selfhost" && !activeAccount.web_url;
 
-    if (activeAccount?.kind === "selfhost") {
-      setStatusMessage("Sign in with your self-hosted email and password in Account settings.");
+    if (selfhostNeedsPassword) {
+      setStatusMessage("Use the account menu to sign in with email and password.");
       return;
     }
 
@@ -1001,7 +1043,7 @@ function App() {
         setStatusMessage(`Sign in failed: ${String(err).replace(/^Error:\s*/, "")}`);
       }
     })();
-  }, [activeAccount?.kind, refreshAccounts, refreshSyncStatus]);
+  }, [activeAccount?.kind, activeAccount?.web_url, refreshAccounts, refreshSyncStatus]);
 
   const handlePasswordLogin = useCallback(
     async (email: string, password: string) => {
@@ -1793,6 +1835,7 @@ function App() {
       {onboarded === false ? (
         <FirstRunWizard
           onConnectSelfhost={handleConnectSelfhost}
+          onConnectSelfhostBrowser={handleConnectSelfhostBrowser}
           onDone={() => {
             setOnboarded(true);
             void refreshAccounts();
@@ -1811,6 +1854,7 @@ function App() {
         onSwitchAccount={handleSwitchAccount}
         onAddAccount={handleAddAccount}
         onConnectSelfhost={handleConnectSelfhost}
+        onConnectSelfhostBrowser={handleConnectSelfhostBrowser}
         onRemoveAccount={handleRemoveAccount}
         onOpenAccount={handleOpenAccount}
         onSignInForSync={handleSignInForSync}

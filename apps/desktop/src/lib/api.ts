@@ -349,10 +349,20 @@ export interface SelfHostProbe {
   ok: boolean;
   instance_name: string;
   version: string | null;
+  has_web_ui: boolean;
+  web_url: string | null;
 }
 
-export function probeSelfhost(baseUrl: string): Promise<SelfHostProbe> {
-  return invoke("probe_selfhost", { baseUrl });
+export function probeSelfhost(input: {
+  baseUrl: string;
+  webUrl?: string | null;
+}): Promise<SelfHostProbe> {
+  return invoke("probe_selfhost", {
+    input: {
+      base_url: input.baseUrl,
+      web_url: input.webUrl ?? null,
+    },
+  });
 }
 
 export function syncLogout(): Promise<void> {

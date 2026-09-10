@@ -371,16 +371,26 @@ pub struct SelfHostProbe {
     pub ok: bool,
     pub instance_name: String,
     pub version: Option<String>,
+    /// True when a management web UI responded (login / authorize).
+    pub has_web_ui: bool,
+    pub web_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProbeSelfhostInput {
+    pub base_url: String,
+    pub web_url: Option<String>,
 }
 
 /// Probe a self-host API base URL (before the account is bound).
-pub async fn probe_selfhost(base_url: &str) -> anyhow::Result<SelfHostProbe> {
+pub async fn probe_selfhost(base_url: &str, web_url: Option<&str>) -> anyhow::Result<SelfHostProbe> {
     let base = base_url.trim().trim_end_matches('/');
     if base.is_empty() {
         anyhow::bail!("Server URL is required");
     }
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(12))
+        .redirect(reqwest::redirect::Policy::limited(5))
         .build()?;
     let resp = client
         .get(format!("{base}/v1/health"))
@@ -406,11 +416,42 @@ pub async fn probe_selfhost(base_url: &str) -> anyhow::Result<SelfHostProbe> {
         .get("version")
         .and_then(|v| v.as_str())
         .map(str::to_string);
+
+    let resolved_web = web_url
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.trim_end_matches('/').to_string());
+
+    let has_web_ui = if let Some(ref web) = resolved_web {
+        probe_web_ui(&client, web).await
+    } else {
+        false
+    };
+
     Ok(SelfHostProbe {
         ok: true,
         instance_name,
         version,
+        has_web_ui,
+        web_url: if has_web_ui {
+            resolved_web
+        } else {
+            None
+        },
     })
+}
+
+async fn probe_web_ui(client: &reqwest::Client, web_url: &str) -> bool {
+    // Dashboard serves /login and /authorize; API-only installs usually 404 here.
+    for path in ["/authorize", "/login"] {
+        let url = format!("{web_url}{path}");
+        match client.get(&url).send().await {
+            Ok(resp) if resp.status().is_success() => return true,
+            Ok(resp) if resp.status().is_redirection() => return true,
+            _ => continue,
+        }
+    }
+    false
 }
 
 async fn refresh_session(state: &mut SyncState) -> anyhow::Result<()> {

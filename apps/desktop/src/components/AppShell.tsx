@@ -29,6 +29,11 @@ interface AppShellProps {
     email: string;
     password: string;
   }) => void | Promise<void>;
+  onConnectSelfhostBrowser: (input: {
+    label: string;
+    base_url: string;
+    web_url: string;
+  }) => void | Promise<void>;
   onRemoveAccount: (id: string) => void | Promise<void>;
   onOpenAccount?: () => void;
   onSignInForSync?: () => void;
@@ -114,6 +119,7 @@ export function AppShell({
   onSwitchAccount,
   onAddAccount,
   onConnectSelfhost,
+  onConnectSelfhostBrowser,
   onRemoveAccount,
   onOpenAccount,
   onSignInForSync,
@@ -145,6 +151,7 @@ export function AppShell({
       onSwitch={onSwitchAccount}
       onAdd={onAddAccount}
       onConnectSelfhost={onConnectSelfhost}
+      onConnectSelfhostBrowser={onConnectSelfhostBrowser}
       onRemove={onRemoveAccount}
       onManage={openAccount}
       onSignIn={onSignInForSync}

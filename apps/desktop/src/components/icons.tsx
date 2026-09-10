@@ -40,6 +40,7 @@ export const FolderTree = makePackIcon("FolderTree", "FolderTree");
 export const FolderX = makePackIcon("FolderX", "FolderX");
 export const Globe = makePackIcon("Globe", "Globe");
 export const HardDriveUpload = makePackIcon("HardDriveUpload", "HardDriveUpload");
+export const HelpCircle = makePackIcon("HelpCircle", "HelpCircle");
 export const Home = makePackIcon("Home", "Home");
 export const KeyRound = makePackIcon("KeyRound", "KeyRound");
 export const Loader2 = makePackIcon("Loader2", "Loader2");
