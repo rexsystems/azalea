@@ -767,7 +767,7 @@ export function AccountSwitcher({
                 <div className="max-h-56 overflow-y-auto py-1.5">
                   {accounts.map((account) => {
                     const isActive = account.id === active?.id;
-                    const canRemove = accounts.length > 1;
+                    const canRemove = accounts.length > 1 && account.kind !== "offline";
                     const showWarn = isActive && authDisconnected;
                     return (
                       <div

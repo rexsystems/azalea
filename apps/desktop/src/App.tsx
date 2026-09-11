@@ -1093,6 +1093,11 @@ function App() {
 
   const handleRemoveAccount = useCallback(
     async (id: string) => {
+      const target = accounts.find((a) => a.id === id);
+      if (target?.kind === "offline") {
+        setStatusMessage("Local profile cannot be removed.");
+        return;
+      }
       await closeAllSessions();
       const next = await api.removeAccount(id);
       setActiveAccount(next);
@@ -1105,7 +1110,15 @@ function App() {
       ]);
       setStatusMessage(`Removed account. Now on ${next.label}.`);
     },
-    [closeAllSessions, refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+    [
+      accounts,
+      closeAllSessions,
+      refreshAccounts,
+      refreshGroups,
+      refreshHosts,
+      refreshKeys,
+      refreshSyncStatus,
+    ],
   );
 
   const handleCopyAccountData = useCallback(

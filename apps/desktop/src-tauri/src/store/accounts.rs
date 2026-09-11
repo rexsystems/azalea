@@ -172,6 +172,14 @@ impl AccountRegistry {
         if self.data.accounts.len() <= 1 {
             anyhow::bail!("Cannot remove the last account");
         }
+        if self
+            .data
+            .accounts
+            .iter()
+            .any(|a| a.id == id && a.kind == AccountKind::Offline)
+        {
+            anyhow::bail!("Local profile cannot be removed");
+        }
         self.data.accounts.retain(|a| a.id != id);
         if self.data.active_id == id {
             self.data.active_id = self.data.accounts[0].id.clone();
