@@ -50,3 +50,11 @@ pub fn close_local_terminal(
     manager.lock().close(&session_id);
     Ok(())
 }
+
+#[tauri::command]
+pub fn close_all_local_terminals(
+    manager: tauri::State<'_, SharedLocalTerminalManager>,
+) -> Result<(), String> {
+    manager.lock().close_all();
+    Ok(())
+}

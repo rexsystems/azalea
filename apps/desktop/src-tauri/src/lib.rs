@@ -88,6 +88,7 @@ pub fn run() {
             ssh_commands::write_terminal,
             ssh_commands::resize_terminal,
             ssh_commands::disconnect_ssh,
+            ssh_commands::disconnect_all_ssh,
             files::pick_text_file,
             files::save_text_file,
             backup::export_backup,
@@ -123,6 +124,7 @@ pub fn run() {
             local_terminal::write_local_terminal,
             local_terminal::resize_local_terminal,
             local_terminal::close_local_terminal,
+            local_terminal::close_all_local_terminals,
             accounts::list_accounts,
             accounts::active_account,
             accounts::accounts_onboarded,
@@ -131,6 +133,7 @@ pub fn run() {
             accounts::add_account,
             accounts::switch_account,
             accounts::remove_account,
+            accounts::copy_account_data,
             crash_report::take_pending_crash,
         ])
         .run(tauri::generate_context!())

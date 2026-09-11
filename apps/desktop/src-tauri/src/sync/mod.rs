@@ -47,6 +47,7 @@ fn vault_error_message(body: &Value) -> String {
 #[derive(Debug, Clone, Deserialize)]
 struct AccountPlanRow {
     plan: String,
+    role: String,
     limit_bytes: i64,
     used_bytes: i64,
     #[allow(dead_code)]
@@ -57,6 +58,7 @@ impl Default for AccountPlanRow {
     fn default() -> Self {
         Self {
             plan: "free".to_string(),
+            role: "user".to_string(),
             limit_bytes: FREE_VAULT_LIMIT_BYTES,
             used_bytes: 0,
             remaining_bytes: FREE_VAULT_LIMIT_BYTES,
@@ -77,6 +79,8 @@ async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
     #[derive(Deserialize)]
     struct AccountBody {
         plan: String,
+        #[serde(default)]
+        role: String,
         vault_bytes: i64,
         vault_limit_bytes: i64,
     }
@@ -85,12 +89,20 @@ async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
         return AccountPlanRow::default();
     };
 
-    normalize_plan_row(AccountPlanRow {
+    let mut row = normalize_plan_row(AccountPlanRow {
         plan: account.plan,
+        role: account.role,
         limit_bytes: account.vault_limit_bytes,
         used_bytes: account.vault_bytes,
         remaining_bytes: (account.vault_limit_bytes - account.vault_bytes).max(0),
-    })
+    });
+    let role = row.role.trim().to_ascii_lowercase();
+    row.role = if role == "admin" {
+        "admin".into()
+    } else {
+        "user".into()
+    };
+    row
 }
 
 fn normalize_plan_row(mut row: AccountPlanRow) -> AccountPlanRow {
@@ -994,6 +1006,7 @@ pub struct SyncStatus {
     pub remote_version: Option<i64>,
     pub last_synced_version: i64,
     pub plan: String,
+    pub role: String,
     pub storage_limit_bytes: i64,
     pub cloud_used_bytes: i64,
     pub local_estimated_bytes: Option<i64>,
@@ -1083,6 +1096,7 @@ pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
         remote_version,
         last_synced_version: last_version,
         plan: plan.plan,
+        role: plan.role,
         storage_limit_bytes: plan.limit_bytes,
         cloud_used_bytes: plan.used_bytes,
         local_estimated_bytes,

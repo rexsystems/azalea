@@ -1,4 +1,5 @@
 # Fresh VPS - no source tree needed. Pulls published GHCR images.
+# Prefer the interactive installer (picks a free high port for the web UI).
 services:
   azalea-server:
     image: ghcr.io/rexsystems/azalea-server:latest
@@ -16,12 +17,12 @@ services:
       - azalea-data:/data
     restart: unless-stopped
 
-  # Optional reverse-proxy UI on :80 (enable with: docker compose --profile web up -d)
+  # Optional dashboard on fixed host port 9843 → container :80.
   azalea-web:
     profiles: ["web"]
     image: ghcr.io/rexsystems/azalea-web:latest
     ports:
-      - "80:80"
+      - "9843:80"
     depends_on:
       - azalea-server
     restart: unless-stopped

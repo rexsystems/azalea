@@ -230,3 +230,48 @@ pub async fn remove_account(
             .ok_or_else(|| "No active account".to_string())
     }
 }
+
+#[derive(Deserialize)]
+pub struct CopyAccountDataInput {
+    from_id: String,
+    #[serde(default)]
+    replace: bool,
+}
+
+/// Copy hosts/keys/groups (and secrets) from another profile into the active one.
+#[tauri::command]
+pub fn copy_account_data(
+    app: AppHandle,
+    registry: State<'_, SharedAccountRegistry>,
+    db: State<'_, SharedDatabase>,
+    input: CopyAccountDataInput,
+) -> Result<crate::commands::backup::ImportBackupResult, String> {
+    use crate::commands::backup::{build_backup, import_azalea_backup_db};
+    use crate::store::db::Database;
+    use std::sync::Arc;
+
+    let from_id = input.from_id.trim().to_string();
+    if from_id.is_empty() {
+        return Err("Source account is required".into());
+    }
+
+    let active_id = registry.lock().active_id().to_string();
+    if from_id == active_id {
+        return Err("Cannot copy a profile onto itself".into());
+    }
+
+    let source_exists = registry.lock().list().iter().any(|a| a.id == from_id);
+    if !source_exists {
+        return Err("Source account not found".into());
+    }
+
+    let path = account_db_path(&app, &from_id).map_err(|e| e.to_string())?;
+    if !path.exists() {
+        return Err("Source profile has no local data yet".into());
+    }
+
+    let source_db = Database::open_path(path).map_err(|e| e.to_string())?;
+    let source = Arc::new(parking_lot::Mutex::new(source_db));
+    let backup = build_backup(&source, None)?;
+    import_azalea_backup_db(&db, backup, input.replace, None)
+}

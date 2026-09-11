@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Check,
   ChevronUp,
+  Copy,
   Globe,
   Plus,
   Server,
@@ -43,13 +44,14 @@ interface AccountSwitcherProps {
     web_url: string;
   }) => void | Promise<void>;
   onRemove: (id: string) => void | Promise<void>;
+  onCopyFrom?: (fromId: string) => void | Promise<void>;
   onManage: () => void;
   onSignIn?: () => void;
   onPasswordLogin?: (email: string, password: string) => void | Promise<void>;
   compact?: boolean;
 }
 
-type AddStep = "menu" | "choose" | "selfhost" | "selfhost-login" | "reauth";
+type AddStep = "menu" | "choose" | "selfhost" | "selfhost-login" | "reauth" | "copy-from";
 
 function kindIcon(kind: AccountKind): ReactNode {
   if (kind === "selfhost") return <Server size={14} />;
@@ -80,6 +82,7 @@ export function AccountSwitcher({
   onConnectSelfhost,
   onConnectSelfhostBrowser,
   onRemove,
+  onCopyFrom,
   onManage,
   onSignIn,
   onPasswordLogin,
@@ -295,7 +298,7 @@ export function AccountSwitcher({
       <UserAvatar email={displayEmail ?? undefined} size={28} />
       {warningIcon}
       {syncStatus?.logged_in ? (
-        <PlanBadge plan={syncStatus.plan} />
+        <PlanBadge plan={syncStatus.plan} role={syncStatus.role} />
       ) : (
         <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
           {authDisconnected ? "Disconnected" : "Accounts"}
@@ -327,7 +330,7 @@ export function AccountSwitcher({
         </div>
         <div className="mt-1 flex items-center gap-1.5">
           {syncStatus?.logged_in ? (
-            <PlanBadge plan={syncStatus.plan} />
+            <PlanBadge plan={syncStatus.plan} role={syncStatus.role} />
           ) : (
             <span
               className="truncate text-[10px] font-semibold"
@@ -364,7 +367,84 @@ export function AccountSwitcher({
               borderColor: "var(--border)",
             }}
           >
-            {step === "choose" ? (
+            {step === "copy-from" ? (
+              <div className="p-2">
+                <div className="mb-1.5 flex items-center gap-1 px-1.5 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep("menu");
+                      setError(null);
+                    }}
+                    className="rounded-md p-1 transition-ui hover-subtle"
+                    style={{ color: "var(--text-muted)" }}
+                    aria-label="Back"
+                  >
+                    <ArrowLeft size={14} />
+                  </button>
+                  <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
+                    Copy data from
+                  </span>
+                </div>
+                <p className="mb-2 px-1.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
+                  Import hosts and keys from another profile into the active one.
+                </p>
+                <div className="max-h-56 space-y-1 overflow-y-auto">
+                  {accounts
+                    .filter((a) => a.id !== active?.id)
+                    .map((account) => (
+                      <button
+                        key={account.id}
+                        type="button"
+                        disabled={busy || !onCopyFrom}
+                        onClick={() => {
+                          void (async () => {
+                            if (!onCopyFrom) return;
+                            try {
+                              setBusy(true);
+                              setError(null);
+                              await onCopyFrom(account.id);
+                              close();
+                            } catch (err) {
+                              setError(String(err).replace(/^Error:\s*/, ""));
+                            } finally {
+                              setBusy(false);
+                            }
+                          })();
+                        }}
+                        className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm transition-ui hover-subtle disabled:opacity-50"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        <span style={{ color: "var(--text-muted)" }}>{kindIcon(account.kind)}</span>
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className="block truncate text-xs font-medium"
+                            style={{ color: "var(--text)" }}
+                          >
+                            {account.label}
+                          </span>
+                          <span
+                            className="block truncate text-[10px] font-semibold"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            {account.email
+                              ? maskEmail(account.email)
+                              : account.base_url
+                                ? account.base_url.replace(/^https?:\/\//, "")
+                                : kindLabel(account.kind)}
+                          </span>
+                        </span>
+                        <Copy size={13} style={{ color: "var(--text-muted)" }} />
+                      </button>
+                    ))}
+                </div>
+                {error && (
+                  <p className="mt-2 px-1.5 text-[11px]" style={{ color: "var(--danger)" }}>
+                    {error}
+                  </p>
+                )}
+              </div>
+            ) : step === "choose" ? (
               <div className="p-2">
                 <div className="mb-1.5 flex items-center gap-1 px-1.5 pt-0.5">
                   <button
@@ -692,7 +772,7 @@ export function AccountSwitcher({
                     return (
                       <div
                         key={account.id}
-                        className="group flex w-full items-center gap-1 px-1.5"
+                        className="flex w-full items-center gap-1 px-1.5"
                       >
                         <button
                           type="button"
@@ -760,7 +840,7 @@ export function AccountSwitcher({
                                 }
                               })();
                             }}
-                            className="shrink-0 rounded-md p-1.5 opacity-60 transition-ui hover-subtle group-hover:opacity-100 disabled:opacity-30"
+                            className="shrink-0 rounded-md p-1.5 opacity-30 transition-ui hover:bg-[var(--bg-card-hover)] hover:opacity-100 focus-visible:opacity-100 disabled:opacity-20"
                             style={{ color: "var(--danger)" }}
                           >
                             <Trash2 size={13} />
@@ -791,6 +871,20 @@ export function AccountSwitcher({
                     <Plus size={14} />
                     Add account
                   </button>
+                  {onCopyFrom && accounts.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        setStep("copy-from");
+                      }}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-ui hover-subtle"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      <Copy size={14} />
+                      Copy data from profile
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {

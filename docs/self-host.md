@@ -29,7 +29,7 @@ The script asks for:
 - public domain (optional)
 - admin email / password
 - Resend mail (optional)
-- whether you want the **optional** web front on :80 (`/api` proxy)
+- whether you want the **optional** web dashboard on **:9843**
 - bind to localhost vs public :9482
 
 Default install dir: `~/azalea` (or `/root/azalea` when run as root).
@@ -101,7 +101,7 @@ EOF
 
 docker compose pull
 docker compose up -d
-# optional web on :80:
+# optional web on :9843:
 # docker compose --profile web up -d
 curl -s http://127.0.0.1:9482/v1/health
 ```
@@ -159,8 +159,10 @@ Add account -> Self-hosted -> `https://yourdomain.com` (or `http://IP:9482`).
 
 ## Optional web front (monorepo `apps/azalea-web`)
 
-Installer can pull `ghcr.io/rexsystems/azalea-web:latest` on port 80. Nginx proxies
-`/api` to `azalea-server`. Sync itself does not need the web container.
+Installer can pull `ghcr.io/rexsystems/azalea-web:latest` on host port **9843**
+(maps to container `:80`). Put Cloudflare Tunnel or host nginx on `:80` if you want
+that. Nginx in the web image proxies `/api` to `azalea-server`. Sync itself does
+not need the web container.
 
 Public product site (landing, download): **https://azalea.rexsystems.me** (separate repo).
 

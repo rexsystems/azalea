@@ -86,3 +86,11 @@ pub async fn disconnect_ssh(
     sessions.lock().await.disconnect(&session_id);
     Ok(())
 }
+
+#[tauri::command]
+pub async fn disconnect_all_ssh(
+    sessions: tauri::State<'_, SharedSshSessionManager>,
+) -> Result<(), String> {
+    sessions.lock().await.disconnect_all();
+    Ok(())
+}

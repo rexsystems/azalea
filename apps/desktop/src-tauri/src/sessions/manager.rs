@@ -431,6 +431,18 @@ impl SshSessionManager {
         self.session_hosts.remove(session_id);
     }
 
+    pub fn disconnect_all(&mut self) {
+        let ids: Vec<String> = self
+            .sessions
+            .keys()
+            .cloned()
+            .chain(self.pending_hosts.keys().cloned())
+            .collect();
+        for id in ids {
+            self.disconnect(&id);
+        }
+    }
+
     pub fn session_handle(
         &self,
         session_id: &str,

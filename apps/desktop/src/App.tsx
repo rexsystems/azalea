@@ -122,6 +122,10 @@ function App() {
   const { terminalSettings, updateTerminalSettings } = useTerminalSettings();
 
   const [tabs, setTabs] = useState<TabSession[]>([]);
+  const tabsRef = useRef<TabSession[]>([]);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [connectingHostId, setConnectingHostId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready");
@@ -612,6 +616,38 @@ function App() {
     [clearReconnectState, removeTab],
   );
 
+  const closeAllSessions = useCallback(async () => {
+    const open = [...tabsRef.current];
+    for (const tab of open) {
+      closingTabsRef.current.add(tab.id);
+      clearReconnectState(tab.id);
+      try {
+        const popout = await WebviewWindow.getByLabel(`popout-${tab.id}`);
+        await popout?.close();
+      } catch {
+        /* no popout */
+      }
+    }
+    await Promise.all(
+      open.map(async (tab) => {
+        if (api.isLocalSession(tab.id)) {
+          await api.closeLocalTerminal(tab.id).catch(() => undefined);
+        } else {
+          await api.disconnectSsh(tab.id).catch(() => undefined);
+        }
+      }),
+    );
+    await Promise.all([
+      api.disconnectAllSsh().catch(() => undefined),
+      api.closeAllLocalTerminals().catch(() => undefined),
+    ]);
+    for (const tab of open) closingTabsRef.current.delete(tab.id);
+    setTabs([]);
+    setActiveTabId(null);
+    setViewingTerminal(false);
+    setForwardStatuses({});
+  }, [clearReconnectState]);
+
 
   useEffect(() => {
     const unlistenStatus = listen<{ session_id: string; status: string; error?: string }>(
@@ -911,6 +947,7 @@ function App() {
     async (id: string) => {
       try {
         setStatusMessage("Switching account…");
+        await closeAllSessions();
         const next = await api.switchAccount(id);
         setActiveAccount(next);
         await refreshAccounts();
@@ -925,7 +962,7 @@ function App() {
         setStatusMessage(`Switch failed: ${String(err).replace(/^Error:\s*/, "")}`);
       }
     },
-    [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+    [closeAllSessions, refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
   );
 
   const handleAddAccount = useCallback(
@@ -935,6 +972,7 @@ function App() {
       base_url?: string | null;
       web_url?: string | null;
     }) => {
+      await closeAllSessions();
       const created = await api.addAccount(input);
       await refreshAccounts();
       await Promise.all([
@@ -945,7 +983,7 @@ function App() {
       ]);
       setStatusMessage(`Added ${created.label}.`);
     },
-    [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+    [closeAllSessions, refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
   );
 
   const [postConnectSync, setPostConnectSync] = useState<{
@@ -955,6 +993,7 @@ function App() {
   } | null>(null);
   const [postConnectBusy, setPostConnectBusy] = useState(false);
   const [postConnectError, setPostConnectError] = useState<string | null>(null);
+  const [pendingCopyFromId, setPendingCopyFromId] = useState<string | null>(null);
 
   const handleConnectSelfhost = useCallback(
     async (input: {
@@ -964,6 +1003,8 @@ function App() {
       email: string;
       password: string;
     }) => {
+      const previousId = activeAccount?.id ?? null;
+      await closeAllSessions();
       const result = await api.connectSelfhost(input);
       await refreshAccounts();
       await Promise.all([
@@ -980,13 +1021,25 @@ function App() {
           email: result.email,
           unlocked: false,
         });
+      } else if (previousId && previousId !== result.account.id) {
+        setPendingCopyFromId(previousId);
       }
     },
-    [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+    [
+      activeAccount?.id,
+      closeAllSessions,
+      refreshAccounts,
+      refreshGroups,
+      refreshHosts,
+      refreshKeys,
+      refreshSyncStatus,
+    ],
   );
 
   const handleConnectSelfhostBrowser = useCallback(
     async (input: { label: string; base_url: string; web_url: string }) => {
+      const previousId = activeAccount?.id ?? null;
+      await closeAllSessions();
       const created = await api.addAccount({
         kind: "selfhost",
         label: input.label,
@@ -1008,6 +1061,8 @@ function App() {
             email: status.email ?? "",
             unlocked: false,
           });
+        } else if (previousId && previousId !== created.id) {
+          setPendingCopyFromId(previousId);
         }
       } catch (err) {
         try {
@@ -1025,11 +1080,20 @@ function App() {
         throw err;
       }
     },
-    [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+    [
+      activeAccount?.id,
+      closeAllSessions,
+      refreshAccounts,
+      refreshGroups,
+      refreshHosts,
+      refreshKeys,
+      refreshSyncStatus,
+    ],
   );
 
   const handleRemoveAccount = useCallback(
     async (id: string) => {
+      await closeAllSessions();
       const next = await api.removeAccount(id);
       setActiveAccount(next);
       await refreshAccounts();
@@ -1041,8 +1105,36 @@ function App() {
       ]);
       setStatusMessage(`Removed account. Now on ${next.label}.`);
     },
-    [refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
+    [closeAllSessions, refreshAccounts, refreshGroups, refreshHosts, refreshKeys, refreshSyncStatus],
   );
+
+  const handleCopyAccountData = useCallback(
+    async (fromId: string, replace = false) => {
+      const result = await api.copyAccountData(fromId, replace);
+      await Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
+      setStatusMessage(
+        `Copied ${result.hosts_imported} hosts, ${result.keys_imported} keys from other profile.`,
+      );
+    },
+    [refreshGroups, refreshHosts, refreshKeys],
+  );
+
+  useEffect(() => {
+    if (!pendingCopyFromId) return;
+    const source = accounts.find((a) => a.id === pendingCopyFromId);
+    const fromId = pendingCopyFromId;
+    setPendingCopyFromId(null);
+    setPendingConfirm({
+      title: "Copy hosts into this profile?",
+      message: source
+        ? `Bring hosts and keys from "${source.label}" into the profile you just connected?`
+        : "Copy hosts and keys from your previous profile into this one?",
+      confirmLabel: "Copy data",
+      onConfirm: () => {
+        void handleCopyAccountData(fromId, false);
+      },
+    });
+  }, [pendingCopyFromId, accounts, handleCopyAccountData]);
 
   const handleSignInForSync = useCallback(() => {
     if (activeAccount?.kind === "offline") return;
@@ -1879,6 +1971,19 @@ function App() {
         onConnectSelfhost={handleConnectSelfhost}
         onConnectSelfhostBrowser={handleConnectSelfhostBrowser}
         onRemoveAccount={handleRemoveAccount}
+        onCopyAccountData={(fromId) => {
+          const source = accounts.find((a) => a.id === fromId);
+          setPendingConfirm({
+            title: "Copy hosts into this profile?",
+            message: source
+              ? `Bring hosts and keys from "${source.label}" into "${activeAccount?.label ?? "this profile"}"?`
+              : "Copy hosts and keys from the selected profile into the active one?",
+            confirmLabel: "Copy data",
+            onConfirm: () => {
+              void handleCopyAccountData(fromId, false);
+            },
+          });
+        }}
         onOpenAccount={handleOpenAccount}
         onSignInForSync={handleSignInForSync}
         onPasswordLogin={handlePasswordLogin}

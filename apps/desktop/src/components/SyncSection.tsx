@@ -83,7 +83,7 @@ function StoragePanel({ status }: { status: api.SyncStatus }) {
         <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
           Cloud storage
         </span>
-        <PlanBadge plan={status.plan} />
+        <PlanBadge plan={status.plan} role={status.role} />
       </div>
       <div
         className="mt-2 h-1.5 overflow-hidden rounded-full"
@@ -408,7 +408,7 @@ export function SyncSection({
             <div className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
               {status.email ? maskEmail(status.email) : "Signed in"}
             </div>
-            <PlanBadge plan={status.plan} size="md" />
+            <PlanBadge plan={status.plan} role={status.role} size="md" />
           </div>
           <div className="text-xs" style={{ color: "var(--text-muted)" }}>
             {syncStateLabel(status)}
@@ -630,7 +630,9 @@ export function SyncSection({
             <h3 className="text-[15px] font-medium" style={{ color: "var(--text)" }}>
               Account &amp; Sync
             </h3>
-            {status?.logged_in && <PlanBadge plan={status.plan} size="md" />}
+            {status?.logged_in && (
+              <PlanBadge plan={status.plan} role={status.role} size="md" />
+            )}
           </div>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
             Encrypted cloud backup for hosts, keys, and settings. Free includes sync - you only pay

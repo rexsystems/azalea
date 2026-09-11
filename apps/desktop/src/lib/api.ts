@@ -155,6 +155,10 @@ export function closeLocalTerminal(sessionId: string): Promise<void> {
   return invoke("close_local_terminal", { sessionId });
 }
 
+export function closeAllLocalTerminals(): Promise<void> {
+  return invoke("close_all_local_terminals");
+}
+
 export interface DialogFilter {
   name: string;
   extensions: string[];
@@ -192,6 +196,10 @@ export function wakeOnLan(macAddress: string, broadcast?: string | null): Promis
 
 export function disconnectSsh(sessionId: string): Promise<void> {
   return invoke("disconnect_ssh", { sessionId });
+}
+
+export function disconnectAllSsh(): Promise<void> {
+  return invoke("disconnect_all_ssh");
 }
 
 export function sftpList(sessionId: string, path?: string): Promise<SftpListResult> {
@@ -288,6 +296,7 @@ export interface SyncStatus {
   remote_version: number | null;
   last_synced_version: number;
   plan: "free" | "pro";
+  role?: string | null;
   storage_limit_bytes: number;
   cloud_used_bytes: number;
   local_estimated_bytes: number | null;
@@ -473,6 +482,23 @@ export function switchAccount(id: string): Promise<AccountRecord> {
 
 export function removeAccount(id: string): Promise<AccountRecord> {
   return invoke("remove_account", { id });
+}
+
+export interface CopyAccountDataResult {
+  hosts_imported: number;
+  keys_imported: number;
+  groups_imported: number;
+  settings?: unknown;
+}
+
+/** Copy hosts/keys/groups from another profile into the active one. */
+export function copyAccountData(
+  fromId: string,
+  replace = false,
+): Promise<CopyAccountDataResult> {
+  return invoke("copy_account_data", {
+    input: { from_id: fromId, replace },
+  });
 }
 
 export interface SshDirKeyCandidate {

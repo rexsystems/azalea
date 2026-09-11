@@ -1,10 +1,19 @@
 interface PlanBadgeProps {
   plan: "free" | "pro";
+  role?: string | null;
   size?: "sm" | "md";
 }
 
-export function PlanBadge({ plan, size = "sm" }: PlanBadgeProps) {
+export function PlanBadge({ plan, role, size = "sm" }: PlanBadgeProps) {
+  const isAdmin = (role ?? "").toLowerCase() === "admin";
   const isPro = plan === "pro";
+
+  const label = isAdmin ? "Admin" : isPro ? "Pro" : "Free";
+  const color = isAdmin
+    ? "var(--danger)"
+    : isPro
+      ? "var(--accent)"
+      : "var(--text-muted)";
 
   return (
     <span
@@ -13,10 +22,10 @@ export function PlanBadge({ plan, size = "sm" }: PlanBadgeProps) {
       }`}
       style={{
         fontWeight: 550,
-        color: isPro ? "var(--accent)" : "var(--text-muted)",
+        color,
       }}
     >
-      {isPro ? "Pro" : "Free"}
+      {label}
     </span>
   );
 }

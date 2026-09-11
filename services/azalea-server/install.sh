@@ -113,7 +113,7 @@ ask_yes_no() {
 write_compose() {
   local api_ports="$1"
   local want_web="$2"
-  local web_ports="${3:-80:80}"
+  local web_ports="${3:-}"
   local mode="$4" # image | build
 
   if [[ "$mode" == "image" ]]; then
@@ -329,7 +329,11 @@ if ask_yes_no "Install web dashboard too (browser login / admin)?" "y"; then
 fi
 
 bind_localhost=0
-if [[ -n "$domain" ]] && ask_yes_no "Bind API port 9482 to 127.0.0.1 only (web still public on :80)?" "y"; then
+if [[ "$want_web" -eq 1 ]]; then
+  if ask_yes_no "Bind API :9482 to localhost only (recommended for Cloudflare Tunnel)?" "y"; then
+    bind_localhost=1
+  fi
+elif [[ -n "$domain" ]] && ask_yes_no "Bind API port 9482 to 127.0.0.1 only?" "y"; then
   bind_localhost=1
 fi
 
@@ -339,10 +343,21 @@ api_ports="9482:9482"
 if [[ "$bind_localhost" -eq 1 ]]; then
   api_ports="127.0.0.1:9482:9482"
 fi
-web_ports="80:80"
+
+# Fixed dashboard host port (not 80 / 8787).
+web_host_port=""
+web_ports=""
+if [[ "$want_web" -eq 1 ]]; then
+  web_host_port="9843"
+  web_ports="${web_host_port}:80"
+fi
 
 if [[ -z "$web_url" ]]; then
-  web_url="http://127.0.0.1"
+  if [[ "$want_web" -eq 1 && -n "$web_host_port" ]]; then
+    web_url="http://127.0.0.1:${web_host_port}"
+  else
+    web_url="http://127.0.0.1"
+  fi
 fi
 
 public_web_for_mail="$web_url"
@@ -353,6 +368,9 @@ if [[ "$want_web" -eq 0 ]]; then
   fi
 fi
 ok "Config saved"
+if [[ "$want_web" -eq 1 ]]; then
+  ok "Dashboard host port: ${web_host_port}"
+fi
 
 progress "Writing .env"
 cat > .env <<EOF
@@ -363,6 +381,35 @@ AZALEA_PUBLIC_WEB_URL=${public_web_for_mail}
 EOF
 chmod 600 .env
 ok ".env written"
+
+if [[ "$want_web" -eq 1 ]]; then
+  cat > nginx-host.example.conf <<EOF
+# Optional: put the dashboard on :80 via host nginx (default install uses :${web_host_port}).
+# Cloudflare Tunnel: point the tunnel at http://127.0.0.1:${web_host_port} instead.
+server {
+  listen 80;
+  server_name _;
+  location / {
+    proxy_pass http://127.0.0.1:${web_host_port};
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header Authorization \$http_authorization;
+  }
+}
+EOF
+  cat > cloudflared.example.yml <<EOF
+# Example Cloudflare Tunnel ingress (copy into your tunnel config).
+# tunnel: <id>
+# credentials-file: /root/.cloudflared/<id>.json
+ingress:
+  - hostname: your.domain.tld
+    service: http://127.0.0.1:${web_host_port}
+  - service: http_status:404
+EOF
+  ok "Wrote nginx-host.example.conf + cloudflared.example.yml"
+fi
 
 progress "Pulling Docker images"
 install_mode="image"
@@ -382,8 +429,9 @@ progress "Starting containers"
 if docker compose ps -q 2>/dev/null | grep -q .; then
   docker compose down >/dev/null 2>&1 || true
 fi
-for p in 9482 80 8787; do
-  if command -v ss >/dev/null 2>&1 && ss -ltn | grep -q ":${p} "; then
+for p in 9482 ${web_host_port:-}; do
+  [[ -z "$p" ]] && continue
+  if command -v ss >/dev/null 2>&1 && ss -ltn | grep -qE ":${p}\\s"; then
     docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | while read -r id name ports; do
       case "$ports" in
         *"${p}"*) docker stop "$id" >/dev/null 2>&1 || true ;;
@@ -428,10 +476,16 @@ printf '  %sAdmin%s        %s\n' "${C_DIM}" "${C_RESET}" "$admin_email"
 printf '  %sInstall dir%s  %s\n' "${C_DIM}" "${C_RESET}" "$INSTALL_DIR"
 
 if [[ "$want_web" -eq 1 ]]; then
-  printf '  %sDashboard%s    %shttp://YOUR_IP/%s  (or %s)\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "${C_RESET}" "$web_url"
-  printf '  %sDesktop URL%s  %shttp://YOUR_IP%s  (uses /api)\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "${C_RESET}"
+  printf '  %sDashboard%s    %shttp://YOUR_IP:%s/%s  (local %s)\n' \
+    "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$web_host_port" "${C_RESET}" "$web_url"
+  printf '  %sDesktop URL%s  %shttp://YOUR_IP:%s%s  (uses /api via the dashboard)\n' \
+    "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$web_host_port" "${C_RESET}"
   printf '  %sSign in%s      %s/login%s · %sAuthorize%s /authorize\n' \
     "${C_DIM}" "${C_RESET}" "${C_MAGENTA}" "${C_RESET}" "${C_MAGENTA}" "${C_RESET}"
+  printf '  %sTunnel%s       point Cloudflare Tunnel at %shttp://127.0.0.1:%s%s\n' \
+    "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$web_host_port" "${C_RESET}"
+  printf '  %sOptional :80%s see %snginx-host.example.conf%s\n' \
+    "${C_DIM}" "${C_RESET}" "${C_DIM}" "${C_RESET}"
 else
   printf '  %sDashboard%s    not installed (CLI only)\n' "${C_DIM}" "${C_RESET}"
   printf '  %sDesktop URL%s  %shttp://YOUR_IP:9482%s\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "${C_RESET}"
@@ -443,9 +497,10 @@ printf '  docker compose exec azalea-server azalea-server user list\n'
 printf '  docker compose exec azalea-server azalea-server user create --email u@x.com --password secret123\n'
 
 if [[ -n "$domain" && "$want_web" -eq 1 ]]; then
-  printf '\n%sDNS%s  Point A record for %s%s%s to this VPS. HTTP :80 is serving the UI.\n' \
-    "${C_WHITE}${C_BOLD}" "${C_RESET}" "${C_CYAN}" "$domain" "${C_RESET}"
-  printf '     For HTTPS, put Caddy/Nginx in front or use Cloudflare.\n'
+  printf '\n%sDNS / Tunnel%s\n' "${C_WHITE}${C_BOLD}" "${C_RESET}"
+  printf '  Point DNS for %s%s%s here, then either:\n' "${C_CYAN}" "$domain" "${C_RESET}"
+  printf '  - Cloudflare Tunnel → http://127.0.0.1:%s (see cloudflared.example.yml)\n' "$web_host_port"
+  printf '  - Host nginx on :80 → proxy to 127.0.0.1:%s (see nginx-host.example.conf)\n' "$web_host_port"
 fi
 
 printf '\n%sWipe + reinstall%s\n' "${C_WHITE}${C_BOLD}" "${C_RESET}"

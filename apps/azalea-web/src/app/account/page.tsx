@@ -77,12 +77,26 @@ export default function AccountPage() {
       >
         <div className="flex justify-between text-sm">
           <span style={{ color: "var(--text-muted)" }}>Plan</span>
-          <span style={{ color: "var(--text)" }}>{plan === "pro" ? "Pro" : "Free"}</span>
+          <span
+            style={{
+              color:
+                user.role === "admin"
+                  ? "var(--danger)"
+                  : plan === "pro"
+                    ? "var(--accent)"
+                    : "var(--text)",
+              fontWeight: 550,
+            }}
+          >
+            {user.role === "admin" ? "Admin" : plan === "pro" ? "Pro" : "Free"}
+          </span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span style={{ color: "var(--text-muted)" }}>Role</span>
-          <span style={{ color: "var(--text)" }}>{user.role}</span>
-        </div>
+        {user.role !== "admin" ? (
+          <div className="flex justify-between text-sm">
+            <span style={{ color: "var(--text-muted)" }}>Role</span>
+            <span style={{ color: "var(--text)" }}>{user.role}</span>
+          </div>
+        ) : null}
         <div className="flex justify-between text-sm">
           <span style={{ color: "var(--text-muted)" }}>Vault</span>
           <span style={{ color: "var(--text)" }}>

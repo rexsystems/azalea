@@ -172,4 +172,11 @@ impl LocalTerminalManager {
             let _ = session.killer.kill();
         }
     }
+
+    pub fn close_all(&mut self) {
+        let ids: Vec<String> = self.sessions.keys().cloned().collect();
+        for id in ids {
+            self.close(&id);
+        }
+    }
 }

@@ -48,6 +48,15 @@ export function resolveSelfHostUrls(input: string): {
     };
   }
 
+  // Dashboard default port (:9843) proxies /api → sync server.
+  if (url.port === "9843") {
+    return {
+      base_url: `${url.origin}/api`,
+      web_url: url.origin,
+    };
+  }
+
+  // Direct API port (no dashboard proxy).
   if (isLocal || url.port === "9482" || url.port === "8787") {
     return { base_url: url.origin, web_url: null };
   }
