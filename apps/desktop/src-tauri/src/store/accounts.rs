@@ -49,7 +49,26 @@ fn registry_path(app: &AppHandle) -> anyhow::Result<PathBuf> {
     Ok(app_data_dir(app)?.join("accounts.json"))
 }
 
+/// Reject anything that could climb out of `<app_data>/accounts/`. Account
+/// ids we create ourselves are always UUIDs, so this allowlist is safe.
+///
+/// Without this guard, `id = "../.."` would let `remove_account` (which
+/// unconditionally `fs::remove_dir_all`s the parent of the returned path)
+/// delete arbitrary directories on the user's machine.
+pub fn valid_account_id(id: &str) -> bool {
+    let trimmed = id.trim();
+    if trimmed.len() < 16 || trimmed.len() > 64 {
+        return false;
+    }
+    trimmed
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
 pub fn account_db_path(app: &AppHandle, account_id: &str) -> anyhow::Result<PathBuf> {
+    if !valid_account_id(account_id) {
+        anyhow::bail!("invalid account id");
+    }
     Ok(app_data_dir(app)?
         .join("accounts")
         .join(account_id)
@@ -128,6 +147,9 @@ impl AccountRegistry {
     }
 
     pub fn switch(&mut self, id: &str) -> anyhow::Result<&AccountRecord> {
+        if !valid_account_id(id) {
+            anyhow::bail!("invalid account id");
+        }
         if !self.data.accounts.iter().any(|a| a.id == id) {
             anyhow::bail!("Account not found");
         }
@@ -169,6 +191,9 @@ impl AccountRegistry {
     }
 
     pub fn remove(&mut self, id: &str) -> anyhow::Result<()> {
+        if !valid_account_id(id) {
+            anyhow::bail!("invalid account id");
+        }
         if self.data.accounts.len() <= 1 {
             anyhow::bail!("Cannot remove the last account");
         }
@@ -180,7 +205,15 @@ impl AccountRegistry {
         {
             anyhow::bail!("Local profile cannot be removed");
         }
+        let before = self.data.accounts.len();
         self.data.accounts.retain(|a| a.id != id);
+        if self.data.accounts.len() == before {
+            // Previously this silently returned Ok, so a malicious id would
+            // reach the caller which then unconditionally tried to delete the
+            // computed account directory. Explicit error keeps `remove_account`
+            // honest.
+            anyhow::bail!("Account not found");
+        }
         if self.data.active_id == id {
             self.data.active_id = self.data.accounts[0].id.clone();
         }
@@ -188,6 +221,9 @@ impl AccountRegistry {
     }
 
     pub fn set_email(&mut self, id: &str, email: Option<String>) -> anyhow::Result<()> {
+        if !valid_account_id(id) {
+            anyhow::bail!("invalid account id");
+        }
         if let Some(account) = self.data.accounts.iter_mut().find(|a| a.id == id) {
             account.email = email;
         }
@@ -195,6 +231,9 @@ impl AccountRegistry {
     }
 
     pub fn set_label(&mut self, id: &str, label: String) -> anyhow::Result<()> {
+        if !valid_account_id(id) {
+            anyhow::bail!("invalid account id");
+        }
         if let Some(account) = self.data.accounts.iter_mut().find(|a| a.id == id) {
             let trimmed = label.trim();
             if !trimmed.is_empty() {

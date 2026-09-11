@@ -21,10 +21,10 @@ jobs:
   docker-server:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -32,7 +32,7 @@ jobs:
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5.8.0
         with:
           images: ${{ env.SERVER_IMAGE }}
           tags: |
@@ -40,7 +40,7 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@ee4ca427a2f43b6a16632044ca514c076267da23 # v6.19.0
         with:
           context: services/azalea-server
           push: true
@@ -82,10 +82,10 @@ jobs:
   docker-web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -93,7 +93,7 @@ jobs:
 
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5.8.0
         with:
           images: ${{ env.WEB_IMAGE }}
           tags: |
@@ -101,7 +101,7 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@ee4ca427a2f43b6a16632044ca514c076267da23 # v6.19.0
         with:
           context: apps/azalea-web
           push: true

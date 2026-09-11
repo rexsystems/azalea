@@ -4,7 +4,9 @@ use parking_lot::Mutex;
 use serde::Deserialize;
 use tauri::{AppHandle, State};
 
-use crate::store::accounts::{account_db_path, AccountKind, AccountRecord, AccountRegistry};
+use crate::store::accounts::{
+    account_db_path, valid_account_id, AccountKind, AccountRecord, AccountRegistry,
+};
 use crate::store::SharedDatabase;
 use crate::sync::{self, SharedSyncState};
 
@@ -169,6 +171,9 @@ pub fn rename_account(
     id: String,
     label: String,
 ) -> Result<AccountRecord, String> {
+    if !valid_account_id(&id) {
+        return Err("invalid account id".into());
+    }
     let mut reg = registry.lock();
     reg.set_label(&id, label).map_err(|e| e.to_string())?;
     reg.list()
@@ -186,6 +191,9 @@ pub async fn switch_account(
     sync: State<'_, SharedSyncState>,
     id: String,
 ) -> Result<AccountRecord, String> {
+    if !valid_account_id(&id) {
+        return Err("invalid account id".into());
+    }
     switch_to_account(&app, &registry, &db, &sync, &id).await
 }
 
@@ -217,6 +225,12 @@ pub async fn remove_account(
     sync: State<'_, SharedSyncState>,
     id: String,
 ) -> Result<AccountRecord, String> {
+    // Guard at the IPC boundary so a malformed id fails loudly before we touch
+    // the filesystem. `AccountRegistry::remove` and `account_db_path` both
+    // re-check, but a nice error message beats a silent no-op.
+    if !valid_account_id(&id) {
+        return Err("invalid account id".into());
+    }
     let removed_was_active = {
         let mut reg = registry.lock();
         let was_active = reg.active_id() == id;
@@ -268,6 +282,9 @@ pub fn copy_account_data(
     let from_id = input.from_id.trim().to_string();
     if from_id.is_empty() {
         return Err("Source account is required".into());
+    }
+    if !valid_account_id(&from_id) {
+        return Err("invalid account id".into());
     }
 
     let active_id = registry.lock().active_id().to_string();

@@ -1,15 +1,15 @@
 use axum::extract::{Path, State};
 use axum::routing::{get, patch};
 use axum::{Json, Router};
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::auth::hash_password;
 use crate::db::now_rfc3339;
-use rusqlite::params;
 use crate::error::{ApiError, ApiResult};
-use crate::routes::extractors::{require_admin, AuthUser};
+use crate::routes::extractors::AdminUser;
 use crate::state::AppState;
 
 pub fn router() -> Router<Arc<AppState>> {
@@ -45,7 +45,7 @@ struct PatchSettingsBody {
 }
 
 #[derive(Serialize)]
-struct AdminUser {
+struct AdminUserRow {
     id: String,
     email: String,
     role: String,
@@ -86,9 +86,12 @@ struct PatchUserBody {
 
 async fn get_settings(
     State(state): State<Arc<AppState>>,
-    AuthUser(claims): AuthUser,
+    _admin: AdminUser,
 ) -> ApiResult<Json<SettingsResponse>> {
-    require_admin(&claims)?;
+    read_settings(&state)
+}
+
+fn read_settings(state: &AppState) -> ApiResult<Json<SettingsResponse>> {
     let row = state.db.with_conn(|conn| {
         Ok(conn.query_row(
             "SELECT signup_enabled, captcha_provider, captcha_site_key, captcha_secret_key,
@@ -122,11 +125,9 @@ async fn get_settings(
 
 async fn patch_settings(
     State(state): State<Arc<AppState>>,
-    AuthUser(claims): AuthUser,
+    _admin: AdminUser,
     Json(body): Json<PatchSettingsBody>,
 ) -> ApiResult<Json<SettingsResponse>> {
-    require_admin(&claims)?;
-
     state.db.with_conn(|conn| {
         if let Some(v) = body.signup_enabled {
             conn.execute(
@@ -173,14 +174,13 @@ async fn patch_settings(
         Ok(())
     })?;
 
-    get_settings(State(state), AuthUser(claims)).await
+    read_settings(&state)
 }
 
 async fn list_users(
     State(state): State<Arc<AppState>>,
-    AuthUser(claims): AuthUser,
-) -> ApiResult<Json<Vec<AdminUser>>> {
-    require_admin(&claims)?;
+    _admin: AdminUser,
+) -> ApiResult<Json<Vec<AdminUserRow>>> {
     let users = state.db.with_conn(|conn| {
         let mut stmt = conn.prepare(
             "SELECT u.id, u.email, u.role, u.plan, u.disabled, u.created_at, u.updated_at,
@@ -193,7 +193,7 @@ async fn list_users(
              FROM users u ORDER BY u.created_at ASC",
         )?;
         let rows = stmt.query_map([], |r| {
-            Ok(AdminUser {
+            Ok(AdminUserRow {
                 id: r.get(0)?,
                 email: r.get(1)?,
                 role: r.get(2)?,
@@ -217,10 +217,9 @@ async fn list_users(
 
 async fn create_user(
     State(state): State<Arc<AppState>>,
-    AuthUser(claims): AuthUser,
+    _admin: AdminUser,
     Json(body): Json<CreateUserBody>,
-) -> ApiResult<Json<AdminUser>> {
-    require_admin(&claims)?;
+) -> ApiResult<Json<AdminUserRow>> {
     let email = body.email.trim().to_lowercase();
     if !email.contains('@') {
         return Err(ApiError::BadRequest("invalid email".into()));
@@ -251,7 +250,7 @@ async fn create_user(
         return Err(ApiError::Internal(e));
     }
 
-    Ok(Json(AdminUser {
+    Ok(Json(AdminUserRow {
         id,
         email,
         role: role.into(),
@@ -267,18 +266,23 @@ async fn create_user(
 
 async fn patch_user(
     State(state): State<Arc<AppState>>,
-    AuthUser(claims): AuthUser,
+    _admin: AdminUser,
     Path(id): Path<String>,
     Json(body): Json<PatchUserBody>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    require_admin(&claims)?;
     let now = now_rfc3339();
+    let mut revoke_sessions = false;
+
     state.db.with_conn(|conn| {
         if let Some(disabled) = body.disabled {
             conn.execute(
                 "UPDATE users SET disabled = ?2, updated_at = ?3 WHERE id = ?1",
                 params![id, if disabled { 1 } else { 0 }, now],
             )?;
+            if disabled {
+                // A disabled account should not keep any live refresh tokens.
+                revoke_sessions = true;
+            }
         }
         if let Some(role) = &body.role {
             if role == "admin" || role == "user" {
@@ -298,6 +302,7 @@ async fn patch_user(
         }
         Ok(())
     })?;
+
     if let Some(password) = &body.password {
         if !password.is_empty() {
             if password.len() < 8 {
@@ -313,7 +318,18 @@ async fn patch_user(
                 )?;
                 Ok(())
             })?;
+            // Force re-authentication after an admin resets the password.
+            // Mirrors the self-serve /v1/auth/reset-password flow.
+            revoke_sessions = true;
         }
     }
+
+    if revoke_sessions {
+        state.db.with_conn(|conn| {
+            conn.execute("DELETE FROM sessions WHERE user_id = ?1", params![id])?;
+            Ok(())
+        })?;
+    }
+
     Ok(Json(serde_json::json!({ "ok": true })))
 }

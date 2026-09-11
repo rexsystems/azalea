@@ -3,9 +3,11 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, Loader2, ShieldQuestion, XCircle } from "lucide-react";
+// Icons: react-icons/fi is already a dep. Lucide was dropped repo-wide to
+// shrink the client bundle and cut one npm supply-chain surface.
+import { FiCheckCircle, FiHelpCircle, FiLoader, FiXCircle } from "react-icons/fi";
 import { accessRedirect, resolveAccountAccess } from "@/lib/auth-access";
-import { ensureSession, getStoredSession } from "@/lib/azalea-api";
+import { approveDesktopHandoff, ensureSession, getStoredSession } from "@/lib/azalea-api";
 import { Logo } from "@/components/Logo";
 
 type Phase = "checking" | "ready" | "handing-off" | "done" | "error";
@@ -16,8 +18,16 @@ function isValidPort(port: string | null): port is string {
   return Number.isInteger(n) && n >= 1024 && n <= 65535;
 }
 
-function backPath(port: string, state: string): string {
-  return `/authorize?port=${port}&state=${encodeURIComponent(state)}`;
+function isValidHandle(handle: string | null): handle is string {
+  if (!handle) return false;
+  // random_token() on the server returns 64 hex chars.
+  return /^[a-f0-9]{16,128}$/i.test(handle);
+}
+
+function backPath(port: string, state: string, handle: string): string {
+  return `/authorize?port=${port}&state=${encodeURIComponent(
+    state,
+  )}&handle=${encodeURIComponent(handle)}`;
 }
 
 function AuthorizeInner() {
@@ -25,12 +35,18 @@ function AuthorizeInner() {
   const params = useSearchParams();
   const port = params.get("port");
   const state = params.get("state");
+  const handle = params.get("handle");
 
   const [phase, setPhase] = useState<Phase>("checking");
   const [email, setEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const paramsValid = isValidPort(port) && !!state && state.length >= 8 && state.length <= 128;
+  const paramsValid =
+    isValidPort(port) &&
+    !!state &&
+    state.length >= 8 &&
+    state.length <= 128 &&
+    isValidHandle(handle);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +64,7 @@ function AuthorizeInner() {
       if (cancelled) return;
 
       if (!session) {
-        const back = backPath(port!, state!);
+        const back = backPath(port!, state!, handle!);
         router.replace(`/login?next=${encodeURIComponent(back)}`);
         return;
       }
@@ -56,7 +72,7 @@ function AuthorizeInner() {
       const access = await resolveAccountAccess();
       if (cancelled) return;
       if (access.status !== "ok") {
-        router.replace(accessRedirect(access, backPath(port!, state!)));
+        router.replace(accessRedirect(access, backPath(port!, state!, handle!)));
         return;
       }
 
@@ -67,24 +83,38 @@ function AuthorizeInner() {
     return () => {
       cancelled = true;
     };
-  }, [paramsValid, port, state, router]);
+  }, [paramsValid, port, state, handle, router]);
 
   const handOff = useCallback(async () => {
     setPhase("handing-off");
     setError(null);
 
-    const session = (await ensureSession()) ?? getStoredSession();
-    if (!session?.refresh_token) {
+    // Step 1: exchange our web session for a short-lived one-time authorization
+    // code bound to this PKCE handle. The code is worthless on its own; only
+    // the desktop app (holding the matching code_verifier) can redeem it.
+    let code: string;
+    try {
+      const approved = await approveDesktopHandoff(handle!, state!);
+      code = approved.code;
+    } catch (err) {
       setPhase("error");
-      setError("Your session expired. Please sign in again.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not authorize the desktop app. Try starting the sign-in again.",
+      );
       return;
     }
 
+    // Step 2: hand the code (NOT the refresh token) to the loopback listener
+    // in the desktop app. The plain-HTTP hop is fine here because the code is
+    // single-use, expires in 60 s, and can only be redeemed with the desktop
+    // app's local code_verifier.
     try {
       const response = await fetch(`http://127.0.0.1:${port}/callback`, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
-        body: JSON.stringify({ state, refresh_token: session.refresh_token }),
+        body: JSON.stringify({ state, code }),
       });
       if (!response.ok) throw new Error("The desktop app rejected the sign-in.");
     } catch {
@@ -94,7 +124,7 @@ function AuthorizeInner() {
     }
 
     setPhase("done");
-  }, [port, state]);
+  }, [handle, port, state]);
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-clip px-6 py-16">
@@ -119,7 +149,7 @@ function AuthorizeInner() {
 
         {phase === "checking" && (
           <div className="flex flex-col items-center gap-4">
-            <Loader2 size={30} className="animate-spin" style={{ color: "var(--accent)" }} />
+            <FiLoader size={30} className="animate-spin" style={{ color: "var(--accent)" }} />
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
               Checking your session…
             </p>
@@ -128,7 +158,7 @@ function AuthorizeInner() {
 
         {phase === "ready" && (
           <div className="flex flex-col items-center gap-5">
-            <ShieldQuestion size={34} style={{ color: "var(--accent)" }} />
+            <FiHelpCircle size={34} style={{ color: "var(--accent)" }} />
             <div>
               <h1 className="text-xl font-semibold tracking-tight">Connect the desktop app?</h1>
               <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -148,7 +178,7 @@ function AuthorizeInner() {
 
         {phase === "handing-off" && (
           <div className="flex flex-col items-center gap-4">
-            <Loader2 size={30} className="animate-spin" style={{ color: "var(--accent)" }} />
+            <FiLoader size={30} className="animate-spin" style={{ color: "var(--accent)" }} />
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
               Connecting…
             </p>
@@ -157,7 +187,7 @@ function AuthorizeInner() {
 
         {phase === "done" && (
           <div className="flex flex-col items-center gap-4">
-            <CheckCircle2 size={34} style={{ color: "#4ade80" }} />
+            <FiCheckCircle size={34} style={{ color: "#4ade80" }} />
             <div>
               <h1 className="text-xl font-semibold tracking-tight">You&apos;re connected</h1>
               <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
@@ -169,7 +199,7 @@ function AuthorizeInner() {
 
         {phase === "error" && (
           <div className="flex flex-col items-center gap-4">
-            <XCircle size={34} style={{ color: "var(--danger)" }} />
+            <FiXCircle size={34} style={{ color: "var(--danger)" }} />
             <p className="text-sm" style={{ color: "var(--danger)" }}>
               {error}
             </p>

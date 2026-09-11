@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CreateKeyInput, Host, SshKey } from "@azalea/shared";
 import {
   Check,
+  ChevronDown,
   Copy,
   FileKey,
   FileKey2,
@@ -87,6 +88,40 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
   const [installBusy, setInstallBusy] = useState(false);
   const [installResult, setInstallResult] = useState<SelectHostResult | null>(null);
   const [exportPrivateTarget, setExportPrivateTarget] = useState<SshKey | null>(null);
+  const [exportMenuId, setExportMenuId] = useState<string | null>(null);
+  const [exportMenuDir, setExportMenuDir] = useState<"down" | "up">("down");
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!exportMenuId) return;
+    const onPointer = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setExportMenuId(null);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExportMenuId(null);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [exportMenuId]);
+
+  const toggleExportMenu = (keyId: string, trigger: HTMLElement) => {
+    setExportMenuId((current) => {
+      if (current === keyId) return null;
+      const rect = trigger.getBoundingClientRect();
+      const menuHeight = 96;
+      const gap = 8;
+      const spaceBelow = window.innerHeight - rect.bottom - gap;
+      const spaceAbove = rect.top - gap;
+      setExportMenuDir(spaceBelow >= menuHeight || spaceBelow >= spaceAbove ? "down" : "up");
+      return keyId;
+    });
+  };
 
   const handleGenerate = async () => {
     const name = newKeyName.trim() || "My Key";
@@ -387,7 +422,7 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                     return (
                       <article
                         key={key.id}
-                        className="flex min-w-0 flex-col overflow-hidden rounded-xl border p-4"
+                        className="flex min-w-0 flex-col overflow-visible rounded-xl border p-4"
                         style={{
                           background: "var(--bg-card)",
                           borderColor: "var(--border-subtle)",
@@ -443,7 +478,7 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                         </p>
 
                         <div
-                          className="key-card-actions mt-auto grid grid-cols-2 overflow-hidden rounded-lg border sm:grid-cols-4"
+                          className="key-card-actions mt-auto grid grid-cols-3 overflow-visible rounded-lg border"
                           style={{ borderColor: "var(--border-subtle)", marginTop: "1rem" }}
                         >
                           <button
@@ -454,22 +489,53 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                             {copied ? <Check size={14} /> : <Copy size={14} />}
                             <span>{copied ? "Copied" : "Copy"}</span>
                           </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void exportPublicKey(key)}
+                          <div
+                            className="key-export-menu"
+                            ref={exportMenuId === key.id ? exportMenuRef : undefined}
                           >
-                            <FileKey2 size={14} />
-                            <span>Export</span>
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => setExportPrivateTarget(key)}
-                          >
-                            <KeyRound size={14} />
-                            <span>Private</span>
-                          </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              aria-haspopup="menu"
+                              aria-expanded={exportMenuId === key.id}
+                              onClick={(event) => toggleExportMenu(key.id, event.currentTarget)}
+                            >
+                              <FileKey2 size={14} />
+                              <span>Export</span>
+                              <ChevronDown size={12} />
+                            </button>
+                            {exportMenuId === key.id ? (
+                              <div
+                                className={`key-export-dropdown ${exportMenuDir === "up" ? "up" : "down"}`}
+                                role="menu"
+                              >                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setExportMenuId(null);
+                                    void exportPublicKey(key);
+                                  }}
+                                >
+                                  <FileKey2 size={14} />
+                                  <span>Public key (.pub)</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  className="danger"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    setExportMenuId(null);
+                                    setExportPrivateTarget(key);
+                                  }}
+                                >
+                                  <KeyRound size={14} />
+                                  <span>Private key</span>
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
                           <button
                             type="button"
                             disabled={busy || hosts.length === 0}

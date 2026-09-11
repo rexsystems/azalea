@@ -31,6 +31,29 @@ interface TerminalProps {
   onStatusChange?: (status: string, error?: string) => void;
 }
 
+/**
+ * Only allow safe URL schemes to escape the terminal into the user's browser.
+ * A compromised remote shell can print arbitrary OSC 8 hyperlinks or naked
+ * URLs; without this check it could inject `file:///Users/me/.ssh/id_ed25519`
+ * or `javascript:...` links that would exfiltrate data the moment the user
+ * clicks. `mailto:` is allowed because it's a common, low-risk external
+ * launcher; `http://` is dropped in favor of `https://` to prevent
+ * network-attacker downgrade.
+ */
+function isTerminalLinkSafe(uri: string): boolean {
+  if (typeof uri !== "string" || !uri) return false;
+  const trimmed = uri.trim();
+  if (trimmed.length > 4096) return false;
+  const lower = trimmed.toLowerCase();
+  return (
+    lower.startsWith("https://") ||
+    lower.startsWith("mailto:") ||
+    // Some shells emit `www.` shortcuts; xterm turns those into `http://www.`
+    // which we allow through as https:// upgrade.
+    lower.startsWith("http://www.")
+  );
+}
+
 function encodeBytes(data: Uint8Array): string {
   let binary = "";
   for (const byte of data) {
@@ -622,6 +645,11 @@ export function TerminalView({
     searchRef.current = searchAddon;
     term.loadAddon(
       new WebLinksAddon((_event, uri) => {
+        // Hard-restrict what a remote shell can open in the user's browser via
+        // OSC / hyperlinks. Only https:// URLs (and mailto:) reach the opener
+        // plugin - never `file://`, `javascript:`, `data:`, `ssh://`, or any
+        // other scheme that a hostile shell could weaponize.
+        if (!isTerminalLinkSafe(uri)) return;
         void openUrl(uri);
       }),
     );

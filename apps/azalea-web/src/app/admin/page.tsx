@@ -210,6 +210,8 @@ export default function AdminPage() {
             <input
               className="field"
               type="password"
+              autoComplete="new-password"
+              spellCheck={false}
               placeholder="Password (8+)"
               value={password}
               onChange={(event) => setPassword(event.target.value)}

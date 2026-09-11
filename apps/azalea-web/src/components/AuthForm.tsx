@@ -12,9 +12,23 @@ interface AuthFormProps {
   mode: "login" | "signup";
 }
 
+/**
+ * Only accept in-app paths for the post-login redirect. Rejects protocol-
+ * relative URLs (`//evil.com`), absolute URLs, values containing backslashes
+ * or control characters, and anything that resolves to a different origin.
+ */
 function safeNext(next: string | null): string {
-  if (next && next.startsWith("/") && !next.startsWith("//")) return next;
-  return "/account";
+  if (!next) return "/account";
+  if (/[\\\u0000-\u001f]/.test(next)) return "/account";
+  if (!next.startsWith("/") || next.startsWith("//")) return "/account";
+  if (typeof window === "undefined") return next;
+  try {
+    const parsed = new URL(next, window.location.origin);
+    if (parsed.origin !== window.location.origin) return "/account";
+    return parsed.pathname + parsed.search + parsed.hash;
+  } catch {
+    return "/account";
+  }
 }
 
 export function AuthForm({ mode }: AuthFormProps) {

@@ -135,7 +135,7 @@ pub type SharedSyncState = Arc<tokio::sync::Mutex<SyncState>>;
 
 pub fn init_sync_state() -> SharedSyncState {
     Arc::new(tokio::sync::Mutex::new(SyncState {
-        http: reqwest::Client::new(),
+        http: desktop_http_client(),
         access_token: None,
         refresh_token: None,
         expires_at: 0,
@@ -146,6 +146,91 @@ pub fn init_sync_state() -> SharedSyncState {
         api_base: None,
         web_url: None,
     }))
+}
+
+/// Builds a reqwest client tagged with the `x-azalea-client: desktop` header
+/// on every request. The server uses this header to decide whether to return
+/// the refresh token in the JSON body (desktop) or set an HttpOnly cookie
+/// (web).
+fn desktop_http_client() -> reqwest::Client {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::HeaderName::from_static("x-azalea-client"),
+        reqwest::header::HeaderValue::from_static("desktop"),
+    );
+    reqwest::Client::builder()
+        .default_headers(headers)
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
+/// Rejects `http://` for non-loopback hosts unless the operator explicitly
+/// opts in with `AZALEA_ALLOW_INSECURE_SYNC=1`. Loopback / `.local` / RFC1918
+/// hosts are always allowed. Prevents plaintext credentials from being sent to
+/// a public sync server.
+fn ensure_https_or_loopback(base_url: &str) -> anyhow::Result<()> {
+    let (scheme, host) = split_scheme_host(base_url)
+        .ok_or_else(|| anyhow::anyhow!("Invalid server URL"))?;
+    if scheme == "https" {
+        return Ok(());
+    }
+    if scheme != "http" {
+        anyhow::bail!("Unsupported URL scheme: {scheme}");
+    }
+    if std::env::var("AZALEA_ALLOW_INSECURE_SYNC").ok().as_deref() == Some("1") {
+        return Ok(());
+    }
+    let host = host.to_ascii_lowercase();
+    let is_loopback = host == "localhost"
+        || host == "127.0.0.1"
+        || host == "::1"
+        || host.ends_with(".local")
+        || is_private_ipv4(&host);
+    if is_loopback {
+        return Ok(());
+    }
+    anyhow::bail!(
+        "Refusing plaintext http:// for a public server. Use https:// (or set AZALEA_ALLOW_INSECURE_SYNC=1 to override)."
+    );
+}
+
+/// Cheap scheme+host extractor. Returns None if the URL is malformed.
+/// Only the parts we care about for HTTPS enforcement.
+fn split_scheme_host(url: &str) -> Option<(&str, &str)> {
+    let (scheme, rest) = url.split_once("://")?;
+    let after_userinfo = rest.rsplit_once('@').map(|(_, r)| r).unwrap_or(rest);
+    let host_and_port = after_userinfo
+        .split_once('/')
+        .map(|(h, _)| h)
+        .unwrap_or(after_userinfo);
+    // Strip port. IPv6 (bracketed) hosts also work: `[::1]:8080`.
+    let host = if let Some(stripped) = host_and_port.strip_prefix('[') {
+        stripped.split_once(']').map(|(h, _)| h).unwrap_or(stripped)
+    } else if let Some((h, _)) = host_and_port.rsplit_once(':') {
+        h
+    } else {
+        host_and_port
+    };
+    Some((scheme, host))
+}
+
+fn is_private_ipv4(host: &str) -> bool {
+    let Ok(ip) = host.parse::<std::net::Ipv4Addr>() else {
+        return false;
+    };
+    let o = ip.octets();
+    // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10 (CGNAT)
+    o[0] == 10
+        || (o[0] == 172 && (16..=31).contains(&o[1]))
+        || (o[0] == 192 && o[1] == 168)
+        || (o[0] == 100 && (64..=127).contains(&o[1]))
+}
+
+/// Public wrapper around the internal `api_base_url` for use from
+/// `commands/sync.rs`. Kept separate so we don't accidentally leak the
+/// internal helper across the module boundary.
+pub fn api_base_url_public(state: &SyncState) -> anyhow::Result<String> {
+    api_base_url(state)
 }
 
 fn api_base_url(state: &SyncState) -> anyhow::Result<String> {
@@ -321,6 +406,11 @@ async fn auth_refresh(state: &SyncState, refresh_token: &str) -> anyhow::Result<
 }
 
 /// Signs in using a refresh token obtained from the browser login flow.
+///
+/// Retained for tooling / migrations; the primary browser-login path is now
+/// `exchange_desktop_code` + `login_with_desktop_session`, which uses a PKCE
+/// code exchange instead of passing the refresh token through the browser.
+#[allow(dead_code)]
 pub async fn login_with_refresh_token(
     state: &mut SyncState,
     refresh_token: &str,
@@ -352,8 +442,15 @@ pub async fn password_login_at_url(
     if base.is_empty() {
         anyhow::bail!("Server URL is required");
     }
+    ensure_https_or_loopback(base)?;
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::HeaderName::from_static("x-azalea-client"),
+        reqwest::header::HeaderValue::from_static("desktop"),
+    );
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
+        .default_headers(headers)
         .build()?;
     let resp = client
         .post(format!("{base}/v1/auth/login"))
@@ -369,6 +466,123 @@ pub async fn password_login_at_url(
     }
 
     serde_json::from_value(body).map_err(|_| anyhow::anyhow!("Unexpected auth response"))
+}
+
+// ---------- Desktop PKCE handoff ----------
+
+/// PKCE code verifier + derived challenge. The verifier stays in this process;
+/// only the challenge crosses the wire (and later the auth code, which is
+/// worthless without the verifier).
+#[derive(Debug, Clone)]
+pub struct PkceMaterial {
+    pub verifier: String,
+    pub challenge: String,
+}
+
+pub fn new_pkce_material() -> PkceMaterial {
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine as _;
+    use rand::rngs::OsRng;
+    use sha2::{Digest, Sha256};
+
+    let mut bytes = [0u8; 32];
+    rand::RngCore::fill_bytes(&mut OsRng, &mut bytes);
+    let verifier = URL_SAFE_NO_PAD.encode(bytes);
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    PkceMaterial { verifier, challenge }
+}
+
+/// Ask the server to open a PKCE handle. Returns the handle string that goes
+/// into the browser URL (`/authorize?...&handle=...`).
+pub async fn begin_desktop_pkce(
+    base_url: &str,
+    challenge: &str,
+    client_state: &str,
+) -> anyhow::Result<String> {
+    let base = base_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        anyhow::bail!("Server URL is required");
+    }
+    ensure_https_or_loopback(base)?;
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::HeaderName::from_static("x-azalea-client"),
+        reqwest::header::HeaderValue::from_static("desktop"),
+    );
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .default_headers(headers)
+        .build()?;
+    let resp = client
+        .post(format!("{base}/v1/auth/desktop/begin"))
+        .json(&json!({
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "client_state": client_state,
+        }))
+        .send()
+        .await
+        .map_err(|err| anyhow::anyhow!("Network error: {err}"))?;
+
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap_or(Value::Null);
+    if !status.is_success() {
+        anyhow::bail!(auth_error_message(&body));
+    }
+    let handle = body
+        .get("handle")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Unexpected /desktop/begin response"))?;
+    Ok(handle.to_string())
+}
+
+/// Redeem a `code` returned by the browser callback for a full session.
+pub async fn exchange_desktop_code(
+    base_url: &str,
+    handle: &str,
+    code: &str,
+    verifier: &str,
+) -> anyhow::Result<AuthSession> {
+    let base = base_url.trim().trim_end_matches('/');
+    if base.is_empty() {
+        anyhow::bail!("Server URL is required");
+    }
+    ensure_https_or_loopback(base)?;
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::HeaderName::from_static("x-azalea-client"),
+        reqwest::header::HeaderValue::from_static("desktop"),
+    );
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .default_headers(headers)
+        .build()?;
+    let resp = client
+        .post(format!("{base}/v1/auth/desktop/exchange"))
+        .json(&json!({
+            "handle": handle,
+            "code": code,
+            "code_verifier": verifier,
+        }))
+        .send()
+        .await
+        .map_err(|err| anyhow::anyhow!("Network error: {err}"))?;
+
+    let status = resp.status();
+    let body: Value = resp.json().await.unwrap_or(Value::Null);
+    if !status.is_success() {
+        anyhow::bail!(auth_error_message(&body));
+    }
+    serde_json::from_value(body).map_err(|_| anyhow::anyhow!("Unexpected exchange response"))
+}
+
+/// Sign in using a fresh session returned from /v1/auth/desktop/exchange.
+pub async fn login_with_desktop_session(
+    state: &mut SyncState,
+    session: AuthSession,
+) -> anyhow::Result<()> {
+    state.apply_session(session);
+    Ok(())
 }
 
 #[derive(Debug, Serialize)]
@@ -400,6 +614,7 @@ pub async fn probe_selfhost(base_url: &str, web_url: Option<&str>) -> anyhow::Re
     if base.is_empty() {
         anyhow::bail!("Server URL is required");
     }
+    ensure_https_or_loopback(base)?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(12))
         .redirect(reqwest::redirect::Policy::limited(5))
@@ -756,7 +971,12 @@ pub async fn setup_passphrase(
     let recovery_envelope = crypto::seal_vault_key(&recovery_kek, &vault_key)?;
 
     let (json, _) = local_vault_json(db, settings.clone())?;
-    let ciphertext = crypto::encrypt(&vault_key, json.as_bytes())?;
+    let account_id = require_account_id(state)?;
+    // AAD binds account_id + version (1 for the initial write) + kdf_salt so
+    // a malicious server cannot swap this ciphertext for another account's or
+    // an older version's blob without detection.
+    let aad = crypto::vault_aad(&account_id, 1, &salt);
+    let ciphertext = crypto::encrypt_with_aad(&vault_key, json.as_bytes(), &aad)?;
 
     let plan = fetch_account_plan(state).await;
     let total = vault_row_bytes(&ciphertext, &verifier, &salt, Some(&recovery_envelope));
@@ -799,10 +1019,21 @@ pub async fn unlock(
     };
 
     // Verify the vault decrypts; do not overwrite local data here.
-    let _plaintext = crypto::decrypt(&vault_key, &vault.ciphertext)?;
+    let account_id = require_account_id(state)?;
+    let aad = crypto::vault_aad(&account_id, vault.version, &vault.kdf_salt);
+    let _plaintext = crypto::decrypt_with_aad(&vault_key, &vault.ciphertext, &aad)?;
 
     state.vault_key = Some(vault_key);
     Ok(vault.version)
+}
+
+/// Returns the current account id or errors out. Vault crypto that binds AAD
+/// on account_id must not silently fall back to an empty string, or the AAD
+/// would be trivially predictable and its rollback-protection purpose lost.
+fn require_account_id(state: &SyncState) -> anyhow::Result<String> {
+    state
+        .account_id_clone()
+        .ok_or_else(|| anyhow::anyhow!("No account bound; cannot encrypt vault"))
 }
 
 async fn push_local(
@@ -813,7 +1044,10 @@ async fn push_local(
     vault_meta: &VaultRow,
     limit_bytes: i64,
 ) -> anyhow::Result<Option<i64>> {
-    let ciphertext = crypto::encrypt(vault_key, local_json.as_bytes())?;
+    let new_version = expected + 1;
+    let account_id = require_account_id(state)?;
+    let aad = crypto::vault_aad(&account_id, new_version, &vault_meta.kdf_salt);
+    let ciphertext = crypto::encrypt_with_aad(vault_key, local_json.as_bytes(), &aad)?;
     let total = vault_row_bytes(
         &ciphertext,
         &vault_meta.verifier,
@@ -821,7 +1055,6 @@ async fn push_local(
         vault_meta.recovery_envelope.as_deref(),
     );
     ensure_vault_within_limit(limit_bytes, total)?;
-    let new_version = expected + 1;
     if update_vault(state, expected, new_version, &ciphertext, vault_meta).await? {
         Ok(Some(new_version))
     } else {
@@ -834,11 +1067,21 @@ fn parse_backup_json(json: &str) -> anyhow::Result<AzaleaBackup> {
 }
 
 async fn remote_backup(
-    _state: &SyncState,
+    state: &SyncState,
     vault_key: &VaultKey,
     vault: &VaultRow,
 ) -> anyhow::Result<AzaleaBackup> {
-    let plaintext = crypto::decrypt(vault_key, &vault.ciphertext)?;
+    let account_id = require_account_id(state)?;
+    let aad = crypto::vault_aad(&account_id, vault.version, &vault.kdf_salt);
+    // decrypt_with_aad falls back to legacy V1 blobs (no AAD) when the caller
+    // passes an empty aad. We deliberately pass real AAD here so any V2 blob
+    // whose version/account/salt was tampered with fails to decrypt.
+    let plaintext = crypto::decrypt_with_aad(vault_key, &vault.ciphertext, &aad).or_else(|_| {
+        // Backward compat: older vaults may still be V1. Fall back to legacy
+        // path so users don't get stuck after upgrading. Any subsequent push
+        // will rewrite the blob as V2 with AAD binding.
+        crypto::decrypt(vault_key, &vault.ciphertext)
+    })?;
     let json = String::from_utf8(plaintext).map_err(|_| anyhow::anyhow!("Corrupted vault payload"))?;
     parse_backup_json(&json)
 }
@@ -968,7 +1211,21 @@ pub async fn perform_sync(
     } else {
         // Remote moved ahead of us - never pull without explicit user choice.
         if resolution == Some("keep_cloud") {
-            let plaintext = crypto::decrypt(&vault_key, &vault.ciphertext)?;
+            // Refuse to accept a server-provided ciphertext whose version
+            // does not strictly exceed our last-synced version. A hostile /
+            // rolled-back server otherwise could feed us an older-but-still-
+            // valid vault and silently downgrade the client.
+            if vault.version <= last_version {
+                anyhow::bail!(
+                    "Server returned an older vault (v{} <= v{}). Refusing to roll back.",
+                    vault.version,
+                    last_version,
+                );
+            }
+            let account_id = require_account_id(state)?;
+            let aad = crypto::vault_aad(&account_id, vault.version, &vault.kdf_salt);
+            let plaintext = crypto::decrypt_with_aad(&vault_key, &vault.ciphertext, &aad)
+                .or_else(|_| crypto::decrypt(&vault_key, &vault.ciphertext))?;
             let settings = apply_remote_vault(db, &plaintext)?;
             set_synced_meta(db, vault.version, settings.as_ref())?;
             return Ok(SyncOutcome::Pulled { version: vault.version, settings });
@@ -1062,6 +1319,10 @@ pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
     if session_ok && state.is_unlocked() {
         if let Some(vault_key) = state.vault_key.as_ref() {
             if let Ok((local_json, _)) = local_vault_json(db, None) {
+                // Size estimate: AAD doesn't affect ciphertext length, and the
+                // 1-byte V2 version prefix is negligible. Use empty AAD to
+                // avoid pulling account_id here (this path may run before
+                // a successful sync).
                 if let Ok(ciphertext) = crypto::encrypt(vault_key, local_json.as_bytes()) {
                     if let Some(vault) = vault_row.as_ref() {
                         let total = vault_row_bytes(

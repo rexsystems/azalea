@@ -1,22 +1,45 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { resetPassword } from "@/lib/azalea-api";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { resetPassword, TURNSTILE_SITE_KEY } from "@/lib/azalea-api";
 import { Logo } from "@/components/Logo";
 
 function ResetPasswordForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const token = useMemo(() => params.get("token")?.trim() ?? "", [params]);
+  // Consume the token from the URL exactly once on mount, then strip the
+  // query string. This keeps the reset token out of `document.referrer` (any
+  // outbound click) and out of browser history.
+  const [token, setToken] = useState<string>("");
+  const consumedRef = useRef(false);
+
+  useEffect(() => {
+    if (consumedRef.current) return;
+    consumedRef.current = true;
+    const raw = params.get("token")?.trim() ?? "";
+    setToken(raw);
+    if (raw) {
+      router.replace("/reset-password");
+    }
+  }, [params, router]);
+
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const turnstileRef = useRef<TurnstileInstance | null>(null);
 
-  const ready = token.length > 0 && password.length >= 8 && password === confirm;
+  const captchaRequired = TURNSTILE_SITE_KEY.length > 0;
+  const ready =
+    token.length > 0 &&
+    password.length >= 8 &&
+    password === confirm &&
+    (!captchaRequired || captchaToken !== null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,10 +47,12 @@ function ResetPasswordForm() {
     setBusy(true);
     setError(null);
     try {
-      await resetPassword(token, password);
+      await resetPassword(token, password, captchaToken);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      setCaptchaToken(null);
+      turnstileRef.current?.reset();
       setBusy(false);
     }
   };
@@ -62,7 +87,11 @@ function ResetPasswordForm() {
             Request a new link
           </Link>
         ) : done ? (
-          <button type="button" className="btn btn-primary w-full" onClick={() => router.push("/login")}>
+          <button
+            type="button"
+            className="btn btn-primary w-full"
+            onClick={() => router.push("/login")}
+          >
             Sign in
           </button>
         ) : (
@@ -87,6 +116,15 @@ function ResetPasswordForm() {
               required
               minLength={8}
             />
+            {captchaRequired && (
+              <Turnstile
+                ref={turnstileRef}
+                siteKey={TURNSTILE_SITE_KEY}
+                onSuccess={setCaptchaToken}
+                onExpire={() => setCaptchaToken(null)}
+                options={{ theme: "dark" }}
+              />
+            )}
             {error && (
               <p className="text-xs" style={{ color: "var(--danger)" }}>
                 {error}

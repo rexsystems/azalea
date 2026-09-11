@@ -152,11 +152,30 @@ pub fn build_backup(db: &SharedDatabase, settings: Option<Value>) -> Result<Azal
     })
 }
 
+/// Hard cap on backup / import payload size. Azalea vaults are meant to hold
+/// hundreds of hosts, not gigabytes; anything above this is either an accident
+/// or a memory-exhaustion attempt against `serde_json::from_str`, which
+/// buffers the whole document in memory.
+const MAX_IMPORT_JSON_BYTES: usize = 16 * 1024 * 1024; // 16 MiB
+
+fn enforce_import_size(data: &str) -> Result<(), String> {
+    if data.len() > MAX_IMPORT_JSON_BYTES {
+        return Err(format!(
+            "Backup file too large ({} MB). Maximum is {} MB.",
+            data.len() / 1024 / 1024,
+            MAX_IMPORT_JSON_BYTES / 1024 / 1024
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn import_backup(
     db: tauri::State<'_, SharedDatabase>,
     input: ImportBackupInput,
 ) -> Result<ImportBackupResult, String> {
+    enforce_import_size(&input.data)?;
+
     let backup: AzaleaBackup = serde_json::from_str(&input.data)
         .map_err(|_| "Unrecognized backup format. Expected an Azalea backup file.".to_string())?;
 
@@ -173,6 +192,8 @@ pub fn import_data_file(
     data: String,
     replace: bool,
 ) -> Result<ImportResult, String> {
+    enforce_import_size(&data)?;
+
     if let Ok(backup) = serde_json::from_str::<AzaleaBackup>(&data) {
         if backup.format == BACKUP_FORMAT {
             let result = import_azalea_backup_db(&db, backup, replace, None)?;

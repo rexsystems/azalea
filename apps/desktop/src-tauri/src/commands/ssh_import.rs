@@ -109,6 +109,22 @@ fn expand_tilde(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
+/// True when `candidate` resolves to a path inside `base`. Canonicalises both
+/// so `..` / symlinks cannot escape. Falls back to a lexical prefix check when
+/// canonicalisation fails (e.g. the file was moved between scan and import).
+///
+/// This is the guard that prevents `import_ssh_dir` from being tricked into
+/// reading arbitrary private keys off disk (e.g. `/etc/ssh/ssh_host_ed25519_key`,
+/// another app's key material) and silently importing them into Azalea's
+/// vault, from where they would be exportable, backup-able, and cloud-syncable.
+fn is_within(base: &Path, candidate: &Path) -> bool {
+    let base_canon = base.canonicalize().unwrap_or_else(|_| base.to_path_buf());
+    let cand_canon = candidate
+        .canonicalize()
+        .unwrap_or_else(|_| candidate.to_path_buf());
+    cand_canon.starts_with(&base_canon)
+}
+
 /// OpenSSH configs (esp. copied from Windows) often use `\`; treat as `/`.
 fn normalize_ssh_path(path: &str) -> PathBuf {
     let trimmed = path.trim().trim_matches('"').trim_matches('\'');
@@ -410,8 +426,21 @@ pub fn import_ssh_dir(
         };
 
     let passphrase = input.passphrase.as_deref();
+    let ssh_dir_for_scope = default_ssh_dir();
     for path_str in &input.key_paths {
         let path = normalize_ssh_path(path_str);
+        // Refuse anything outside the scanned ~/.ssh directory. The frontend
+        // is only supposed to send paths returned by scan_ssh_dir; a caller
+        // that ignores that (or a compromised webview) cannot silently import
+        // /etc/ssh/ssh_host_*_key or any other private key on disk.
+        if !is_within(&ssh_dir_for_scope, &path) {
+            keys_failed.push(format!(
+                "{}: refused (outside {})",
+                key_name_from_path(&path),
+                ssh_dir_for_scope.display()
+            ));
+            continue;
+        }
         let _ = ensure_key_for_path(
             &path,
             passphrase,
@@ -468,7 +497,10 @@ pub fn import_ssh_dir(
         if let Some(identity) = &host.identity_file {
             let identity_path = normalize_ssh_path(identity);
             key_id = resolve_identity_key_id(identity, &path_to_key_id);
-            if key_id.is_none() && identity_path.is_file() {
+            if key_id.is_none()
+                && identity_path.is_file()
+                && is_within(&ssh_dir_for_scope, &identity_path)
+            {
                 key_id = ensure_key_for_path(
                     &identity_path,
                     passphrase,
@@ -545,7 +577,10 @@ pub fn import_ssh_dir(
                 };
                 let identity_path = normalize_ssh_path(identity);
                 let mut kid = resolve_identity_key_id(identity, &path_to_key_id);
-                if kid.is_none() && identity_path.is_file() {
+                if kid.is_none()
+                    && identity_path.is_file()
+                    && is_within(&ssh_dir_for_scope, &identity_path)
+                {
                     kid = ensure_key_for_path(
                         &identity_path,
                         passphrase,

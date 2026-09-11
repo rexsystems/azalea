@@ -4,9 +4,13 @@ export type SessionUser = {
   role: string;
 };
 
+/**
+ * Client-side session shape. The refresh token is intentionally NOT part of
+ * this type - it lives in an HttpOnly cookie set by azalea-server. The access
+ * token is short-lived (10 min) and kept in localStorage under STORAGE_KEY.
+ */
 export type Session = {
   access_token: string;
-  refresh_token: string;
   expires_in: number;
   user: SessionUser;
 };
@@ -53,7 +57,14 @@ async function request<T>(
       headers.set("Authorization", `Bearer ${session.access_token}`);
     }
   }
-  const res = await fetch(`${apiBase()}${path}`, { ...init, headers });
+  // credentials: "include" so the browser sends the HttpOnly refresh cookie
+  // on /v1/auth/refresh and /v1/auth/logout. Safe because we also lock CORS
+  // down to an origin allowlist on the server.
+  const res = await fetch(`${apiBase()}${path}`, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(
@@ -95,14 +106,17 @@ export async function register(
   return session;
 }
 
+/**
+ * Ask the server for a fresh access token. The refresh token itself lives in
+ * an HttpOnly cookie, so we send an empty body and rely on `credentials:
+ * "include"`.
+ */
 export async function refreshSession(): Promise<Session | null> {
-  const current = getStoredSession();
-  if (!current?.refresh_token) return null;
   try {
     const session = await request<Session>("/v1/auth/refresh", {
       method: "POST",
       auth: false,
-      body: JSON.stringify({ refresh_token: current.refresh_token }),
+      body: JSON.stringify({}),
     });
     storeSession(session);
     return session;
@@ -131,29 +145,60 @@ export async function getAccount(): Promise<{
   return request("/v1/account");
 }
 
-export async function forgotPassword(email: string): Promise<{ ok: boolean; message?: string }> {
+export async function forgotPassword(
+  email: string,
+  captchaToken?: string | null,
+): Promise<{ ok: boolean; message?: string }> {
   return request("/v1/auth/forgot-password", {
     method: "POST",
     auth: false,
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({
+      email,
+      captcha_token: captchaToken ?? undefined,
+    }),
   });
 }
 
 export async function resetPassword(
   token: string,
   password: string,
+  captchaToken?: string | null,
 ): Promise<{ ok: boolean }> {
   return request("/v1/auth/reset-password", {
     method: "POST",
     auth: false,
-    body: JSON.stringify({ token, password }),
+    body: JSON.stringify({
+      token,
+      password,
+      captcha_token: captchaToken ?? undefined,
+    }),
   });
 }
 
 export async function ensureSession(): Promise<Session | null> {
   const current = getStoredSession();
-  if (!current) return null;
-  return (await refreshSession()) ?? current;
+  // Always try to refresh: if the cookie is present we get a fresh access
+  // token, otherwise we fall back to the currently-stored session (which the
+  // caller may then decide is expired).
+  const refreshed = await refreshSession();
+  return refreshed ?? current;
+}
+
+// ---------- Desktop PKCE authorization handoff ----------
+
+export type DesktopApproveResponse = {
+  code: string;
+  expires_in: number;
+};
+
+export async function approveDesktopHandoff(
+  handle: string,
+  clientState: string,
+): Promise<DesktopApproveResponse> {
+  return request<DesktopApproveResponse>("/v1/auth/desktop/approve", {
+    method: "POST",
+    body: JSON.stringify({ handle, client_state: clientState }),
+  });
 }
 
 export const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";

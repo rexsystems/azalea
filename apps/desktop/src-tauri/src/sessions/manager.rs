@@ -4,7 +4,94 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use russh::client;
-use russh::{Channel, ChannelMsg, Disconnect};
+use russh::{cipher, kex, mac, Channel, ChannelMsg, Disconnect, Preferred};
+use std::borrow::Cow;
+
+/// Returns true when `home` looks like an actual user home directory. Refuses
+/// system directories (`/`, `/etc/*`, `/var/*`, `/usr/*`, ...) that would let
+/// a hostile SSH server redirect an authorized_keys install to a system path.
+///
+/// Accepted shapes:
+///   * `/home/<any>` (Linux)
+///   * `/Users/<any>` (macOS)
+///   * `/root` when the login user is `root`
+///   * `/export/home/<any>` (Solaris-style)
+///   * `C:/Users/<any>` and forward-slashed variants (Windows via OpenSSH)
+fn looks_like_user_home(home: &str, username: &str) -> bool {
+    let home = home.trim().trim_end_matches('/');
+    if home.is_empty() {
+        return false;
+    }
+    // Windows drive path normalization.
+    let normalized = home.replace('\\', "/");
+    let lower = normalized.to_ascii_lowercase();
+
+    if username.eq_ignore_ascii_case("root") && (normalized == "/root" || normalized == "/var/root")
+    {
+        return true;
+    }
+
+    for prefix in [
+        "/home/",
+        "/Users/",
+        "/export/home/",
+        "/private/var/root/",
+        "/var/lib/",
+    ] {
+        if normalized.starts_with(prefix) {
+            // Require at least one path component after the prefix so `/home/`
+            // alone doesn't slip through.
+            if normalized.len() > prefix.len() {
+                return true;
+            }
+        }
+    }
+    // Windows: C:/Users/<name>
+    if lower.starts_with("c:/users/") && lower.len() > "c:/users/".len() {
+        return true;
+    }
+    false
+}
+
+/// Strict set of SSH algorithms Azalea negotiates by default.
+///
+/// russh's `Preferred::DEFAULT` still advertises `hmac-sha1` and
+/// `hmac-sha1-etm@openssh.com`. SHA-1 as a MAC has real practical attacks; we
+/// drop it. Users stuck talking to legacy servers can opt in via the
+/// `AZALEA_ALLOW_LEGACY_SSH=1` environment variable, which falls back to
+/// russh's defaults (still no CBC ciphers, still no DH-group1).
+fn strict_ssh_preferences() -> Preferred {
+    if std::env::var("AZALEA_ALLOW_LEGACY_SSH").ok().as_deref() == Some("1") {
+        return Preferred::DEFAULT;
+    }
+    Preferred {
+        kex: Cow::Borrowed(&[
+            kex::CURVE25519,
+            kex::CURVE25519_PRE_RFC_8731,
+            kex::DH_G16_SHA512,
+            kex::DH_G14_SHA256,
+            kex::EXTENSION_SUPPORT_AS_CLIENT,
+            kex::EXTENSION_SUPPORT_AS_SERVER,
+            kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
+            kex::EXTENSION_OPENSSH_STRICT_KEX_AS_SERVER,
+        ]),
+        key: Preferred::DEFAULT.key,
+        cipher: Cow::Borrowed(&[
+            cipher::CHACHA20_POLY1305,
+            cipher::AES_256_GCM,
+            cipher::AES_256_CTR,
+            cipher::AES_192_CTR,
+            cipher::AES_128_CTR,
+        ]),
+        mac: Cow::Borrowed(&[
+            mac::HMAC_SHA512_ETM,
+            mac::HMAC_SHA256_ETM,
+            mac::HMAC_SHA512,
+            mac::HMAC_SHA256,
+        ]),
+        compression: Preferred::DEFAULT.compression,
+    }
+}
 use russh_sftp::client::SftpSession;
 use ssh_key::{HashAlg, PublicKey};
 use tauri::{AppHandle, Emitter};
@@ -876,6 +963,7 @@ async fn run_session(
 ) -> anyhow::Result<()> {
     let config = Arc::new(client::Config {
         inactivity_timeout: Some(std::time::Duration::from_secs(3600)),
+        preferred: strict_ssh_preferences(),
         ..Default::default()
     });
 
@@ -1230,6 +1318,7 @@ pub async fn install_authorized_key(
 
     let config = Arc::new(client::Config {
         inactivity_timeout: Some(std::time::Duration::from_secs(60)),
+        preferred: strict_ssh_preferences(),
         ..Default::default()
     });
 
@@ -1264,6 +1353,26 @@ pub async fn install_authorized_key(
         .canonicalize(".")
         .await
         .map_err(|err| anyhow::anyhow!("Could not resolve home directory: {err}"))?;
+
+    // Sanity-check the server-reported home before we write authorized_keys
+    // into it. A hostile / misconfigured SSH server can return any path from
+    // `canonicalize(".")`, and Azalea would happily create `.ssh/` and
+    // append a public key there. Refusing suspicious system directories
+    // keeps a rogue server from tricking us into writing keys under, say,
+    // /etc/skel/ or /var/lib/*.
+    if !looks_like_user_home(&home, &host.username) {
+        let _ = session
+            .disconnect(
+                Disconnect::ByApplication,
+                "Unexpected home directory",
+                "en",
+            )
+            .await;
+        anyhow::bail!(
+            "Server returned an unexpected home directory ({home}). Refusing to install the key."
+        );
+    }
+
     let ssh_dir = format!("{home}/.ssh");
     let auth_keys_path = format!("{ssh_dir}/authorized_keys");
 

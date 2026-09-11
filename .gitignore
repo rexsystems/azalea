@@ -18,3 +18,22 @@ apps/desktop/src-tauri/gen/
 .cursor/
 
 /azalea-telemetry
+
+# Secret material - never commit. Belt-and-suspenders in case someone drops
+# an SSH key, TLS cert, or Tauri signing key into the repo by accident.
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+id_dsa
+id_dsa.*
+*.ppk
+minisign.key
+tauri-signing-*
+

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { User } from "./icons";
 import { emailInitials, gravatarUrl } from "../lib/gravatar";
+import { getStoredGravatarEnabled } from "../lib/settings";
 
 interface UserAvatarProps {
   email?: string | null;
@@ -18,6 +19,9 @@ export function UserAvatar({ email, size = 32, className = "" }: UserAvatarProps
     setSrc(null);
 
     if (!email?.trim()) return;
+    // Gravatar is off by default; the render falls back to initials until the
+    // user opts in from Settings. See getStoredGravatarEnabled for rationale.
+    if (!getStoredGravatarEnabled()) return;
 
     void gravatarUrl(email, size * 2)
       .then((url) => {

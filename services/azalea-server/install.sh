@@ -1,10 +1,24 @@
 #!/usr/bin/env bash
 # Interactive installer: azalea-server (+ optional web) on a fresh VPS.
 # Prefers prebuilt GHCR images. Falls back to source build only if pull fails.
+#
+# For production installs, pin the images to a specific digest so a compromised
+# GHCR push cannot silently swap the runtime out from under you. Example:
+#
+#   AZALEA_SERVER_IMAGE=ghcr.io/rexsystems/azalea-server@sha256:<64hex> \
+#   AZALEA_WEB_IMAGE=ghcr.io/rexsystems/azalea-web@sha256:<64hex> \
+#     bash install.sh
+#
+# The current digests are printed at the end of a successful `docker compose pull`.
 set -euo pipefail
 
 SERVER_IMAGE="${AZALEA_SERVER_IMAGE:-ghcr.io/rexsystems/azalea-server:latest}"
 WEB_IMAGE="${AZALEA_WEB_IMAGE:-ghcr.io/rexsystems/azalea-web:latest}"
+
+# Warn once when using :latest so operators know they can pin.
+if [[ "$SERVER_IMAGE" == *:latest ]] || [[ "$WEB_IMAGE" == *:latest ]]; then
+  printf '\033[38;5;221m[warn]\033[0m Using floating :latest tags. For a reproducible install, pin AZALEA_SERVER_IMAGE and AZALEA_WEB_IMAGE to sha256 digests (see comment at top of this script).\n' >&2
+fi
 REPO="${AZALEA_REPO:-https://github.com/rexsystems/azalea.git}"
 INSTALL_DIR="${AZALEA_INSTALL_DIR:-$HOME/azalea}"
 
@@ -278,16 +292,26 @@ banner
 
 progress "Checking Docker"
 if ! command -v docker >/dev/null 2>&1; then
-  if ask_yes_no "Docker not found. Install via get.docker.com?" "y"; then
-    need_cmd curl
-    curl -fsSL https://get.docker.com | sh
-    if command -v usermod >/dev/null 2>&1 && [[ "$(id -u)" -ne 0 ]]; then
-      sudo usermod -aG docker "$USER" || true
-      warn "You may need to log out/in for docker without sudo."
-    fi
-  else
-    die "Docker is required"
-  fi
+  # Suggest the OS package manager first (auditable, distro-signed) instead of
+  # curl | sh. The Docker convenience script docker.com itself recommends
+  # against on production hosts.
+  cat <<'EOM' >&2
+Docker is not installed.
+
+Please install it with your OS package manager (recommended):
+  Debian/Ubuntu:  https://docs.docker.com/engine/install/ubuntu/
+  Fedora:         https://docs.docker.com/engine/install/fedora/
+  RHEL / Alma:    https://docs.docker.com/engine/install/rhel/
+  Arch Linux:     sudo pacman -S docker docker-compose
+
+Piping get.docker.com to sh is disabled here because we cannot verify its
+integrity. If you accept the risk, run the convenience script manually:
+
+  curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+  sha256sum /tmp/get-docker.sh   # compare against docker.com/blog before running
+  sudo sh /tmp/get-docker.sh
+EOM
+  die "Install Docker with the OS package manager, then re-run this script."
 fi
 need_cmd docker
 docker compose version >/dev/null 2>&1 || die "docker compose plugin required"
@@ -446,6 +470,21 @@ docker ps -a --format '{{.Names}}' | while read -r name; do
 done
 docker compose up -d
 ok "Containers up"
+
+# Print the resolved image digests. Operators who want a reproducible install
+# can pin AZALEA_SERVER_IMAGE / AZALEA_WEB_IMAGE to these values (see top of
+# script) so a compromised GHCR push cannot silently ship a new binary here.
+printf '\n%b Currently-running image digests:\n' "${C_DIM}image ${C_RESET}"
+for image in "$SERVER_IMAGE" "$WEB_IMAGE"; do
+  [[ -z "$image" ]] && continue
+  digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$image" 2>/dev/null || true)
+  if [[ -n "$digest" ]]; then
+    printf '  %s\n' "$digest"
+  else
+    printf '  %s (no digest available)\n' "$image"
+  fi
+done
+printf '\n'
 
 progress "Waiting for API health"
 healthy=0

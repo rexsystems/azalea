@@ -59,6 +59,25 @@ export function setStoredAutoSync(enabled: boolean) {
   localStorage.setItem(AUTO_SYNC_KEY, enabled ? "1" : "0");
 }
 
+// ---------- Gravatar (privacy opt-in) ----------
+
+const GRAVATAR_KEY = "azalea-gravatar-enabled";
+
+/**
+ * Gravatar shows an avatar by sending a SHA-256 of the user's email to
+ * gravatar.com every time the app renders <UserAvatar>. That leaks the
+ * email hash to a third party, which trivially rounds down to "did user X
+ * open Azalea today?". Default OFF; user must explicitly opt in from
+ * Settings.
+ */
+export function getStoredGravatarEnabled(): boolean {
+  return localStorage.getItem(GRAVATAR_KEY) === "1";
+}
+
+export function setStoredGravatarEnabled(enabled: boolean) {
+  localStorage.setItem(GRAVATAR_KEY, enabled ? "1" : "0");
+}
+
 export const connectScreenOptions: { id: ConnectScreenMode; label: string; description: string }[] =
   [
     {

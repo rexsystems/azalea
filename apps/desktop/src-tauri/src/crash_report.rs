@@ -92,6 +92,18 @@ fn write_pending(crash: PendingCrash) {
     };
     if let Ok(json) = serde_json::to_string_pretty(&crash) {
         let _ = fs::write(path, json);
+        // Best-effort chmod 0600 on Unix so another user on the machine can
+        // never read a crash report (which can include a stack trace / rust
+        // panic message; low risk but no reason to be world-readable).
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(meta) = fs::metadata(path) {
+                let mut perms = meta.permissions();
+                perms.set_mode(0o600);
+                let _ = fs::set_permissions(path, perms);
+            }
+        }
     }
 }
 

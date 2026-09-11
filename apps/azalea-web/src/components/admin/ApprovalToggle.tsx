@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { FiLoader } from "react-icons/fi";
 
 interface ApprovalToggleProps {
   approved: boolean;
@@ -42,7 +42,7 @@ export function ApprovalToggle({
         <span className="approval-toggle-thumb" />
       </span>
       <span className="approval-toggle-label">{approved ? approvedLabel : pendingLabel}</span>
-      {busy && <Loader2 size={12} className="animate-spin" style={{ color: "var(--text-muted)" }} />}
+      {busy && <FiLoader size={12} className="animate-spin" style={{ color: "var(--text-muted)" }} />}
     </label>
   );
 }

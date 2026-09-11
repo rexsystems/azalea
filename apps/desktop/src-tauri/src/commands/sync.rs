@@ -23,8 +23,9 @@ pub async fn sync_status(
 const BROWSER_LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
 
 fn random_state() -> String {
+    use rand::rngs::OsRng;
     use rand::Rng;
-    let mut rng = rand::thread_rng();
+    let mut rng = OsRng;
     (0..24)
         .map(|_| {
             let n: u8 = rng.gen_range(0..62);
@@ -54,15 +55,17 @@ Access-Control-Allow-Methods: POST, OPTIONS\r\nConnection: close\r\n\r\n";
 
 const NO_CONTENT_RESPONSE: &str = "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n";
 
+/// The browser POSTs `{state, code}` to the loopback listener. Neither field
+/// is a bearer credential on its own: `code` must be exchanged with the server
+/// using the local PKCE `code_verifier` to yield a session.
 #[derive(Debug, Deserialize)]
 struct CallbackBody {
     state: String,
-    refresh_token: String,
+    code: String,
 }
 
-/// Waits for the browser to POST `{state, refresh_token}` to `/callback` on the
-/// loopback server, validates the state, and returns the refresh token. The
-/// token is kept out of the URL so it never reaches browser history or logs.
+/// Waits for the browser to POST `{state, code}` to `/callback` on the
+/// loopback server, validates the state, and returns the authorization code.
 async fn wait_for_callback(listener: TcpListener, expected_state: &str) -> anyhow::Result<String> {
     loop {
         let (mut stream, _) = listener.accept().await?;
@@ -123,11 +126,9 @@ async fn wait_for_callback(listener: TcpListener, expected_state: &str) -> anyho
         let body = &buf[header_end..];
         let parsed: Option<CallbackBody> = serde_json::from_slice(body).ok();
 
-        let refresh = match parsed {
-            Some(payload)
-                if payload.state == expected_state && !payload.refresh_token.is_empty() =>
-            {
-                Some(payload.refresh_token)
+        let code = match parsed {
+            Some(payload) if payload.state == expected_state && !payload.code.is_empty() => {
+                Some(payload.code)
             }
             _ => {
                 let _ = stream
@@ -139,7 +140,7 @@ async fn wait_for_callback(listener: TcpListener, expected_state: &str) -> anyho
             }
         };
 
-        let Some(refresh) = refresh else {
+        let Some(code) = code else {
             continue;
         };
 
@@ -148,7 +149,7 @@ async fn wait_for_callback(listener: TcpListener, expected_state: &str) -> anyho
             .await;
         let _ = stream.flush().await;
         let _ = stream.shutdown().await;
-        return Ok(refresh);
+        return Ok(code);
     }
 }
 
@@ -168,20 +169,35 @@ pub async fn sync_browser_login(
         .port();
     let expected_state = random_state();
 
-    let web = {
+    // PKCE material stays in this process for the lifetime of the flow.
+    let pkce = sync::new_pkce_material();
+
+    // Ask the server for a handle that ties the browser session to our PKCE
+    // challenge. If we cannot reach the server, bail before opening a browser
+    // window so we surface a clear error to the UI.
+    let (api_base, web) = {
         let sync = state.lock().await;
-        sync::web_base_url(Some(&sync))
+        let api_base = sync::api_base_url_public(&sync)
+            .map_err(|e| e.to_string())?;
+        (api_base, sync::web_base_url(Some(&sync)))
     };
+    let handle = sync::begin_desktop_pkce(&api_base, &pkce.challenge, &expected_state)
+        .await
+        .map_err(|e| e.to_string())?;
+
     let url = format!(
-        "{}/authorize?port={}&state={}",
-        web, port, expected_state
+        "{}/authorize?port={}&state={}&handle={}",
+        web,
+        port,
+        urlencoding_encode(&expected_state),
+        urlencoding_encode(&handle),
     );
 
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(|e| format!("Could not open the browser: {e}"))?;
 
-    let refresh = tokio::time::timeout(
+    let code = tokio::time::timeout(
         BROWSER_LOGIN_TIMEOUT,
         wait_for_callback(listener, &expected_state),
     )
@@ -189,9 +205,14 @@ pub async fn sync_browser_login(
     .map_err(|_| "Timed out waiting for the browser sign-in.".to_string())?
     .map_err(|e| e.to_string())?;
 
+    // Redeem the one-time code with the server using our local PKCE verifier.
+    let session = sync::exchange_desktop_code(&api_base, &handle, &code, &pkce.verifier)
+        .await
+        .map_err(|e| e.to_string())?;
+
     let (account_id, email) = {
         let mut sync = state.lock().await;
-        sync::login_with_refresh_token(&mut sync, &refresh)
+        sync::login_with_desktop_session(&mut sync, session)
             .await
             .map_err(|e| e.to_string())?;
         (sync.account_id_clone(), sync.email())
@@ -201,6 +222,23 @@ pub async fn sync_browser_login(
         let _ = registry.lock().set_email(&id, Some(email));
     }
     Ok(())
+}
+
+/// Minimal, non-panicking percent-encoding for query-string values so we don't
+/// pull in a whole crate for one call.
+fn urlencoding_encode(v: &str) -> String {
+    let mut out = String::with_capacity(v.len());
+    for byte in v.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(*byte as char);
+            }
+            _ => {
+                out.push_str(&format!("%{byte:02X}"));
+            }
+        }
+    }
+    out
 }
 
 #[tauri::command]

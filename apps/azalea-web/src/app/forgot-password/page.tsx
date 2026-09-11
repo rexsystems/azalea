@@ -1,28 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { forgotPassword } from "@/lib/azalea-api";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
+import { forgotPassword, TURNSTILE_SITE_KEY } from "@/lib/azalea-api";
 import { Logo } from "@/components/Logo";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const turnstileRef = useRef<TurnstileInstance | null>(null);
+
+  const captchaRequired = TURNSTILE_SITE_KEY.length > 0;
+  const ready =
+    email.trim().length > 3 && (!captchaRequired || captchaToken !== null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy || email.trim().length < 3) return;
+    if (!ready || busy) return;
     setBusy(true);
     setError(null);
     try {
-      await forgotPassword(email.trim());
+      await forgotPassword(email.trim(), captchaToken);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      setCaptchaToken(null);
+      turnstileRef.current?.reset();
       setBusy(false);
     }
   };
@@ -49,7 +58,11 @@ export default function ForgotPasswordPage() {
         </p>
 
         {done ? (
-          <button type="button" className="btn btn-primary w-full" onClick={() => router.push("/login")}>
+          <button
+            type="button"
+            className="btn btn-primary w-full"
+            onClick={() => router.push("/login")}
+          >
             Back to sign in
           </button>
         ) : (
@@ -63,16 +76,21 @@ export default function ForgotPasswordPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
             />
+            {captchaRequired && (
+              <Turnstile
+                ref={turnstileRef}
+                siteKey={TURNSTILE_SITE_KEY}
+                onSuccess={setCaptchaToken}
+                onExpire={() => setCaptchaToken(null)}
+                options={{ theme: "dark" }}
+              />
+            )}
             {error && (
               <p className="text-xs" style={{ color: "var(--danger)" }}>
                 {error}
               </p>
             )}
-            <button
-              type="submit"
-              className="btn btn-primary w-full"
-              disabled={busy || email.trim().length < 3}
-            >
+            <button type="submit" className="btn btn-primary w-full" disabled={!ready || busy}>
               {busy ? "Sending..." : "Send reset link"}
             </button>
           </form>

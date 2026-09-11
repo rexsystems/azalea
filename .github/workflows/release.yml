@@ -2,6 +2,11 @@ name: Release
 
 # Builds installable desktop apps and publishes GitHub Releases for downloads.
 # Runs only on master. The dev branch is intentionally excluded.
+#
+# All third-party actions are pinned to a full commit SHA rather than a
+# floating tag so a hijacked tag on the upstream action cannot silently
+# execute new code with our TAURI_SIGNING_PRIVATE_KEY. Bumping a pin is a
+# reviewable diff, not an invisible upgrade.
 
 on:
   push:
@@ -11,9 +16,11 @@ on:
 permissions:
   contents: write
 
+# Publicly-safe values only. TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) is
+# intentionally NOT in the top-level env - it's scoped per-step to the build
+# and signer steps that actually need it, so a compromised curl or npm script
+# in an unrelated step can't read it out of the environment.
 env:
-  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
   VITE_AZALEA_BUILD: ${{ github.run_number }}
 
 jobs:
@@ -21,16 +28,16 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable @ 2025-08
 
       - name: Install dependencies
         run: npm ci
@@ -43,6 +50,9 @@ jobs:
             rollup esbuild @tauri-apps/cli
 
       - name: Build Azalea (Windows)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run build:ci
 
       - name: Read version
@@ -62,7 +72,7 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/latest-fragment.json
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows
           path: |
@@ -76,16 +86,16 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable @ 2025-08
 
       - name: Install Linux dependencies
         run: |
@@ -112,11 +122,17 @@ jobs:
             rollup esbuild @tauri-apps/cli
 
       - name: Build Azalea (deb + rpm + AppImage)
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run build:linux:ci
 
       - name: Sign Linux package updaters
         # createUpdaterArtifacts signs AppImage; rpm/deb need an explicit sign for
         # linux-x86_64-rpm / linux-x86_64-deb keys used by installed packages.
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           shopt -s nullglob
           for pkg in \
@@ -146,7 +162,7 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/latest-fragment.json
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: linux
           path: |
@@ -173,16 +189,16 @@ jobs:
     runs-on: macos-14
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable @ 2025-08
         with:
           targets: ${{ matrix.rust_target }}
 
@@ -198,6 +214,8 @@ jobs:
       - name: Build Azalea (macOS .app)
         env:
           CI: "true"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run build:macos:ci -- --target ${{ matrix.rust_target }}
 
       - name: Read version
@@ -236,7 +254,7 @@ jobs:
           echo "bundle_dir=$BUNDLE" >> "$GITHUB_OUTPUT"
 
       - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.artifact_name }}
           path: |
@@ -250,10 +268,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
 
@@ -286,7 +304,7 @@ jobs:
           ls -la release-files
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@62c96d0c4e8a889135c1f3a25910db8dbe0e85f7 # v2.3.4
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: Azalea v${{ steps.meta.outputs.version }} (build ${{ github.run_number }})

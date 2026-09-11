@@ -505,6 +505,7 @@ textarea,
 .key-card-actions button {
   display: inline-flex;
   min-width: 0;
+  width: 100%;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
@@ -521,7 +522,7 @@ textarea,
     color 120ms ease;
 }
 
-.key-card-actions button:last-child {
+.key-card-actions > button:last-child {
   border-right: none;
 }
 
@@ -539,6 +540,65 @@ textarea,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.key-export-menu {
+  position: relative;
+  min-width: 0;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.key-export-menu > button {
+  border-right: none;
+}
+
+.key-export-dropdown {
+  position: absolute;
+  left: 50%;
+  z-index: 20;
+  width: max-content;
+  min-width: 11.5rem;
+  transform: translateX(-50%);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background: var(--bg-panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  padding: 0.25rem;
+}
+
+.key-export-dropdown.down {
+  top: calc(100% + 0.35rem);
+  bottom: auto;
+}
+
+.key-export-dropdown.up {
+  bottom: calc(100% + 0.35rem);
+  top: auto;
+}
+
+.key-export-dropdown button {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  border-right: none;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  color: var(--text-secondary);
+}
+
+.key-export-dropdown button:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.key-export-dropdown button.danger {
+  color: var(--danger, #f87171);
+}
+
+.key-export-dropdown button.danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--danger, #f87171);
 }
 
 .titlebar-btn {
