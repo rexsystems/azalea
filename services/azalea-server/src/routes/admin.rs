@@ -53,6 +53,9 @@ struct AdminUser {
     disabled: bool,
     vault_bytes: i64,
     created_at: String,
+    updated_at: String,
+    vault_updated_at: Option<String>,
+    last_sign_in_at: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -61,10 +64,16 @@ struct CreateUserBody {
     password: String,
     #[serde(default = "default_role")]
     role: String,
+    #[serde(default = "default_plan")]
+    plan: String,
 }
 
 fn default_role() -> String {
     "user".into()
+}
+
+fn default_plan() -> String {
+    "free".into()
 }
 
 #[derive(Deserialize)]
@@ -72,6 +81,7 @@ struct PatchUserBody {
     disabled: Option<bool>,
     role: Option<String>,
     plan: Option<String>,
+    password: Option<String>,
 }
 
 async fn get_settings(
@@ -173,11 +183,13 @@ async fn list_users(
     require_admin(&claims)?;
     let users = state.db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT u.id, u.email, u.role, u.plan, u.disabled, u.created_at,
+            "SELECT u.id, u.email, u.role, u.plan, u.disabled, u.created_at, u.updated_at,
                     COALESCE((
                       SELECT length(kdf_salt)+length(verifier)+length(ifnull(recovery_envelope,''))+length(ciphertext)
                       FROM vaults v WHERE v.user_id = u.id
-                    ), 0)
+                    ), 0),
+                    (SELECT v.updated_at FROM vaults v WHERE v.user_id = u.id),
+                    (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id)
              FROM users u ORDER BY u.created_at ASC",
         )?;
         let rows = stmt.query_map([], |r| {
@@ -188,7 +200,10 @@ async fn list_users(
                 plan: r.get(3)?,
                 disabled: r.get::<_, i64>(4)? != 0,
                 created_at: r.get(5)?,
-                vault_bytes: r.get(6)?,
+                updated_at: r.get(6)?,
+                vault_bytes: r.get(7)?,
+                vault_updated_at: r.get(8)?,
+                last_sign_in_at: r.get(9)?,
             })
         })?;
         let mut out = Vec::new();
@@ -216,6 +231,7 @@ async fn create_user(
         ));
     }
     let role = if body.role == "admin" { "admin" } else { "user" };
+    let plan = if body.plan == "pro" { "pro" } else { "free" };
     let password_hash = hash_password(&body.password)?;
     let id = Uuid::new_v4().to_string();
     let now = now_rfc3339();
@@ -223,8 +239,8 @@ async fn create_user(
     let insert = state.db.with_conn(|conn| {
         conn.execute(
             "INSERT INTO users (id, email, password_hash, role, plan, disabled, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, 'free', 0, ?5, ?5)",
-            params![id, email, password_hash, role, now],
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6)",
+            params![id, email, password_hash, role, plan, now],
         )?;
         Ok(())
     });
@@ -239,10 +255,13 @@ async fn create_user(
         id,
         email,
         role: role.into(),
-        plan: "free".into(),
+        plan: plan.into(),
         disabled: false,
         vault_bytes: 0,
-        created_at: now,
+        created_at: now.clone(),
+        updated_at: now,
+        vault_updated_at: None,
+        last_sign_in_at: None,
     }))
 }
 
@@ -279,5 +298,22 @@ async fn patch_user(
         }
         Ok(())
     })?;
+    if let Some(password) = &body.password {
+        if !password.is_empty() {
+            if password.len() < 8 {
+                return Err(ApiError::BadRequest(
+                    "password must be at least 8 characters".into(),
+                ));
+            }
+            let password_hash = hash_password(password)?;
+            state.db.with_conn(|conn| {
+                conn.execute(
+                    "UPDATE users SET password_hash = ?2, updated_at = ?3 WHERE id = ?1",
+                    params![id, password_hash, now],
+                )?;
+                Ok(())
+            })?;
+        }
+    }
     Ok(Json(serde_json::json!({ "ok": true })))
 }

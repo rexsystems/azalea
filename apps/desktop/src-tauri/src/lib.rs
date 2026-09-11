@@ -131,6 +131,7 @@ pub fn run() {
             accounts::set_accounts_onboarded,
             accounts::connect_selfhost,
             accounts::add_account,
+            accounts::rename_account,
             accounts::switch_account,
             accounts::remove_account,
             accounts::copy_account_data,

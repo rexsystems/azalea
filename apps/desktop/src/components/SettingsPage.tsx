@@ -20,7 +20,7 @@ import { Slider } from "./ui/Slider";
 import { SyncSection } from "./SyncSection";
 import { ImportSection } from "./ImportSection";
 import { UpdateSection } from "./UpdateSection";
-import type { AccountKind, SyncStatus } from "../lib/api";
+import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { isTelemetryEnabled, setTelemetryEnabled } from "../lib/telemetry";
 
 type SettingsTab =
@@ -51,6 +51,7 @@ interface SettingsPageProps {
   onSyncVaultApplied: (settings: unknown) => void;
   onSyncDataRefresh: () => Promise<void>;
   accountKind?: AccountKind | null;
+  activeAccount?: AccountRecord | null;
   focusSync?: boolean;
   onFocusSyncHandled?: () => void;
 }
@@ -140,6 +141,7 @@ export function SettingsPage({
   onSyncVaultApplied,
   onSyncDataRefresh,
   accountKind = null,
+  activeAccount = null,
   focusSync = false,
   onFocusSyncHandled,
 }: SettingsPageProps) {
@@ -387,8 +389,14 @@ export function SettingsPage({
             {tab === "account" && (
               <>
                 <PanelHeader
-                  title="Account & sync"
-                  description="Encrypted cloud backup for hosts, keys, and settings."
+                  title="Account"
+                  description={
+                    accountKind === "offline"
+                      ? "Local profile. Hosts and keys stay on this device."
+                      : accountKind === "selfhost"
+                        ? "Your instance, vault status, and master password."
+                        : "Sign-in, vault, and encrypted cloud backup."
+                  }
                 />
                 <SyncSection
                   embedded
@@ -398,6 +406,7 @@ export function SettingsPage({
                   onVaultApplied={onSyncVaultApplied}
                   onDataRefresh={onSyncDataRefresh}
                   accountKind={accountKind}
+                  account={activeAccount}
                 />
               </>
             )}

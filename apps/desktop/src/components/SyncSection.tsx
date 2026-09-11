@@ -29,6 +29,7 @@ interface SyncSectionProps {
   /** Skip outer section chrome when rendered inside a parent settings panel. */
   embedded?: boolean;
   accountKind?: api.AccountKind | null;
+  account?: api.AccountRecord | null;
 }
 
 type Busy = null | "status" | "auth" | "setup" | "unlock" | "sync";
@@ -69,10 +70,17 @@ function syncStateLabel(status: api.SyncStatus): string {
   return "In sync";
 }
 
-function StoragePanel({ status }: { status: api.SyncStatus }) {
+function StoragePanel({
+  status,
+  accountKind,
+}: {
+  status: api.SyncStatus;
+  accountKind?: api.AccountKind | null;
+}) {
   const used = status.cloud_used_bytes;
   const limit = status.storage_limit_bytes;
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const cloud = accountKind === "cloud";
 
   return (
     <div
@@ -81,7 +89,7 @@ function StoragePanel({ status }: { status: api.SyncStatus }) {
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
-          Cloud storage
+          {cloud ? "Cloud storage" : "Vault storage"}
         </span>
         <PlanBadge plan={status.plan} role={status.role} />
       </div>
@@ -98,7 +106,7 @@ function StoragePanel({ status }: { status: api.SyncStatus }) {
         />
       </div>
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-        {fmtBytes(used)} / {fmtBytes(limit)} in cloud
+        {fmtBytes(used)} / {fmtBytes(limit)} {cloud ? "in cloud" : "on this instance"}
       </p>
       {status.unlocked && status.local_estimated_bytes != null && (
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -111,7 +119,7 @@ function StoragePanel({ status }: { status: api.SyncStatus }) {
           hosts or keys locally, then sync again.
         </p>
       )}
-      {status.plan !== "pro" && (
+      {cloud && status.plan !== "pro" && (
         <button
           type="button"
           className="mt-1 inline-flex items-center gap-1 text-xs transition-colors hover:opacity-80"
@@ -134,6 +142,7 @@ export function SyncSection({
   onDataRefresh,
   embedded = false,
   accountKind = null,
+  account = null,
 }: SyncSectionProps) {
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
@@ -202,7 +211,9 @@ export function SyncSection({
   const runPreview = useCallback(async () => {
     if (status?.storage_blocked) {
       setError(
-        "Cloud vault is full. Remove hosts or keys locally, then try again, or upgrade to Pro.",
+        accountKind === "cloud"
+          ? "Cloud vault is full. Remove hosts or keys locally, then try again, or upgrade to Pro."
+          : "Vault is full. Remove hosts or keys locally, then try again.",
       );
       return;
     }
@@ -218,7 +229,7 @@ export function SyncSection({
     ) {
       setPreview(next);
     }
-  }, [getSettings, status?.storage_blocked]);
+  }, [accountKind, getSettings, status?.storage_blocked]);
 
   const run = useCallback(
     async (kind: Busy, action: () => Promise<void>) => {
@@ -311,6 +322,35 @@ export function SyncSection({
 
   const spinner = <Loader2 size={14} className="animate-spin" />;
 
+  const kindTitle =
+    accountKind === "selfhost" ? "Self-hosted" : accountKind === "cloud" ? "Azalea Cloud" : "Local";
+  const profileCard = (
+    <div
+      className="rounded-lg border px-3 py-2.5"
+      style={{ borderColor: "var(--border-subtle)", background: "var(--bg-base)" }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
+            {account?.label ?? kindTitle}
+          </div>
+          <div className="mt-0.5 truncate text-[11px]" style={{ color: "var(--text-muted)" }}>
+            {kindTitle}
+            {account?.email || status?.email
+              ? ` · ${maskEmail(account?.email ?? status?.email ?? "")}`
+              : ""}
+          </div>
+          {accountKind === "selfhost" && account?.base_url ? (
+            <div className="mt-0.5 truncate text-[11px]" style={{ color: "var(--text-muted)" }}>
+              {account.base_url.replace(/^https?:\/\//, "")}
+            </div>
+          ) : null}
+        </div>
+        {status?.logged_in ? <PlanBadge plan={status.plan} role={status.role} size="md" /> : null}
+      </div>
+    </div>
+  );
+
   const renderBody = () => {
     if (!status) {
       return (
@@ -330,10 +370,13 @@ export function SyncSection({
 
     if (accountKind === "offline") {
       return (
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          This profile is local only. Sync and sign-in are not used here. Add a Cloud or Self-hosted
-          account from the account switcher if you want sync.
-        </p>
+        <div className="space-y-3">
+          {profileCard}
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            This profile is local only. Hosts and keys stay on this device. Add a Cloud or
+            Self-hosted account from the switcher if you want sync.
+          </p>
+        </div>
       );
     }
 
@@ -341,6 +384,7 @@ export function SyncSection({
       const selfhost = accountKind === "selfhost";
       return (
         <div className="space-y-3">
+          {profileCard}
           {status.auth_disconnected && (
             <p className="text-xs leading-relaxed" style={{ color: "#d97706" }}>
               Account on this profile was disconnected. Reconnect again.
@@ -415,7 +459,7 @@ export function SyncSection({
             {status.remote_version != null && (
               <span className="opacity-70">
                 {" "}
-                · cloud v{status.remote_version}
+                · vault v{status.remote_version}
                 {status.last_synced_version > 0 && ` · synced v${status.last_synced_version}`}
               </span>
             )}
@@ -428,16 +472,16 @@ export function SyncSection({
       </div>
     );
 
-    const storagePanel = <StoragePanel status={status} />;
+    const storagePanel = <StoragePanel status={status} accountKind={accountKind} />;
 
     if (status.vault_exists === false) {
       return (
         <div className="space-y-3">
+          {profileCard}
           {accountRow}
-          {storagePanel}
           <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Choose a master passphrase. It encrypts everything before upload - never sent to the
-            server. You will get a one-time recovery key.
+            Set a master password now. It encrypts hosts and keys before upload and never leaves
+            this device. You will get a one-time recovery key.
           </p>
           <input
             className={inputClass}
@@ -472,6 +516,7 @@ export function SyncSection({
     if (!status.unlocked) {
       return (
         <div className="space-y-3">
+          {profileCard}
           {accountRow}
           {storagePanel}
           <input
@@ -507,6 +552,7 @@ export function SyncSection({
 
     return (
       <div className="space-y-3">
+        {profileCard}
         {accountRow}
         {storagePanel}
         <div className="grid grid-cols-2 gap-2">
@@ -529,8 +575,9 @@ export function SyncSection({
           </Button>
         </div>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Sync shows what would change before anything is uploaded or downloaded. Local data is
-          unlimited - only encrypted cloud storage counts toward your plan.
+          {accountKind === "cloud"
+            ? "Sync shows what would change before anything is uploaded or downloaded. Local data is unlimited. Only encrypted cloud storage counts toward your plan."
+            : "Sync shows what would change before anything is uploaded or downloaded."}
         </p>
       </div>
     );
@@ -635,8 +682,11 @@ export function SyncSection({
             )}
           </div>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-            Encrypted cloud backup for hosts, keys, and settings. Free includes sync - you only pay
-            for more cloud space.
+            {accountKind === "cloud"
+              ? "Encrypted cloud backup for hosts, keys, and settings."
+              : accountKind === "selfhost"
+                ? "Encrypted vault on your instance. Master password stays on this device."
+                : "This profile stays on this device."}
           </p>
         </div>
       </div>

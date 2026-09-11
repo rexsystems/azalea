@@ -164,6 +164,21 @@ pub async fn add_account(
 }
 
 #[tauri::command]
+pub fn rename_account(
+    registry: State<'_, SharedAccountRegistry>,
+    id: String,
+    label: String,
+) -> Result<AccountRecord, String> {
+    let mut reg = registry.lock();
+    reg.set_label(&id, label).map_err(|e| e.to_string())?;
+    reg.list()
+        .iter()
+        .find(|a| a.id == id)
+        .cloned()
+        .ok_or_else(|| "Account not found".to_string())
+}
+
+#[tauri::command]
 pub async fn switch_account(
     app: AppHandle,
     registry: State<'_, SharedAccountRegistry>,

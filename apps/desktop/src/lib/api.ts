@@ -476,6 +476,10 @@ export function connectSelfhost(input: {
   });
 }
 
+export function renameAccount(id: string, label: string): Promise<AccountRecord> {
+  return invoke("rename_account", { id, label });
+}
+
 export function switchAccount(id: string): Promise<AccountRecord> {
   return invoke("switch_account", { id });
 }

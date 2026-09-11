@@ -32,7 +32,7 @@ import {
 } from "./lib/telemetry";
 import { AddServerDrawer } from "./components/AddServerDrawer";
 import { AutoSyncPrompt } from "./components/AutoSyncPrompt";
-import { PostConnectSyncDialog } from "./components/PostConnectSyncDialog";
+import { PostConnectSyncDialog, type PostConnectMode } from "./components/PostConnectSyncDialog";
 import { CommandPalette, type CommandPaletteActionId } from "./components/CommandPalette";
 import { SyncResolutionDialog } from "./components/SyncResolutionDialog";
 import { AppShell, type NavPage } from "./components/AppShell";
@@ -989,11 +989,47 @@ function App() {
   const [postConnectSync, setPostConnectSync] = useState<{
     label: string;
     email: string;
+    mode: PostConnectMode;
     unlocked: boolean;
   } | null>(null);
   const [postConnectBusy, setPostConnectBusy] = useState(false);
   const [postConnectError, setPostConnectError] = useState<string | null>(null);
+  const [postConnectRecovery, setPostConnectRecovery] = useState<string | null>(null);
   const [pendingCopyFromId, setPendingCopyFromId] = useState<string | null>(null);
+
+  const refreshSelfhostLabel = useCallback(
+    async (account: api.AccountRecord | null) => {
+      if (!account || account.kind !== "selfhost" || !account.base_url) return;
+      try {
+        const probe = await api.probeSelfhost({
+          baseUrl: account.base_url,
+          webUrl: account.web_url,
+        });
+        const name = probe.instance_name.trim();
+        if (!name || name === account.label) return;
+        const next = await api.renameAccount(account.id, name);
+        setActiveAccount(next);
+        await refreshAccounts();
+      } catch {
+        /* keep existing label */
+      }
+    },
+    [refreshAccounts],
+  );
+
+  const openVaultDialog = useCallback(
+    (input: { label: string; email: string; vaultExists: boolean | null }) => {
+      setPostConnectError(null);
+      setPostConnectRecovery(null);
+      setPostConnectSync({
+        label: input.label,
+        email: input.email,
+        mode: input.vaultExists === false ? "setup" : "unlock",
+        unlocked: false,
+      });
+    },
+    [],
+  );
 
   const handleConnectSelfhost = useCallback(
     async (input: {
@@ -1006,6 +1042,7 @@ function App() {
       const previousId = activeAccount?.id ?? null;
       await closeAllSessions();
       const result = await api.connectSelfhost(input);
+      setActiveAccount(result.account);
       await refreshAccounts();
       await Promise.all([
         refreshHosts(),
@@ -1014,24 +1051,25 @@ function App() {
         refreshSyncStatus(),
       ]);
       setStatusMessage(`Connected to ${result.account.label}.`);
-      if (result.vault_exists) {
-        setPostConnectError(null);
-        setPostConnectSync({
-          label: result.account.label,
-          email: result.email,
-          unlocked: false,
-        });
-      } else if (previousId && previousId !== result.account.id) {
+      await refreshSelfhostLabel(result.account);
+      openVaultDialog({
+        label: result.account.label,
+        email: result.email,
+        vaultExists: result.vault_exists,
+      });
+      if (previousId && previousId !== result.account.id && !result.vault_exists) {
         setPendingCopyFromId(previousId);
       }
     },
     [
       activeAccount?.id,
       closeAllSessions,
+      openVaultDialog,
       refreshAccounts,
       refreshGroups,
       refreshHosts,
       refreshKeys,
+      refreshSelfhostLabel,
       refreshSyncStatus,
     ],
   );
@@ -1049,19 +1087,19 @@ function App() {
       try {
         setStatusMessage("Opening browser to sign in…");
         await api.syncBrowserLogin();
+        setActiveAccount(created);
         await refreshAccounts();
         const status = await api.syncStatus();
         setSyncStatus(status);
         await Promise.all([refreshHosts(), refreshGroups(), refreshKeys()]);
         setStatusMessage(`Connected to ${created.label}.`);
-        if (status.vault_exists) {
-          setPostConnectError(null);
-          setPostConnectSync({
-            label: created.label,
-            email: status.email ?? "",
-            unlocked: false,
-          });
-        } else if (previousId && previousId !== created.id) {
+        await refreshSelfhostLabel(created);
+        openVaultDialog({
+          label: created.label,
+          email: status.email ?? "",
+          vaultExists: status.vault_exists,
+        });
+        if (previousId && previousId !== created.id && !status.vault_exists) {
           setPendingCopyFromId(previousId);
         }
       } catch (err) {
@@ -1083,10 +1121,12 @@ function App() {
     [
       activeAccount?.id,
       closeAllSessions,
+      openVaultDialog,
       refreshAccounts,
       refreshGroups,
       refreshHosts,
       refreshKeys,
+      refreshSelfhostLabel,
       refreshSyncStatus,
     ],
   );
@@ -1134,6 +1174,7 @@ function App() {
 
   useEffect(() => {
     if (!pendingCopyFromId) return;
+    if (postConnectSync) return;
     const source = accounts.find((a) => a.id === pendingCopyFromId);
     const fromId = pendingCopyFromId;
     setPendingCopyFromId(null);
@@ -1147,7 +1188,7 @@ function App() {
         void handleCopyAccountData(fromId, false);
       },
     });
-  }, [pendingCopyFromId, accounts, handleCopyAccountData]);
+  }, [pendingCopyFromId, postConnectSync, accounts, handleCopyAccountData]);
 
   const handleSignInForSync = useCallback(() => {
     if (activeAccount?.kind === "offline") return;
@@ -1164,24 +1205,72 @@ function App() {
       try {
         setStatusMessage("Opening browser to sign in…");
         await api.syncBrowserLogin();
-        await refreshSyncStatus();
+        const status = await refreshSyncStatus();
         await refreshAccounts();
+        const account = await api.activeAccount();
+        setActiveAccount(account);
+        await refreshSelfhostLabel(account);
         setStatusMessage("Signed in.");
+        if (account?.kind !== "offline" && status && status.vault_exists === false) {
+          openVaultDialog({
+            label: account?.label ?? "this profile",
+            email: status.email ?? "",
+            vaultExists: false,
+          });
+        }
       } catch (err) {
         setStatusMessage(`Sign in failed: ${String(err).replace(/^Error:\s*/, "")}`);
       }
     })();
-  }, [activeAccount?.kind, activeAccount?.web_url, refreshAccounts, refreshSyncStatus]);
+  }, [
+    activeAccount?.kind,
+    activeAccount?.web_url,
+    openVaultDialog,
+    refreshAccounts,
+    refreshSelfhostLabel,
+    refreshSyncStatus,
+  ]);
 
   const handlePasswordLogin = useCallback(
     async (email: string, password: string) => {
       await api.syncPasswordLogin(email, password);
-      await refreshSyncStatus();
+      const status = await refreshSyncStatus();
       await refreshAccounts();
+      const account = await api.activeAccount();
+      setActiveAccount(account);
+      await refreshSelfhostLabel(account);
       setStatusMessage("Signed in.");
+      if (account?.kind !== "offline" && status && status.vault_exists === false) {
+        openVaultDialog({
+          label: account?.label ?? "this profile",
+          email: status.email ?? email,
+          vaultExists: false,
+        });
+      }
     },
-    [refreshAccounts, refreshSyncStatus],
+    [openVaultDialog, refreshAccounts, refreshSelfhostLabel, refreshSyncStatus],
   );
+
+  const vaultSetupAskedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (postConnectSync) return;
+    if (!syncStatus?.logged_in || syncStatus.vault_exists !== false) return;
+    if (!activeAccount || activeAccount.kind === "offline") return;
+    if (vaultSetupAskedRef.current === activeAccount.id) return;
+    vaultSetupAskedRef.current = activeAccount.id;
+    openVaultDialog({
+      label: activeAccount.label,
+      email: syncStatus.email ?? "",
+      vaultExists: false,
+    });
+  }, [
+    activeAccount,
+    openVaultDialog,
+    postConnectSync,
+    syncStatus?.email,
+    syncStatus?.logged_in,
+    syncStatus?.vault_exists,
+  ]);
 
   useEffect(() => {
     if (!syncStatus?.auth_disconnected) return;
@@ -1434,6 +1523,7 @@ function App() {
         const status = await api.syncStatus();
         setSyncStatus(status);
         if (!status.configured || !status.logged_in || status.vault_exists === false) return;
+        if (postConnectSync) return;
 
         if (status.unlocked) {
           await showSyncPreviewIfNeeded(await api.syncPreview(collectAppSettings()));
@@ -1475,6 +1565,22 @@ function App() {
     }
   };
 
+  const handlePostConnectSetup = async (passphrase: string) => {
+    setPostConnectBusy(true);
+    setPostConnectError(null);
+    try {
+      if (passphrase.length < 8) throw new Error("Passphrase must be at least 8 characters.");
+      const recovery = await api.syncSetupPassphrase(passphrase, collectAppSettings());
+      await refreshSyncStatus();
+      setPostConnectRecovery(recovery);
+      setPostConnectSync((prev) => (prev ? { ...prev, unlocked: true } : prev));
+    } catch (err) {
+      setPostConnectError(String(err));
+    } finally {
+      setPostConnectBusy(false);
+    }
+  };
+
   const handlePostConnectUnlock = async (passphrase: string) => {
     setPostConnectBusy(true);
     setPostConnectError(null);
@@ -1489,13 +1595,19 @@ function App() {
     }
   };
 
+  const closePostConnect = () => {
+    setPostConnectSync(null);
+    setPostConnectError(null);
+    setPostConnectRecovery(null);
+  };
+
   const handlePostConnectSync = async (direction: "from" | "to") => {
     setPostConnectBusy(true);
     setPostConnectError(null);
     try {
       const resolution = direction === "from" ? "keep_cloud" : "keep_local";
       const outcome = await api.syncNow(collectAppSettings(), resolution);
-      setPostConnectSync(null);
+      closePostConnect();
       await applySyncOutcome(outcome);
     } catch (err) {
       setPostConnectError(String(err));
@@ -1723,6 +1835,7 @@ function App() {
             }}
             onSyncDataRefresh={refreshSyncData}
             accountKind={activeAccount?.kind ?? null}
+            activeAccount={activeAccount}
             focusSync={focusSettingsSync}
             onFocusSyncHandled={() => setFocusSettingsSync(false)}
           />
@@ -2145,7 +2258,25 @@ function App() {
         onCancel={() => setPendingPrompt(null)}
       />
 
-      {autoSyncPrompt && (
+      {postConnectSync && (
+        <PostConnectSyncDialog
+          instanceLabel={postConnectSync.label}
+          email={postConnectSync.email}
+          mode={postConnectSync.mode}
+          busy={postConnectBusy}
+          error={postConnectError}
+          needsUnlock={!postConnectSync.unlocked}
+          recoveryKey={postConnectRecovery}
+          onSetup={(passphrase) => void handlePostConnectSetup(passphrase)}
+          onUnlock={(passphrase) => void handlePostConnectUnlock(passphrase)}
+          onSyncFromVault={() => void handlePostConnectSync("from")}
+          onSyncToVault={() => void handlePostConnectSync("to")}
+          onRecoverySaved={closePostConnect}
+          onSkip={closePostConnect}
+        />
+      )}
+
+      {!postConnectSync && autoSyncPrompt && (
         <AutoSyncPrompt
           email={autoSyncPrompt.email}
           busy={autoSyncBusy}
@@ -2163,24 +2294,7 @@ function App() {
         />
       )}
 
-      {postConnectSync && (
-        <PostConnectSyncDialog
-          instanceLabel={postConnectSync.label}
-          email={postConnectSync.email}
-          busy={postConnectBusy}
-          error={postConnectError}
-          needsUnlock={!postConnectSync.unlocked}
-          onUnlock={(passphrase) => void handlePostConnectUnlock(passphrase)}
-          onSyncFromVault={() => void handlePostConnectSync("from")}
-          onSyncToVault={() => void handlePostConnectSync("to")}
-          onSkip={() => {
-            setPostConnectSync(null);
-            setPostConnectError(null);
-          }}
-        />
-      )}
-
-      {autoSyncPreview && (
+      {!postConnectSync && !autoSyncPrompt && autoSyncPreview && (
         <SyncResolutionDialog
           preview={autoSyncPreview}
           busy={autoSyncBusy}
@@ -2283,7 +2397,13 @@ function App() {
         onAction={handleCommandPaletteAction}
       />
 
-      {showTelemetryConsent && onboarded === true && (
+      {showTelemetryConsent &&
+        onboarded === true &&
+        !postConnectSync &&
+        !autoSyncPrompt &&
+        !autoSyncPreview &&
+        !pendingConfirm &&
+        !pendingPrompt && (
         <TelemetryConsentDialog
           onChoice={(enabled) => {
             setTelemetryEnabled(enabled);
