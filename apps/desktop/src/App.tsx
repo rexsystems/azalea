@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type {
   Host,
   HostGroup,
@@ -180,6 +180,9 @@ function App() {
   const [keyMismatch, setKeyMismatch] = useState<HostKeyMismatchEvent | null>(null);
   const [unknownHostKey, setUnknownHostKey] = useState<HostKeyUnknownEvent | null>(null);
   const [splitPickerOpen, setSplitPickerOpen] = useState(false);
+  const [splitRatio, setSplitRatio] = useState(0.5);
+  const [splitResizing, setSplitResizing] = useState(false);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
   const [autoSyncPrompt, setAutoSyncPrompt] = useState<{ email: string | null } | null>(null);
   const [autoSyncPreview, setAutoSyncPreview] = useState<api.SyncPreview | null>(null);
   const [autoSyncBusy, setAutoSyncBusy] = useState(false);
@@ -384,11 +387,38 @@ function App() {
           t.id === tab.id || t.id === tab.splitWithId ? { ...t, splitWithId: undefined } : t,
         ),
       );
+      setSplitRatio(0.5);
       return;
     }
 
     setSplitPickerOpen(true);
   }, [tabs, activeTabId]);
+
+  const beginSplitResize = useCallback((e: ReactPointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const container = splitContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    if (rect.width <= 0) return;
+
+    setSplitResizing(true);
+    const onMove = (ev: PointerEvent) => {
+      const next = (ev.clientX - rect.left) / rect.width;
+      setSplitRatio(Math.min(0.78, Math.max(0.22, next)));
+    };
+    const onUp = () => {
+      setSplitResizing(false);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
 
   const openSplitSession = useCallback(
     async (host: Host) => {
@@ -404,6 +434,7 @@ function App() {
 
       try {
         const sessionId = await api.prepareSsh(target.id);
+        setSplitRatio(0.5);
         setTabs((prev) => {
           const anchorIndex = prev.findIndex((t) => t.id === tab.id);
           const next = prev.map((t) =>
@@ -431,6 +462,59 @@ function App() {
     },
     [tabs, activeTabId, hostNeedsKey, pickKeyForHost, updateHost],
   );
+
+  const splitWithExistingTab = useCallback(
+    (sessionId: string) => {
+      if (!activeTabId || sessionId === activeTabId) return;
+      const anchor = tabs.find((t) => t.id === activeTabId);
+      const mate = tabs.find((t) => t.id === sessionId);
+      if (!anchor || !mate || mate.poppedOut) return;
+
+      setSplitRatio(0.5);
+      setTabs((prev) => {
+        // Clear any previous split links that involve either pane.
+        const cleared = prev.map((t) => {
+          if (
+            t.id === anchor.id ||
+            t.id === mate.id ||
+            t.splitWithId === anchor.id ||
+            t.splitWithId === mate.id
+          ) {
+            return { ...t, splitWithId: undefined };
+          }
+          return t;
+        });
+
+        const linked = cleared.map((t) => {
+          if (t.id === anchor.id) return { ...t, splitWithId: mate.id };
+          if (t.id === mate.id) return { ...t, splitWithId: anchor.id, poppedOut: false };
+          return t;
+        });
+
+        const withoutMate = linked.filter((t) => t.id !== mate.id);
+        const anchorIndex = withoutMate.findIndex((t) => t.id === anchor.id);
+        const mateTab = linked.find((t) => t.id === mate.id);
+        if (!mateTab || anchorIndex < 0) return linked;
+        withoutMate.splice(anchorIndex + 1, 0, mateTab);
+        return withoutMate;
+      });
+      setViewingTerminal(true);
+    },
+    [tabs, activeTabId],
+  );
+
+  const splitSessionOptions = useMemo(() => {
+    return tabs
+      .filter((t) => !t.poppedOut && t.id !== activeTabId)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        subtitle: api.isLocalSession(t.id)
+          ? "Local terminal"
+          : `${t.username}@${t.hostname}:${t.port}`,
+        local: api.isLocalSession(t.id),
+      }));
+  }, [tabs, activeTabId]);
 
   const removeTab = useCallback((tabId: string) => {
     setFilesPanelTabs((prev) => {
@@ -1703,13 +1787,10 @@ function App() {
       .map((tab) => {
         const count = (hostCounts.get(tab.hostId) ?? 0) + 1;
         hostCounts.set(tab.hostId, count);
-        const host = hosts.find((h) => h.id === tab.hostId);
         return {
           id: tab.id,
           title: count > 1 ? `${tab.title} (${count})` : tab.title,
           status: tab.status,
-          osId: host?.os_id ?? null,
-          hostId: tab.hostId,
           splitWithId: tab.splitWithId ?? null,
         };
       })
@@ -1733,7 +1814,7 @@ function App() {
     if (insertAt < 0) return mapped;
     next.splice(insertAt + 1, 0, mate);
     return next;
-  }, [tabs, hosts, activeTabId]);
+  }, [tabs, activeTabId]);
   const useFancyConnect = connectScreen === "fancy";
   const activeNeedsConnectOverlay = Boolean(
     activeTab &&
@@ -1881,7 +1962,7 @@ function App() {
           style={{ background: "var(--terminal-bg)" }}
           aria-hidden={!viewingTerminal}
         >
-          <div className="relative flex min-h-0 min-w-0 flex-1">
+          <div ref={splitContainerRef} className="relative flex min-h-0 min-w-0 flex-1">
             {tabs.map((tab) => {
               if (tab.poppedOut) return null;
               const isActive = tab.id === activeTabId;
@@ -1900,6 +1981,8 @@ function App() {
                   : null;
               const showAsRightPane =
                 isSplitPane && leftSplitId != null && tab.id !== leftSplitId;
+              const isLeftSplitPane =
+                isSplitPane && leftSplitId != null && tab.id === leftSplitId;
               const isLocalConnecting =
                 api.isLocalSession(tab.id) && tab.status === "connecting";
               const midSessionReconnect =
@@ -1929,14 +2012,23 @@ function App() {
 
               if (!keepTerminal) return null;
 
+              const splitPaneStyle =
+                terminalVisible && isSplitPane
+                  ? {
+                      flex: "none" as const,
+                      width: `${(isLeftSplitPane ? splitRatio : 1 - splitRatio) * 100}%`,
+                    }
+                  : undefined;
+
               return (
                 <div
                   key={tab.id}
                   className={
                     terminalVisible
-                      ? `relative flex h-full min-w-0 flex-col ${isSplitPane ? "flex-1 basis-0" : "flex-1"}`
+                      ? `relative flex h-full min-w-0 flex-col ${isSplitPane ? "" : "flex-1"}`
                       : "hidden"
                   }
+                  style={splitPaneStyle}
                   aria-hidden={!terminalVisible}
                   onMouseDownCapture={() => {
                     if (!isActive) setActiveTabId(tab.id);
@@ -1944,13 +2036,16 @@ function App() {
                 >
                   {terminalVisible && showAsRightPane && (
                     <div
-                      className="absolute bottom-0 left-0 top-0 z-[1] w-px"
-                      style={{
-                        background: "var(--border-subtle)",
-                        boxShadow: "0 0 12px color-mix(in srgb, var(--accent) 35%, transparent)",
-                      }}
-                      aria-hidden
-                    />
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label="Resize split"
+                      className={`split-resize absolute inset-y-0 left-0 z-[2] w-2 -translate-x-1/2 cursor-col-resize${
+                        splitResizing ? " is-resizing" : ""
+                      }`}
+                      onPointerDown={beginSplitResize}
+                    >
+                      <div className="split-resize-line absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2" />
+                    </div>
                   )}
 
                   <div className="relative min-h-0 min-w-0 flex-1">
@@ -2295,11 +2390,16 @@ function App() {
       <SelectHostDialog
         open={splitPickerOpen}
         title="Split terminal"
-        message="Choose the host for the second pane."
+        message="Pick an open terminal or start another host beside this one."
         hosts={hosts}
+        sessions={splitSessionOptions}
         onSelect={(host) => {
           setSplitPickerOpen(false);
           void openSplitSession(host);
+        }}
+        onSelectSession={(sessionId) => {
+          setSplitPickerOpen(false);
+          splitWithExistingTab(sessionId);
         }}
         onCancel={() => setSplitPickerOpen(false)}
       />

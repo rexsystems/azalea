@@ -912,6 +912,18 @@ html[data-mobile="true"] .file-browser-resize {
   opacity: 1;
 }
 
+.split-resize-line {
+  background: var(--border-subtle);
+  opacity: 1;
+  transition: background-color 120ms ease, width 120ms ease;
+}
+
+.split-resize:hover .split-resize-line,
+.split-resize.is-resizing .split-resize-line {
+  background: var(--accent);
+  width: 3px;
+}
+
 html[data-mobile="true"] .settings-shell {
   max-width: none;
   padding: 1rem 1rem calc(1.25rem + env(safe-area-inset-bottom));
