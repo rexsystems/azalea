@@ -5,7 +5,7 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 use crate::models::{SftpListInput, SftpListResult};
 use crate::sessions::{
-    sftp_download_file, sftp_list_dir, sftp_read_text_file, sftp_upload_file,
+    cancel_sftp_transfer, sftp_download_file, sftp_list_dir, sftp_read_text_file, sftp_upload_file,
     sftp_write_text_file, SharedSshSessionManager,
 };
 
@@ -50,19 +50,41 @@ pub async fn sftp_download(
 
 #[tauri::command]
 pub async fn sftp_upload(
+    app: AppHandle,
     sessions: tauri::State<'_, SharedSshSessionManager>,
     session_id: String,
     local_path: String,
     remote_path: String,
+    transfer_id: String,
 ) -> Result<u64, String> {
     // Defense-in-depth against a compromised webview: refuse to read from
     // well-known secret directories. A user who actually wants to SFTP-upload
     // their own SSH key can move the file out of ~/.ssh first.
     ensure_upload_source_allowed(&PathBuf::from(&local_path))?;
 
-    sftp_upload_file(sessions.inner(), &session_id, &local_path, &remote_path)
-        .await
-        .map_err(|err| err.to_string())
+    if transfer_id.trim().is_empty() {
+        return Err("transfer_id is required".into());
+    }
+
+    sftp_upload_file(
+        &app,
+        sessions.inner(),
+        &session_id,
+        &local_path,
+        &remote_path,
+        &transfer_id,
+    )
+    .await
+    .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub async fn sftp_cancel_transfer(transfer_id: String) -> Result<(), String> {
+    if transfer_id.trim().is_empty() {
+        return Err("transfer_id is required".into());
+    }
+    let _ = cancel_sftp_transfer(&transfer_id);
+    Ok(())
 }
 
 #[tauri::command]

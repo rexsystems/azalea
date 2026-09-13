@@ -61,10 +61,12 @@ We assume the attacker can:
   still see a dummy Argon2id verify) and never leak whether a specific
   account exists. Password KDF is Argon2id with server-side parameters
   chosen to burn > 100 ms per attempt.
-- **Reach the marketing site or admin panel.** Both sites ship strict CSP,
+- **Reach the marketing site or admin panel.** Both sites ship CSP,
   `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`,
-  and a locked-down `Permissions-Policy`. The desktop Tauri window sets
-  `frame-ancestors 'none'`.
+  and a locked-down `Permissions-Policy`. The self-host dashboard CSP allows
+  `'unsafe-inline'` scripts because Next.js static export injects flight
+  payloads; Turnstile is limited to `challenges.cloudflare.com`. The desktop
+  Tauri window sets `frame-ancestors 'none'`.
 
 We do **not** defend against:
 

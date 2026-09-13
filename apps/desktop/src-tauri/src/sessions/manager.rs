@@ -104,7 +104,7 @@ use crate::keys::{get_host_password, load_key_pair, public_key_identity};
 use crate::models::{
     ConnectionLogEvent, FileEntry, Host, HostKeyMismatchEvent, HostKeyUnknownEvent,
     HostOsUpdatedEvent, InstallPublicKeyResult, KnownHostRecord, PortForward, PortForwardStatus,
-    SftpListResult, TerminalOutputEvent, TerminalStatusEvent,
+    SftpListResult, SftpTransferProgress, TerminalOutputEvent, TerminalStatusEvent,
 };
 use crate::store::SharedDatabase;
 
@@ -152,6 +152,41 @@ pub fn take_pending_mismatch(session_id: &str) -> Option<KnownHostRecord> {
 fn clear_host_key_state(session_id: &str) {
     host_key_decisions().lock().remove(session_id);
     pending_mismatches().lock().remove(session_id);
+}
+
+type TransferCancels = parking_lot::Mutex<HashMap<String, Arc<AtomicBool>>>;
+
+fn transfer_cancels() -> &'static TransferCancels {
+    static CANCELS: std::sync::OnceLock<TransferCancels> = std::sync::OnceLock::new();
+    CANCELS.get_or_init(Default::default)
+}
+
+fn register_transfer_cancel(transfer_id: &str) -> Arc<AtomicBool> {
+    let flag = Arc::new(AtomicBool::new(false));
+    transfer_cancels()
+        .lock()
+        .insert(transfer_id.to_string(), flag.clone());
+    flag
+}
+
+fn clear_transfer_cancel(transfer_id: &str) {
+    transfer_cancels().lock().remove(transfer_id);
+}
+
+/// Marks an in-flight SFTP transfer as cancelled. Returns false if no transfer
+/// with that id is registered.
+pub fn cancel_sftp_transfer(transfer_id: &str) -> bool {
+    match transfer_cancels().lock().get(transfer_id) {
+        Some(flag) => {
+            flag.store(true, Ordering::SeqCst);
+            true
+        }
+        None => false,
+    }
+}
+
+fn emit_transfer_progress(app: &AppHandle, progress: &SftpTransferProgress) {
+    let _ = app.emit("sftp-transfer-progress", progress.clone());
 }
 
 #[async_trait]
@@ -687,18 +722,103 @@ pub async fn sftp_download_file(
 }
 
 pub async fn sftp_upload_file(
+    app: &AppHandle,
     manager: &SharedSshSessionManager,
     session_id: &str,
     local_path: &str,
     remote_path: &str,
+    transfer_id: &str,
 ) -> anyhow::Result<u64> {
-    let sftp = open_sftp(manager, session_id).await?;
-    let mut local = tokio::fs::File::open(local_path).await?;
-    let mut remote = sftp.create(remote_path).await?;
-    let bytes = tokio::io::copy(&mut local, &mut remote).await?;
-    use tokio::io::AsyncWriteExt;
-    remote.shutdown().await?;
-    Ok(bytes)
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let cancel = register_transfer_cancel(transfer_id);
+    let filename = std::path::Path::new(local_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(local_path)
+        .to_string();
+
+    let result = async {
+        let sftp = open_sftp(manager, session_id).await?;
+        let mut local = tokio::fs::File::open(local_path).await?;
+        let total = local.metadata().await?.len();
+        let mut remote = sftp.create(remote_path).await?;
+
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut done = 0u64;
+        let mut last_emit = 0u64;
+
+        emit_transfer_progress(
+            app,
+            &SftpTransferProgress {
+                transfer_id: transfer_id.to_string(),
+                session_id: session_id.to_string(),
+                filename: filename.clone(),
+                bytes_done: 0,
+                bytes_total: total,
+                done: false,
+                cancelled: false,
+            },
+        );
+
+        loop {
+            if cancel.load(Ordering::SeqCst) {
+                drop(remote);
+                let _ = sftp.remove_file(remote_path).await;
+                anyhow::bail!("Upload cancelled.");
+            }
+
+            let n = local.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            remote.write_all(&buf[..n]).await?;
+            done += n as u64;
+
+            // Throttle UI events; always emit near the end.
+            if done == total || done.saturating_sub(last_emit) >= 256 * 1024 {
+                last_emit = done;
+                emit_transfer_progress(
+                    app,
+                    &SftpTransferProgress {
+                        transfer_id: transfer_id.to_string(),
+                        session_id: session_id.to_string(),
+                        filename: filename.clone(),
+                        bytes_done: done,
+                        bytes_total: total,
+                        done: false,
+                        cancelled: false,
+                    },
+                );
+            }
+        }
+
+        remote.shutdown().await?;
+        Ok(done)
+    }
+    .await;
+
+    let cancelled = cancel.load(Ordering::SeqCst);
+    clear_transfer_cancel(transfer_id);
+
+    let (bytes_done, bytes_total, is_err) = match &result {
+        Ok(n) => (*n, *n, false),
+        Err(_) => (0, 0, true),
+    };
+    emit_transfer_progress(
+        app,
+        &SftpTransferProgress {
+            transfer_id: transfer_id.to_string(),
+            session_id: session_id.to_string(),
+            filename,
+            bytes_done: if is_err { 0 } else { bytes_done },
+            bytes_total: if is_err { 0 } else { bytes_total },
+            done: true,
+            cancelled,
+        },
+    );
+
+    result
 }
 
 const SFTP_TEXT_MAX_BYTES: u64 = 2 * 1024 * 1024;

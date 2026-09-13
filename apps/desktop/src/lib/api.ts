@@ -220,8 +220,13 @@ export function sftpUpload(
   sessionId: string,
   localPath: string,
   remotePath: string,
+  transferId: string,
 ): Promise<number> {
-  return invoke("sftp_upload", { sessionId, localPath, remotePath });
+  return invoke("sftp_upload", { sessionId, localPath, remotePath, transferId });
+}
+
+export function sftpCancelTransfer(transferId: string): Promise<void> {
+  return invoke("sftp_cancel_transfer", { transferId });
 }
 
 export function sftpReadText(sessionId: string, remotePath: string): Promise<string> {

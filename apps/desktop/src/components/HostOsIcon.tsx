@@ -128,7 +128,7 @@ function resolveIcon(osId: string): { key: string; src: string } | null {
 }
 
 function UnknownHostIcon({ size, rounded }: { size: number; rounded: number }) {
-  const iconSize = Math.max(22, Math.round(size * 0.52));
+  const iconSize = Math.max(10, Math.round(size * 0.55));
   return (
     <div
       className="flex shrink-0 items-center justify-center"
@@ -173,7 +173,10 @@ export function HostOsIcon({ osId, seed: _seed, size = 48, rounded = 10 }: HostO
     return <UnknownHostIcon size={size} rounded={rounded} />;
   }
 
-  const pad = Math.max(6, Math.round(size * 0.16));
+  const pad =
+    size <= 24
+      ? Math.max(2, Math.round(size * 0.08))
+      : Math.max(6, Math.round(size * 0.16));
   const bg = OS_BG[resolved.key] ?? "#1a1a1e";
 
   return (

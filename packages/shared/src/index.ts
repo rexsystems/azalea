@@ -174,6 +174,16 @@ export interface SftpListResult {
   entries: FileEntry[];
 }
 
+export interface SftpTransferProgress {
+  transfer_id: string;
+  session_id: string;
+  filename: string;
+  bytes_done: number;
+  bytes_total: number;
+  done: boolean;
+  cancelled: boolean;
+}
+
 export interface HostKeyMismatchEvent {
   session_id: string;
   hostname: string;

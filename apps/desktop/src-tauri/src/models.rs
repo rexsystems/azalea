@@ -272,3 +272,14 @@ pub struct SftpListInput {
     pub session_id: String,
     pub path: Option<String>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftpTransferProgress {
+    pub transfer_id: String,
+    pub session_id: String,
+    pub filename: String,
+    pub bytes_done: u64,
+    pub bytes_total: u64,
+    pub done: bool,
+    pub cancelled: bool,
+}

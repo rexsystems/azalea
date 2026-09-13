@@ -1699,17 +1699,41 @@ function App() {
 
   const displayTabs = useMemo(() => {
     const hostCounts = new Map<string, number>();
-    return tabs
+    const mapped = tabs
       .map((tab) => {
         const count = (hostCounts.get(tab.hostId) ?? 0) + 1;
         hostCounts.set(tab.hostId, count);
+        const host = hosts.find((h) => h.id === tab.hostId);
         return {
-          ...tab,
+          id: tab.id,
           title: count > 1 ? `${tab.title} (${count})` : tab.title,
+          status: tab.status,
+          osId: host?.os_id ?? null,
+          hostId: tab.hostId,
+          splitWithId: tab.splitWithId ?? null,
         };
       })
-      .filter((tab) => !tab.poppedOut);
-  }, [tabs]);
+      .filter((tab) => {
+        const raw = tabs.find((t) => t.id === tab.id);
+        return raw && !raw.poppedOut;
+      });
+
+    // Keep an active split pair adjacent in the tab strip.
+    const active = tabs.find((t) => t.id === activeTabId);
+    const mateId = active?.splitWithId;
+    if (!mateId) return mapped;
+
+    const a = mapped.findIndex((t) => t.id === active!.id);
+    const b = mapped.findIndex((t) => t.id === mateId);
+    if (a < 0 || b < 0 || Math.abs(a - b) === 1) return mapped;
+
+    const next = mapped.slice();
+    const [mate] = next.splice(b, 1);
+    const insertAt = next.findIndex((t) => t.id === active!.id);
+    if (insertAt < 0) return mapped;
+    next.splice(insertAt + 1, 0, mate);
+    return next;
+  }, [tabs, hosts, activeTabId]);
   const useFancyConnect = connectScreen === "fancy";
   const activeNeedsConnectOverlay = Boolean(
     activeTab &&
@@ -1905,17 +1929,6 @@ function App() {
 
               if (!keepTerminal) return null;
 
-              const paneTitle =
-                displayTabs.find((t) => t.id === tab.id)?.title ?? tab.title;
-              const statusDot =
-                tab.status === "connected"
-                  ? "#4ade80"
-                  : tab.status === "connecting" || tab.status === "reconnecting"
-                    ? "#fbbf24"
-                    : tab.status === "error"
-                      ? "#f87171"
-                      : "var(--text-muted)";
-
               return (
                 <div
                   key={tab.id}
@@ -1932,39 +1945,12 @@ function App() {
                   {terminalVisible && showAsRightPane && (
                     <div
                       className="absolute bottom-0 left-0 top-0 z-[1] w-px"
-                      style={{ background: "var(--border-subtle)" }}
+                      style={{
+                        background: "var(--border-subtle)",
+                        boxShadow: "0 0 12px color-mix(in srgb, var(--accent) 35%, transparent)",
+                      }}
                       aria-hidden
                     />
-                  )}
-
-                  {terminalVisible && isSplitPane && (
-                    <div
-                      className="flex h-8 shrink-0 items-center gap-2 border-b px-3"
-                      style={{
-                        background: isActive ? "var(--bg-panel)" : "var(--bg-base)",
-                        borderColor: "var(--border-subtle)",
-                        boxShadow: isActive
-                          ? "inset 0 -2px 0 0 var(--accent)"
-                          : undefined,
-                      }}
-                    >
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: statusDot }}
-                      />
-                      <span
-                        className="min-w-0 flex-1 truncate text-xs font-medium"
-                        style={{ color: isActive ? "var(--text)" : "var(--text-muted)" }}
-                      >
-                        {paneTitle}
-                      </span>
-                      <span
-                        className="shrink-0 font-mono text-[10px]"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {tab.username}@{tab.hostname}
-                      </span>
-                    </div>
                   )}
 
                   <div className="relative min-h-0 min-w-0 flex-1">

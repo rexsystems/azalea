@@ -60,6 +60,7 @@ export function AddServerDrawer({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameTouched, setNameTouched] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -85,16 +86,17 @@ export function AddServerDrawer({
     }
     setError(null);
     setShowAdvanced(false);
+    setNameTouched(false);
   }, [host, open, initialValues, defaultGroupId]);
 
   useEffect(() => {
-    if (!host && values.hostname && !values.name) {
+    if (!host && !nameTouched && values.hostname && !values.name) {
       setValues((prev) => ({
         ...prev,
         name: values.hostname.split(".")[0] || values.hostname,
       }));
     }
-  }, [values.hostname, values.name, host]);
+  }, [values.hostname, values.name, host, nameTouched]);
 
   const isEdit = Boolean(host);
 
@@ -174,9 +176,10 @@ export function AddServerDrawer({
           placeholder="My server"
           icon={<Tag size={15} />}
           value={values.name}
-          onChange={(e) =>
-            setValues((prev) => ({ ...prev, name: e.target.value }))
-          }
+          onChange={(e) => {
+            setNameTouched(true);
+            setValues((prev) => ({ ...prev, name: e.target.value }));
+          }}
         />
 
         <div className="grid grid-cols-[1fr_80px] gap-3">

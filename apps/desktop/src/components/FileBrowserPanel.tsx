@@ -6,9 +6,10 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import type { FileEntry } from "@azalea/shared";
+import type { FileEntry, SftpTransferProgress } from "@azalea/shared";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
 import {
   ArrowUp,
@@ -34,6 +35,13 @@ interface FileBrowserPanelProps {
   sessionId: string;
   onClose: () => void;
   onCdTerminal: (path: string) => void;
+}
+
+interface UploadState {
+  id: string;
+  filename: string;
+  bytesDone: number;
+  bytesTotal: number;
 }
 
 const WIDTH_KEY = "azalea.sftp.panelWidth";
@@ -164,6 +172,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
   const [error, setError] = useState<string | null>(null);
   const [homePath, setHomePath] = useState<string | null>(null);
   const [transfer, setTransfer] = useState<string | null>(null);
+  const [upload, setUpload] = useState<UploadState | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [filter, setFilter] = useState("");
@@ -186,10 +195,12 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
   } | null>(null);
 
   const pathRef = useRef(path);
-  const transferRef = useRef(transfer);
+  const busyRef = useRef(false);
+  const uploadIdRef = useRef<string | null>(null);
   const widthRef = useRef(width);
   pathRef.current = path;
-  transferRef.current = transfer;
+  busyRef.current = Boolean(transfer || upload);
+  uploadIdRef.current = upload?.id ?? null;
   widthRef.current = width;
 
   const load = useCallback(
@@ -276,30 +287,70 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
   const uploadPaths = useCallback(
     async (localPaths: string[]) => {
       const current = pathRef.current;
-      if (!current || transferRef.current || localPaths.length === 0) return;
+      if (!current || busyRef.current || localPaths.length === 0) return;
 
       setNotice(null);
       let ok = 0;
       for (const local of localPaths) {
         const filename = basename(local);
-        setTransfer(`Uploading ${filename}...`);
+        const transferId =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `up-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        setUpload({ id: transferId, filename, bytesDone: 0, bytesTotal: 0 });
         try {
           const remote = current === "/" ? `/${filename}` : `${current}/${filename}`;
-          await api.sftpUpload(sessionId, local, remote);
+          await api.sftpUpload(sessionId, local, remote, transferId);
           ok += 1;
         } catch (err) {
-          setNotice(String(err));
-          setTransfer(null);
+          const message = String(err);
+          setUpload(null);
+          if (/upload cancelled/i.test(message)) {
+            setNotice("Upload cancelled");
+          } else {
+            setNotice(message);
+          }
           await load(current);
           return;
         }
       }
-      setTransfer(null);
+      setUpload(null);
       setNotice(ok === 1 ? `Uploaded ${basename(localPaths[0])}` : `Uploaded ${ok} files`);
       await load(current);
     },
     [sessionId, load],
   );
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<SftpTransferProgress>("sftp-transfer-progress", (event) => {
+      const p = event.payload;
+      if (p.session_id !== sessionId) return;
+      if (uploadIdRef.current && p.transfer_id !== uploadIdRef.current) return;
+      if (p.done || p.cancelled) return;
+      setUpload((prev) =>
+        prev && prev.id === p.transfer_id
+          ? {
+              ...prev,
+              filename: p.filename || prev.filename,
+              bytesDone: p.bytes_done,
+              bytesTotal: p.bytes_total,
+            }
+          : prev,
+      );
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [sessionId]);
+
+  const cancelUpload = useCallback(() => {
+    const id = uploadIdRef.current;
+    if (!id) return;
+    void api.sftpCancelTransfer(id);
+  }, []);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -354,7 +405,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
   }, [uploadPaths]);
 
   const downloadFile = async (entry: FileEntry) => {
-    if (!path || transfer || entry.is_dir) return;
+    if (!path || transfer || upload || entry.is_dir) return;
     const target = await saveFileDialog({ defaultPath: entry.name });
     if (!target) return;
     setTransfer(`Downloading ${entry.name}...`);
@@ -370,7 +421,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
   };
 
   const uploadFile = async () => {
-    if (!path || transfer) return;
+    if (!path || transfer || upload) return;
     const selectedFiles = await openFileDialog({ multiple: true });
     if (!selectedFiles) return;
     const paths = Array.isArray(selectedFiles) ? selectedFiles : [selectedFiles];
@@ -378,7 +429,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
   };
 
   const openEditor = async (entry: FileEntry) => {
-    if (!path || transfer || entry.is_dir) return;
+    if (!path || transfer || upload || entry.is_dir) return;
     const remote = joinPath(entry.name);
     setTransfer(`Opening ${entry.name}...`);
     setNotice(null);
@@ -810,15 +861,57 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
       </div>
 
       <div
-        className="flex shrink-0 items-center justify-between gap-2 border-t px-3 py-1.5 text-[10px]"
+        className="flex shrink-0 flex-col gap-1.5 border-t px-3 py-1.5 text-[10px]"
         style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
       >
-        <span>
-          {dirCount} folder{dirCount === 1 ? "" : "s"} · {fileCount} file{fileCount === 1 ? "" : "s"}
-        </span>
-        <span className="truncate tabular-nums">
-          {resizing ? `${width}px` : (transfer ?? notice ?? "Drag left edge to resize")}
-        </span>
+        {upload ? (
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="truncate">
+                  Uploading {upload.filename}
+                  {upload.bytesTotal > 0
+                    ? ` · ${formatSize(upload.bytesDone)} / ${formatSize(upload.bytesTotal)}`
+                    : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={cancelUpload}
+                  className="hover-subtle shrink-0 rounded px-1.5 py-0.5 font-medium"
+                  style={{ color: "var(--danger, #f87171)" }}
+                >
+                  Cancel
+                </button>
+              </div>
+              <div
+                className="h-1.5 overflow-hidden rounded-full"
+                style={{ background: "var(--bg-input)" }}
+              >
+                <div
+                  className="h-full rounded-full transition-[width] duration-150"
+                  style={{
+                    width: `${
+                      upload.bytesTotal > 0
+                        ? Math.min(100, Math.round((upload.bytesDone / upload.bytesTotal) * 100))
+                        : 0
+                    }%`,
+                    background: "var(--accent)",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2">
+            <span>
+              {dirCount} folder{dirCount === 1 ? "" : "s"} · {fileCount} file
+              {fileCount === 1 ? "" : "s"}
+            </span>
+            <span className="truncate tabular-nums">
+              {resizing ? `${width}px` : (transfer ?? notice ?? "Drag left edge to resize")}
+            </span>
+          </div>
+        )}
       </div>
 
       {menu && (

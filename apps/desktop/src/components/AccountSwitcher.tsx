@@ -108,7 +108,14 @@ export function AccountSwitcher({
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const authDisconnected = Boolean(syncStatus?.auth_disconnected);
-  const displayEmail = syncStatus?.email ?? active?.email ?? null;
+  const loggedIn = Boolean(syncStatus?.logged_in);
+  const needsAuth =
+    (active?.kind === "cloud" || active?.kind === "selfhost") && !loggedIn;
+  // Only treat session email as signed-in identity. Registry email is for form
+  // prefill after logout / never-signed-in profiles still look unsigned.
+  const displayEmail =
+    loggedIn || authDisconnected ? (syncStatus?.email ?? null) : null;
+  const formEmail = displayEmail ?? active?.email ?? null;
 
   const close = () => {
     setOpen(false);
@@ -173,7 +180,13 @@ export function AccountSwitcher({
   const title = displayEmail
     ? maskEmail(displayEmail)
     : active?.label ?? "Local";
-  const subtitle = active ? kindLabel(active.kind) : "Account";
+  const subtitle = authDisconnected
+    ? "Disconnected"
+    : needsAuth
+      ? "Sign in"
+      : active
+        ? kindLabel(active.kind)
+        : "Account";
 
   const addSimpleAccount = async (kind: "cloud" | "offline") => {
     try {
@@ -254,7 +267,7 @@ export function AccountSwitcher({
           onSignIn?.();
           return;
         }
-        const loginEmail = email.trim() || displayEmail || "";
+        const loginEmail = email.trim() || formEmail || "";
         if (onPasswordLogin) {
           await onPasswordLogin(loginEmail, password);
         } else {
@@ -274,8 +287,11 @@ export function AccountSwitcher({
     }
   };
 
-  const warningIcon = authDisconnected ? (
-    <span title="Account disconnected" style={{ color: "var(--warning, #d97706)" }}>
+  const warningIcon = needsAuth ? (
+    <span
+      title={authDisconnected ? "Account disconnected" : "Not signed in"}
+      style={{ color: "var(--warning, #d97706)" }}
+    >
       <AlertTriangle size={compact ? 14 : 15} />
     </span>
   ) : null;
@@ -297,11 +313,16 @@ export function AccountSwitcher({
     >
       <UserAvatar email={displayEmail ?? undefined} size={28} />
       {warningIcon}
-      {syncStatus?.logged_in ? (
+      {loggedIn && syncStatus ? (
         <PlanBadge plan={syncStatus.plan} role={syncStatus.role} />
       ) : (
-        <span className="text-[11px] font-medium" style={{ color: "var(--text-secondary)" }}>
-          {authDisconnected ? "Disconnected" : "Accounts"}
+        <span
+          className="text-[11px] font-medium"
+          style={{
+            color: needsAuth ? "var(--warning, #d97706)" : "var(--text-secondary)",
+          }}
+        >
+          {needsAuth ? subtitle : "Accounts"}
         </span>
       )}
     </button>
@@ -329,14 +350,16 @@ export function AccountSwitcher({
           {warningIcon}
         </div>
         <div className="mt-1 flex items-center gap-1.5">
-          {syncStatus?.logged_in ? (
+          {loggedIn && syncStatus ? (
             <PlanBadge plan={syncStatus.plan} role={syncStatus.role} />
           ) : (
             <span
               className="truncate text-[10px] font-semibold"
-              style={{ color: authDisconnected ? "var(--warning, #d97706)" : "var(--text-muted)" }}
+              style={{
+                color: needsAuth ? "var(--warning, #d97706)" : "var(--text-muted)",
+              }}
             >
-              {authDisconnected ? "Disconnected" : subtitle}
+              {subtitle}
             </span>
           )}
         </div>
@@ -694,7 +717,7 @@ export function AccountSwitcher({
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && (email.trim() || displayEmail) && password) {
+                          if (e.key === "Enter" && (email.trim() || formEmail) && password) {
                             void finishReauth();
                           }
                         }}
@@ -707,7 +730,7 @@ export function AccountSwitcher({
                     )}
                     <button
                       type="button"
-                      disabled={busy || !(email.trim() || displayEmail) || !password}
+                      disabled={busy || !(email.trim() || formEmail) || !password}
                       onClick={() => void finishReauth()}
                       className="home-action-primary transition-ui w-full rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
                     >
@@ -734,7 +757,7 @@ export function AccountSwitcher({
               </div>
             ) : (
               <>
-                {authDisconnected && (
+                {needsAuth && (
                   <div
                     className="flex items-start gap-2 border-b px-3 py-2.5"
                     style={{
@@ -745,8 +768,9 @@ export function AccountSwitcher({
                     <AlertTriangle size={14} style={{ color: "#d97706", marginTop: 1 }} />
                     <div className="min-w-0 flex-1">
                       <p className="text-[11px] leading-snug" style={{ color: "var(--text)" }}>
-                        Account on {active?.label ?? "this profile"} was disconnected. Reconnect
-                        again.
+                        {authDisconnected
+                          ? `Account on ${active?.label ?? "this profile"} was disconnected. Reconnect again.`
+                          : `Sign in to ${active?.label ?? "this profile"} to sync.`}
                       </p>
                       <button
                         type="button"
@@ -754,12 +778,12 @@ export function AccountSwitcher({
                         style={{ color: "#d97706" }}
                         onClick={() => {
                           setError(null);
-                          setEmail(displayEmail ?? "");
+                          setEmail(formEmail ?? "");
                           setPassword("");
                           setStep("reauth");
                         }}
                       >
-                        Reconnect
+                        {authDisconnected ? "Reconnect" : "Sign in"}
                       </button>
                     </div>
                   </div>
@@ -768,7 +792,7 @@ export function AccountSwitcher({
                   {accounts.map((account) => {
                     const isActive = account.id === active?.id;
                     const canRemove = accounts.length > 1 && account.kind !== "offline";
-                    const showWarn = isActive && authDisconnected;
+                    const showWarn = isActive && needsAuth;
                     return (
                       <div
                         key={account.id}
@@ -807,13 +831,21 @@ export function AccountSwitcher({
                             </span>
                             <span
                               className="block truncate text-[10px] font-semibold"
-                              style={{ color: "var(--text-muted)" }}
+                              style={{
+                                color: showWarn
+                                  ? "var(--warning, #d97706)"
+                                  : "var(--text-muted)",
+                              }}
                             >
-                              {account.email
-                                ? maskEmail(account.email)
-                                : account.base_url
-                                  ? account.base_url.replace(/^https?:\/\//, "")
-                                  : kindLabel(account.kind)}
+                              {showWarn
+                                ? authDisconnected
+                                  ? "Disconnected"
+                                  : "Sign in"
+                                : account.email
+                                  ? maskEmail(account.email)
+                                  : account.base_url
+                                    ? account.base_url.replace(/^https?:\/\//, "")
+                                    : kindLabel(account.kind)}
                             </span>
                           </span>
                           {isActive && !showWarn && (
@@ -902,7 +934,7 @@ export function AccountSwitcher({
                       type="button"
                       onClick={() => {
                         setError(null);
-                        setEmail(displayEmail ?? "");
+                        setEmail(formEmail ?? "");
                         setPassword("");
                         setStep("reauth");
                       }}
@@ -914,14 +946,13 @@ export function AccountSwitcher({
                     </button>
                   ) : null}
                   {!authDisconnected &&
-                    !syncStatus?.logged_in &&
-                    (active?.kind === "cloud" || active?.kind === "selfhost") && (
+                    needsAuth && (
                       <button
                         type="button"
                         onClick={() => {
                           if (active?.kind === "selfhost" && !active.web_url) {
                             setError(null);
-                            setEmail(displayEmail ?? "");
+                            setEmail(formEmail ?? "");
                             setPassword("");
                             setStep("reauth");
                             return;

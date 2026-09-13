@@ -245,9 +245,17 @@ fn urlencoding_encode(v: &str) -> String {
 pub async fn sync_logout(
     state: tauri::State<'_, SharedSyncState>,
     db: tauri::State<'_, SharedDatabase>,
+    registry: tauri::State<'_, crate::commands::accounts::SharedAccountRegistry>,
 ) -> Result<(), String> {
-    let mut sync = state.lock().await;
-    sync::logout(&mut sync, &db);
+    let account_id = {
+        let mut sync = state.lock().await;
+        let id = sync.account_id_clone();
+        sync::logout(&mut sync, &db);
+        id
+    };
+    if let Some(id) = account_id {
+        let _ = registry.lock().set_email(&id, None);
+    }
     Ok(())
 }
 
