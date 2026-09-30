@@ -7,6 +7,7 @@ import {
   FileKey,
   FileKey2,
   Fingerprint,
+  Folder,
   HardDriveUpload,
   KeyRound,
   Trash2,
@@ -26,6 +27,7 @@ interface KeysPageProps {
   onGenerate: (input: CreateKeyInput) => Promise<void>;
   onImport: (name: string, pem: string, passphrase?: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onImportFromSsh?: () => void;
 }
 
 const ALGORITHM_OPTIONS = [
@@ -75,7 +77,14 @@ function formatPublicKeyExport(key: SshKey): string {
   return `# ${comment}\n${keyed}\n`;
 }
 
-export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPageProps) {
+export function KeysPage({
+  keys,
+  hosts,
+  onGenerate,
+  onImport,
+  onDelete,
+  onImportFromSsh,
+}: KeysPageProps) {
   const [newKeyName, setNewKeyName] = useState("");
   const [algorithm, setAlgorithm] = useState<string>("ed25519");
   const [busy, setBusy] = useState(false);
@@ -332,6 +341,12 @@ export function KeysPage({ keys, hosts, onGenerate, onImport, onDelete }: KeysPa
                   <FileKey size={16} />
                   Import file
                 </Button>
+                {onImportFromSsh && (
+                  <Button variant="secondary" disabled={busy} onClick={onImportFromSsh}>
+                    <Folder size={16} />
+                    Import from…
+                  </Button>
+                )}
               </div>
 
               {(notice || error) && (

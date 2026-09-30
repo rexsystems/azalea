@@ -78,6 +78,19 @@ export function setStoredGravatarEnabled(enabled: boolean) {
   localStorage.setItem(GRAVATAR_KEY, enabled ? "1" : "0");
 }
 
+// ---------- Host card address privacy ----------
+
+const HIDE_HOST_ADDRESSES_KEY = "azalea-hide-host-addresses";
+
+/** When on, host cards show username only (no hostname/IP). */
+export function getStoredHideHostAddresses(): boolean {
+  return localStorage.getItem(HIDE_HOST_ADDRESSES_KEY) === "1";
+}
+
+export function setStoredHideHostAddresses(enabled: boolean) {
+  localStorage.setItem(HIDE_HOST_ADDRESSES_KEY, enabled ? "1" : "0");
+}
+
 export const connectScreenOptions: { id: ConnectScreenMode; label: string; description: string }[] =
   [
     {

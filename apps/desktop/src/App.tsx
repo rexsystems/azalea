@@ -162,6 +162,7 @@ function App() {
   const [connectionError, setConnectionError] = useState<ConnectionErrorState | null>(null);
   const [wakeBusy, setWakeBusy] = useState(false);
   const [focusSettingsSync, setFocusSettingsSync] = useState(false);
+  const [focusSettingsImport, setFocusSettingsImport] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [keyPickerHost, setKeyPickerHost] = useState<Host | null>(null);
   const keyPickerResolver = useRef<((keyId: string | null) => void) | null>(null);
@@ -939,6 +940,29 @@ function App() {
     });
   };
 
+  const requestDeleteHosts = (targets: Host[]) => {
+    if (targets.length === 0) return;
+    if (targets.length === 1) {
+      requestDeleteHost(targets[0]);
+      return;
+    }
+    setPendingConfirm({
+      title: `Delete ${targets.length} hosts?`,
+      message: "Selected hosts will be removed permanently.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => {
+        void Promise.all(targets.map((h) => removeHost(h.id)));
+        setStatusMessage(`Deleted ${targets.length} hosts`);
+        if (editingHost && targets.some((h) => h.id === editingHost.id)) closeDrawer();
+      },
+    });
+  };
+
+  const handleDeleteHost = (host: Host) => {
+    requestDeleteHost(host);
+  };
+
   const handleQuickConnect = () => {
     const parsed = parseQuickConnect(searchQuery);
     if (!parsed.hostname) return;
@@ -971,10 +995,6 @@ function App() {
     });
     setStatusMessage(`Added ${values.name}`);
     if (connectAfter) await connectToHost(created);
-  };
-
-  const handleDeleteHost = (host: Host) => {
-    requestDeleteHost(host);
   };
 
   const handleAddGroup = () => {
@@ -1025,6 +1045,12 @@ function App() {
     setNavPage("settings");
     setViewingTerminal(false);
     setFocusSettingsSync(true);
+  }, []);
+
+  const handleOpenImportFromSsh = useCallback(() => {
+    setNavPage("settings");
+    setViewingTerminal(false);
+    setFocusSettingsImport(true);
   }, []);
 
   const handleSwitchAccount = useCallback(
@@ -1219,8 +1245,11 @@ function App() {
     async (id: string) => {
       const target = accounts.find((a) => a.id === id);
       if (target?.kind === "offline") {
-        setStatusMessage("Local profile cannot be removed.");
-        return;
+        const offlineCount = accounts.filter((a) => a.kind === "offline").length;
+        if (offlineCount <= 1) {
+          setStatusMessage("Must keep at least one local profile.");
+          return;
+        }
       }
       await closeAllSessions();
       const next = await api.removeAccount(id);
@@ -1893,6 +1922,7 @@ function App() {
             onAddGroup={handleAddGroup}
             onEditHost={openEditDrawer}
             onDeleteHost={handleDeleteHost}
+            onDeleteHosts={requestDeleteHosts}
             onRenameGroup={handleRenameGroup}
             onDeleteGroup={handleDeleteGroup}
             onMoveHost={(hostId, groupId) => void handleMoveHost(hostId, groupId)}
@@ -1915,6 +1945,7 @@ function App() {
               await importKey({ name, private_key_pem: pem, passphrase: passphrase ?? null });
             }}
             onDelete={removeKey}
+            onImportFromSsh={handleOpenImportFromSsh}
           />
         );
       case "settings":
@@ -1943,6 +1974,8 @@ function App() {
             activeAccount={activeAccount}
             focusSync={focusSettingsSync}
             onFocusSyncHandled={() => setFocusSettingsSync(false)}
+            focusImport={focusSettingsImport}
+            onFocusImportHandled={() => setFocusSettingsImport(false)}
           />
         );
       default:

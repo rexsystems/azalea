@@ -179,6 +179,80 @@ fn resolve_identity_key_id(
     by_name
 }
 
+fn paths_equivalent(a: &Path, b: &Path) -> bool {
+    if a == b {
+        return true;
+    }
+    let a_keys = path_lookup_keys(a);
+    let b_keys = path_lookup_keys(b);
+    a_keys.iter().any(|ak| b_keys.iter().any(|bk| ak == bk))
+}
+
+/// Paths allowed for import: anything under ~/.ssh, plus IdentityFile entries
+/// from the user's ~/.ssh/config (re-read on the backend; never trust arbitrary paths).
+fn load_config_identity_paths(ssh_dir: &Path) -> Vec<PathBuf> {
+    let config_path = ssh_dir.join("config");
+    let Ok(config) = fs::read_to_string(&config_path) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for host in parse_config_hosts(&config) {
+        let Some(identity) = host.identity_file else {
+            continue;
+        };
+        let path = normalize_ssh_path(&identity);
+        if out.iter().any(|p: &PathBuf| paths_equivalent(p, &path)) {
+            continue;
+        }
+        out.push(path);
+    }
+    out
+}
+
+fn is_import_allowed(ssh_dir: &Path, path: &Path, config_identities: &[PathBuf]) -> bool {
+    if is_within(ssh_dir, path) {
+        return true;
+    }
+    config_identities
+        .iter()
+        .any(|allowed| paths_equivalent(allowed, path))
+}
+
+fn probe_key_candidate(
+    path: &Path,
+    existing_keys: &[crate::models::SshKeyRecord],
+) -> Option<SshDirKeyCandidate> {
+    if !path.is_file() {
+        return None;
+    }
+    let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    if skip_ssh_filename(file_name) {
+        return None;
+    }
+    let contents = fs::read_to_string(path).ok()?;
+    if !looks_like_private_key(&contents) {
+        return None;
+    }
+    let name = key_name_from_path(path);
+    let encrypted = private_key_needs_passphrase(&contents);
+    let (key_type, fingerprint, already_imported) = if encrypted {
+        (None, None, false)
+    } else if let Ok((kt, fp)) = peek_private_key_meta(&contents, None) {
+        let already = existing_keys.iter().any(|k| k.fingerprint == fp);
+        (Some(kt), Some(fp), already)
+    } else {
+        (None, None, false)
+    };
+    Some(SshDirKeyCandidate {
+        path: path.display().to_string(),
+        name,
+        key_type,
+        fingerprint,
+        encrypted,
+        already_imported,
+    })
+}
+
 fn parse_config_hosts(config: &str) -> Vec<SshDirHostCandidate> {
     let mut out = Vec::new();
     let mut current_name: Option<String> = None;
@@ -284,48 +358,10 @@ pub fn scan_ssh_dir(db: tauri::State<'_, SharedDatabase>) -> Result<SshDirScanRe
     let entries = fs::read_dir(&ssh_dir).map_err(|e| e.to_string())?;
     for entry in entries.flatten() {
         let path = entry.path();
-        if !path.is_file() {
-            continue;
+        if let Some(candidate) = probe_key_candidate(&path, &existing_keys) {
+            keys.push(candidate);
         }
-        let file_name = path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
-        if skip_ssh_filename(&file_name) {
-            continue;
-        }
-
-        let contents = match fs::read_to_string(&path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        if !looks_like_private_key(&contents) {
-            continue;
-        }
-
-        let name = key_name_from_path(&path);
-        let encrypted = private_key_needs_passphrase(&contents);
-        let (key_type, fingerprint, already_imported) = if encrypted {
-            (None, None, false)
-        } else if let Ok((kt, fp)) = peek_private_key_meta(&contents, None) {
-            let already = existing_keys.iter().any(|k| k.fingerprint == fp);
-            (Some(kt), Some(fp), already)
-        } else {
-            (None, None, false)
-        };
-
-        keys.push(SshDirKeyCandidate {
-            path: path.display().to_string(),
-            name,
-            key_type,
-            fingerprint,
-            encrypted,
-            already_imported,
-        });
     }
-
-    keys.sort_by(|a, b| a.name.cmp(&b.name));
 
     let mut hosts = Vec::new();
     let config_path = ssh_dir.join("config");
@@ -341,6 +377,21 @@ pub fn scan_ssh_dir(db: tauri::State<'_, SharedDatabase>) -> Result<SshDirScanRe
             }
         }
     }
+
+    // Also surface IdentityFile paths that live outside ~/.ssh.
+    for identity_path in load_config_identity_paths(&ssh_dir) {
+        if keys
+            .iter()
+            .any(|k| paths_equivalent(&normalize_ssh_path(&k.path), &identity_path))
+        {
+            continue;
+        }
+        if let Some(candidate) = probe_key_candidate(&identity_path, &existing_keys) {
+            keys.push(candidate);
+        }
+    }
+
+    keys.sort_by(|a, b| a.name.cmp(&b.name));
 
     Ok(SshDirScanResult {
         ssh_dir: ssh_dir_str,
@@ -427,17 +478,16 @@ pub fn import_ssh_dir(
 
     let passphrase = input.passphrase.as_deref();
     let ssh_dir_for_scope = default_ssh_dir();
+    let config_identities = load_config_identity_paths(&ssh_dir_for_scope);
     for path_str in &input.key_paths {
         let path = normalize_ssh_path(path_str);
-        // Refuse anything outside the scanned ~/.ssh directory. The frontend
-        // is only supposed to send paths returned by scan_ssh_dir; a caller
-        // that ignores that (or a compromised webview) cannot silently import
-        // /etc/ssh/ssh_host_*_key or any other private key on disk.
-        if !is_within(&ssh_dir_for_scope, &path) {
+        // Allow ~/.ssh keys and IdentityFile paths declared in ~/.ssh/config.
+        // Arbitrary paths are still refused so a compromised webview cannot
+        // vacuum /etc/ssh/ssh_host_*_key or unrelated private key material.
+        if !is_import_allowed(&ssh_dir_for_scope, &path, &config_identities) {
             keys_failed.push(format!(
-                "{}: refused (outside {})",
-                key_name_from_path(&path),
-                ssh_dir_for_scope.display()
+                "{}: refused (not in ~/.ssh or config IdentityFile)",
+                key_name_from_path(&path)
             ));
             continue;
         }
@@ -486,6 +536,26 @@ pub fn import_ssh_dir(
                 }
             }
         }
+        // Also index allowed IdentityFile paths outside ~/.ssh.
+        for identity_path in &config_identities {
+            if is_within(&ssh_dir, identity_path) {
+                continue;
+            }
+            let Ok(contents) = fs::read_to_string(identity_path) else {
+                continue;
+            };
+            if !looks_like_private_key(&contents) {
+                continue;
+            }
+            let Ok((_, fp)) = peek_private_key_meta(&contents, passphrase)
+                .or_else(|_| peek_private_key_meta(&contents, None))
+            else {
+                continue;
+            };
+            if let Some(existing) = vault_keys.iter().find(|k| k.fingerprint == fp) {
+                remember_path_key(&mut path_to_key_id, identity_path, &existing.id);
+            }
+        }
     }
 
     let mut hosts_imported = 0usize;
@@ -499,7 +569,7 @@ pub fn import_ssh_dir(
             key_id = resolve_identity_key_id(identity, &path_to_key_id);
             if key_id.is_none()
                 && identity_path.is_file()
-                && is_within(&ssh_dir_for_scope, &identity_path)
+                && is_import_allowed(&ssh_dir_for_scope, &identity_path, &config_identities)
             {
                 key_id = ensure_key_for_path(
                     &identity_path,
@@ -579,7 +649,7 @@ pub fn import_ssh_dir(
                 let mut kid = resolve_identity_key_id(identity, &path_to_key_id);
                 if kid.is_none()
                     && identity_path.is_file()
-                    && is_within(&ssh_dir_for_scope, &identity_path)
+                    && is_import_allowed(&ssh_dir_for_scope, &identity_path, &config_identities)
                 {
                     kid = ensure_key_for_path(
                         &identity_path,

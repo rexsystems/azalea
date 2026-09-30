@@ -11,7 +11,12 @@ export interface HostFormValues {
 }
 
 /** Short connection label for host cards - never show a full IP. */
-export function formatHostEndpoint(username: string, hostname: string): string {
+export function formatHostEndpoint(
+  username: string,
+  hostname: string,
+  hideAddress = false,
+): string {
+  if (hideAddress) return username;
   return `${username}@${shortenHostForCard(hostname)}`;
 }
 

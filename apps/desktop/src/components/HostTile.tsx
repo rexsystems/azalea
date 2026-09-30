@@ -1,13 +1,16 @@
 import type { Host, HostGroup } from "@azalea/shared";
 import { Pencil, Server } from "./icons";
+import { useHideHostAddresses } from "../hooks/useHideHostAddresses";
 import { formatHostEndpoint } from "../lib/utils";
 import { HostOsIcon } from "./HostOsIcon";
 
 interface HostTileProps {
   host: Host;
   connecting?: boolean;
+  selected?: boolean;
   onConnect: (host: Host) => void;
   onEdit: (host: Host) => void;
+  onSelectToggle?: (host: Host) => void;
   onContextMenu?: (e: React.MouseEvent, host: Host) => void;
   compact?: boolean;
 }
@@ -15,11 +18,15 @@ interface HostTileProps {
 export function HostTile({
   host,
   connecting,
+  selected = false,
   onConnect,
   onEdit,
+  onSelectToggle,
   onContextMenu,
   compact = false,
 }: HostTileProps) {
+  const hideAddress = useHideHostAddresses();
+
   return (
     <div
       className="group relative"
@@ -29,7 +36,14 @@ export function HostTile({
       <button
         type="button"
         disabled={connecting}
-        onClick={() => onConnect(host)}
+        onClick={(e) => {
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            onSelectToggle?.(host);
+            return;
+          }
+          onConnect(host);
+        }}
         className={`hover-subtle transition-ui flex w-full items-center text-left disabled:opacity-50 ${
           compact
             ? "gap-3 rounded-xl border px-3.5 py-3.5"
@@ -37,7 +51,8 @@ export function HostTile({
         }`}
         style={{
           background: "var(--bg-card)",
-          borderColor: "var(--border-subtle)",
+          borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
+          boxShadow: selected ? "inset 0 0 0 1px var(--accent)" : undefined,
         }}
       >
         <HostOsIcon
@@ -54,7 +69,7 @@ export function HostTile({
             {host.name}
           </div>
           <div className="truncate text-sm" style={{ color: "var(--text-muted)" }}>
-            {formatHostEndpoint(host.username, host.hostname)}
+            {formatHostEndpoint(host.username, host.hostname, hideAddress)}
           </div>
         </div>
         {connecting && (
@@ -90,8 +105,10 @@ interface GroupSectionProps {
   group: HostGroup | null;
   hosts: Host[];
   connectingHostId: string | null;
+  selectedHostIds?: Set<string>;
   onConnect: (host: Host) => void;
   onEditHost: (host: Host) => void;
+  onSelectToggle?: (host: Host) => void;
   onGroupContextMenu: (e: React.MouseEvent, group: HostGroup | null) => void;
   onHostContextMenu: (e: React.MouseEvent, host: Host) => void;
   compact?: boolean;
@@ -101,8 +118,10 @@ export function GroupSection({
   group,
   hosts,
   connectingHostId,
+  selectedHostIds,
   onConnect,
   onEditHost,
+  onSelectToggle,
   onGroupContextMenu,
   onHostContextMenu,
   compact = false,
@@ -156,8 +175,10 @@ export function GroupSection({
               key={host.id}
               host={host}
               connecting={connectingHostId === host.id}
+              selected={selectedHostIds?.has(host.id)}
               onConnect={onConnect}
               onEdit={onEditHost}
+              onSelectToggle={onSelectToggle}
               onContextMenu={onHostContextMenu}
               compact={compact}
             />

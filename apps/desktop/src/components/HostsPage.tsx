@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Host, HostGroup } from "@azalea/shared";
 import {
+  Check,
   Folder,
   Pencil,
   Play,
@@ -10,6 +11,7 @@ import {
   SquareTerminal,
   Tag,
   Trash2,
+  X,
   Zap,
 } from "./icons";
 import { groupHostsByGroup } from "../lib/utils";
@@ -29,6 +31,7 @@ interface HostsPageProps {
   onAddGroup: () => void;
   onEditHost: (host: Host) => void;
   onDeleteHost: (host: Host) => void;
+  onDeleteHosts: (hosts: Host[]) => void;
   onRenameGroup: (group: HostGroup) => void;
   onDeleteGroup: (group: HostGroup) => void;
   onMoveHost: (hostId: string, groupId: string | null) => void;
@@ -50,6 +53,7 @@ export function HostsPage({
   onAddGroup,
   onEditHost,
   onDeleteHost,
+  onDeleteHosts,
   onRenameGroup,
   onDeleteGroup,
   onMoveHost,
@@ -61,6 +65,7 @@ export function HostsPage({
 }: HostsPageProps) {
   const { openMenu, menuElement } = useContextMenu();
   const [groupPickHost, setGroupPickHost] = useState<Host | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const filteredHosts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -78,51 +83,94 @@ export function HostsPage({
     [filteredHosts, groups],
   );
 
-  const hostMenu = (host: Host) => [
-    {
-      items: [
-        {
-          id: "connect",
-          label: "Connect",
-          icon: <Play size={16} />,
-          onClick: () => onConnect(host),
-        },
-        ...(!isMobile && host.mac_address
-          ? [
-              {
-                id: "wake",
-                label: "Wake up",
-                icon: <Zap size={16} />,
-                onClick: () => onWakeHost(host),
-              },
-            ]
-          : []),
-        {
-          id: "edit",
-          label: "Edit",
-          icon: <Pencil size={16} />,
-          onClick: () => onEditHost(host),
-        },
-        {
-          id: "add-to-group",
-          label: host.group_id ? "Move to group…" : "Add to group…",
-          icon: <Tag size={16} />,
-          onClick: () => setGroupPickHost(host),
-        },
-      ],
-    },
-    {
-      items: [
-        {
-          id: "delete",
-          label: "Delete",
-          icon: <Trash2 size={16} />,
-          danger: true,
-          onClick: () => onDeleteHost(host),
-        },
-      ],
-    },
-  ];
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const valid = new Set(hosts.map((h) => h.id));
+      const next = new Set([...prev].filter((id) => valid.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [hosts]);
+
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedIds(new Set());
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedIds.size]);
+
+  const toggleSelect = (host: Host) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(host.id)) next.delete(host.id);
+      else next.add(host.id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const selectedHosts = useMemo(
+    () => hosts.filter((h) => selectedIds.has(h.id)),
+    [hosts, selectedIds],
+  );
+
+  const hostMenu = (host: Host) => {
+    const isSelected = selectedIds.has(host.id);
+    return [
+      {
+        items: [
+          {
+            id: "connect",
+            label: "Connect",
+            icon: <Play size={16} />,
+            onClick: () => onConnect(host),
+          },
+          ...(!isMobile && host.mac_address
+            ? [
+                {
+                  id: "wake",
+                  label: "Wake up",
+                  icon: <Zap size={16} />,
+                  onClick: () => onWakeHost(host),
+                },
+              ]
+            : []),
+          {
+            id: "edit",
+            label: "Edit",
+            icon: <Pencil size={16} />,
+            onClick: () => onEditHost(host),
+          },
+          {
+            id: "select",
+            label: isSelected ? "Deselect" : "Select",
+            icon: <Check size={16} />,
+            onClick: () => toggleSelect(host),
+          },
+          {
+            id: "add-to-group",
+            label: host.group_id ? "Move to group…" : "Add to group…",
+            icon: <Tag size={16} />,
+            onClick: () => setGroupPickHost(host),
+          },
+        ],
+      },
+      {
+        items: [
+          {
+            id: "delete",
+            label: "Delete",
+            icon: <Trash2 size={16} />,
+            danger: true,
+            onClick: () => onDeleteHost(host),
+          },
+        ],
+      },
+    ];
+  };
 
   const groupMenu = (group: HostGroup | null) => {
     if (!group) {
@@ -297,6 +345,39 @@ export function HostsPage({
           </div>
         </div>
 
+        {selectedIds.size > 0 && (
+          <div
+            className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5"
+            style={{ borderColor: "var(--accent)", background: "var(--bg-panel)" }}
+          >
+            <span className="text-sm" style={{ color: "var(--text)" }}>
+              {selectedIds.size} selected
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="hover-subtle inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+              >
+                <X size={13} />
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteHosts(selectedHosts);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
+                style={{ borderColor: "var(--danger)", color: "var(--danger)" }}
+              >
+                <Trash2 size={13} />
+                Delete
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="min-h-0 flex-1 overflow-y-auto pb-4">
           {loading ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -317,8 +398,10 @@ export function HostsPage({
                   group={group ? groups.find((g) => g.id === group.id) ?? null : null}
                   hosts={sectionHosts}
                   connectingHostId={connectingHostId}
+                  selectedHostIds={selectedIds}
                   onConnect={onConnect}
                   onEditHost={onEditHost}
+                  onSelectToggle={toggleSelect}
                   onGroupContextMenu={(e, g) => openMenu(e, groupMenu(g))}
                   onHostContextMenu={(e, host) => openMenu(e, hostMenu(host))}
                   compact={isMobile}

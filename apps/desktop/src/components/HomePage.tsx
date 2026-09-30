@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { Host, SshKey } from "@azalea/shared";
+import { useHideHostAddresses } from "../hooks/useHideHostAddresses";
 import { formatHostEndpoint } from "../lib/utils";
 import { HostOsIcon } from "./HostOsIcon";
 import { KeyRound, Plus, Server, Settings, SquareTerminal } from "./icons";
@@ -31,6 +32,7 @@ export function HomePage({
   onOpenSettings,
   isMobile = false,
 }: HomePageProps) {
+  const hideAddress = useHideHostAddresses();
   const recent = useMemo(
     () =>
       [...hosts]
@@ -294,7 +296,7 @@ export function HomePage({
                         {host.name}
                       </span>
                       <span className="block truncate text-[11px]" style={{ color: "var(--text-muted)" }}>
-                        {formatHostEndpoint(host.username, host.hostname)}
+                        {formatHostEndpoint(host.username, host.hostname, hideAddress)}
                       </span>
                     </span>
                     {connecting && (

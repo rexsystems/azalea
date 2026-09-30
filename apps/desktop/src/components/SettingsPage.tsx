@@ -11,6 +11,8 @@ import { pixelartPack } from "./icons/pixelartPack";
 import {
   clampFontSize,
   connectScreenOptions,
+  getStoredHideHostAddresses,
+  setStoredHideHostAddresses,
   type ConnectScreenMode,
   type TerminalSettings,
 } from "../lib/settings";
@@ -54,6 +56,8 @@ interface SettingsPageProps {
   activeAccount?: AccountRecord | null;
   focusSync?: boolean;
   onFocusSyncHandled?: () => void;
+  focusImport?: boolean;
+  onFocusImportHandled?: () => void;
 }
 
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -144,11 +148,14 @@ export function SettingsPage({
   activeAccount = null,
   focusSync = false,
   onFocusSyncHandled,
+  focusImport = false,
+  onFocusImportHandled,
 }: SettingsPageProps) {
   const { iconPack, changeIconPack } = useIconPack();
   const [tab, setTab] = useState<SettingsTab>("appearance");
   const [appVersion, setAppVersion] = useState("…");
   const [telemetryOn, setTelemetryOn] = useState(() => isTelemetryEnabled());
+  const [hideHostAddresses, setHideHostAddresses] = useState(() => getStoredHideHostAddresses());
 
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => setAppVersion("-"));
@@ -159,6 +166,12 @@ export function SettingsPage({
     setTab("account");
     onFocusSyncHandled?.();
   }, [focusSync, onFocusSyncHandled]);
+
+  useEffect(() => {
+    if (!focusImport) return;
+    setTab("import");
+    onFocusImportHandled?.();
+  }, [focusImport, onFocusImportHandled]);
 
   return (
     <div
@@ -459,6 +472,16 @@ export function SettingsPage({
                   onChange={(on) => {
                     setTelemetryEnabled(on);
                     setTelemetryOn(on);
+                  }}
+                />
+                <SettingToggle
+                  label="Hide addresses on host cards"
+                  description="Show only the username on Home and Hosts cards. Hostname and IP stay available in Edit and connect flows."
+                  checked={hideHostAddresses}
+                  onChange={(on) => {
+                    setStoredHideHostAddresses(on);
+                    setHideHostAddresses(on);
+                    window.dispatchEvent(new Event("azalea-hide-host-addresses"));
                   }}
                 />
               </>

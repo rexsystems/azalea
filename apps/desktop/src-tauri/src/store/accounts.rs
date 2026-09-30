@@ -197,13 +197,19 @@ impl AccountRegistry {
         if self.data.accounts.len() <= 1 {
             anyhow::bail!("Cannot remove the last account");
         }
-        if self
+        let offline_count = self
             .data
             .accounts
             .iter()
-            .any(|a| a.id == id && a.kind == AccountKind::Offline)
-        {
-            anyhow::bail!("Local profile cannot be removed");
+            .filter(|a| a.kind == AccountKind::Offline)
+            .count();
+        let removing_offline = self
+            .data
+            .accounts
+            .iter()
+            .any(|a| a.id == id && a.kind == AccountKind::Offline);
+        if removing_offline && offline_count <= 1 {
+            anyhow::bail!("Must keep at least one local profile");
         }
         let before = self.data.accounts.len();
         self.data.accounts.retain(|a| a.id != id);
