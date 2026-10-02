@@ -156,7 +156,7 @@ export function UpdateSection({ embedded = false }: UpdateSectionProps) {
           <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
             {mobile
               ? `Installed version ${appVersion}. Mobile builds are updated by installing a new APK.`
-              : `Installed version ${appVersion}. Release builds check azalea.rexsystems.me and GitHub for signed updates.`}
+              : `Installed version ${appVersion}. Release builds check updates.azalea.rexsystems.me for signed updates.`}
           </p>
         </div>
       </div>

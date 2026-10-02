@@ -22,6 +22,10 @@ permissions:
 # in an unrelated step can't read it out of the environment.
 env:
   VITE_AZALEA_BUILD: ${{ github.run_number }}
+  # Public R2 custom domain — used when writing updater fragment download URLs.
+  UPDATER_DOWNLOAD_BASE_URL: https://updates.azalea.rexsystems.me
+  R2_BUCKET: azalea-updates
+  R2_ENDPOINT: https://f92074baafe52a6a6b5b47c82488090d.r2.cloudflarestorage.com
 
 jobs:
   build-windows:
@@ -302,6 +306,27 @@ jobs:
           # Prefer AppImage / nsis updater payloads; keep all .sig files (rpm/deb/AppImage/exe)
           cp artifacts/latest.json release-files/latest.json
           ls -la release-files
+
+      - name: Upload to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY secrets missing; skip R2 upload."
+            exit 1
+          fi
+          # awscli is preinstalled on ubuntu-latest; S3-compatible API for R2.
+          aws s3 sync release-files/ "s3://${R2_BUCKET}/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --only-show-errors
+          # Always overwrite the updater manifest at the bucket root.
+          aws s3 cp release-files/latest.json "s3://${R2_BUCKET}/latest.json" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type application/json \
+            --cache-control "public, max-age=60"
+          echo "Published https://updates.azalea.rexsystems.me/latest.json"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@62c96d0c4e8a889135c1f3a25910db8dbe0e85f7 # v2.3.4

@@ -107,7 +107,7 @@ if (picked.length === 0) {
 
 const baseUrl =
   process.env.UPDATER_DOWNLOAD_BASE_URL ??
-  "https://github.com/rexsystems/azalea/releases/latest/download";
+  "https://updates.azalea.rexsystems.me";
 
 const platforms = {};
 for (const { key, artifact } of picked) {

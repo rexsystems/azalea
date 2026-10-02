@@ -2,10 +2,17 @@
 
 The desktop app uses [Tauri updater](https://v2.tauri.app/plugin/updater/) with signed releases on **Windows**, **Linux (AppImage)**, and **macOS**.
 
+Installer binaries and `latest.json` are published to **Cloudflare R2** (`azalea-updates` bucket) behind the custom domain:
+
+`https://updates.azalea.rexsystems.me`
+
 ## Endpoints (in order)
 
-1. `https://github.com/rexsystems/azalea/releases/latest/download/latest.json` (primary; always published by CI)
-2. `https://azalea.rexsystems.me/updates/latest.json` (fallback; keep in sync with GitHub)
+1. `https://updates.azalea.rexsystems.me/latest.json` (primary; R2)
+2. `https://azalea.rexsystems.me/updates/latest.json` (site fallback)
+3. `https://github.com/rexsystems/azalea/releases/latest/download/latest.json` (GitHub fallback)
+
+Download URLs inside the manifest also point at `updates.azalea.rexsystems.me/<artifact>`.
 
 ## Platforms in `latest.json`
 
@@ -18,11 +25,7 @@ The desktop app uses [Tauri updater](https://v2.tauri.app/plugin/updater/) with 
 | `darwin-aarch64` | `.app.tar.gz` (Apple Silicon) |
 | `darwin-x86_64` | `.app.tar.gz` (Intel) |
 
-The app checks GitHub first. Keep `azalea.rexsystems.me/updates/latest.json`
-copied from the GitHub Release asset after each release, or the website fallback
-drifts and can serve a stale/incomplete platform list.
-
-## GitHub Actions secrets (master release only)
+## GitHub Actions secrets
 
 Add these repository secrets on `rexsystems/azalea`:
 
@@ -30,8 +33,12 @@ Add these repository secrets on `rexsystems/azalea`:
 |--------|--------|
 | `TAURI_SIGNING_PRIVATE_KEY` | Contents of `~/.azalea/tauri-signing.key` |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Your key password |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 API token access key id |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 API token secret access key |
 
-Generate a new keypair locally:
+R2 API tokens: Cloudflare dashboard → R2 → Manage R2 API Tokens → create token with **Object Read & Write** on bucket `azalea-updates`.
+
+Generate a new Tauri keypair locally:
 
 ```bash
 npx tauri signer generate -w ~/.azalea/tauri-signing.key -p "your-password" -f
@@ -45,13 +52,35 @@ CI builds macOS with `--bundles app` (signed `.app.tar.gz` for the updater), the
 
 ## After each master release
 
-1. CI builds Windows, Linux (deb/rpm/AppImage), and macOS on `macos-14` (Apple Silicon natively + Intel via `--target x86_64-apple-darwin`).
-2. CI merges platform fragments into `latest.json` and uploads it with the installers to GitHub Releases.
-3. Copy `latest.json` to **azalea-web** `public/updates/` so azalea.rexsystems.me serves the manifest:
+1. CI builds Windows, Linux (deb/rpm/AppImage), and macOS.
+2. CI merges platform fragments into `latest.json` with download URLs under `https://updates.azalea.rexsystems.me/…`.
+3. CI uploads installers + `latest.json` to R2 (`azalea-updates`).
+4. CI also attaches the same files to the GitHub Release (archive / fallback).
+5. Optionally copy `latest.json` into **azalea-web** `public/updates/` so the marketing site fallback stays in sync:
 
 ```bash
 cp artifacts/latest.json ../azalea-web/public/updates/latest.json
 ```
+
+## Manual seed (first time / before next CI run)
+
+Until the next master release uploads automatically, put the current release assets and manifest on R2:
+
+```bash
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_DEFAULT_REGION=auto
+ENDPOINT=https://f92074baafe52a6a6b5b47c82488090d.r2.cloudflarestorage.com
+
+# From a folder with latest.json + AppImage/exe/deb/rpm/app.tar.gz
+aws s3 sync . s3://azalea-updates/ --endpoint-url "$ENDPOINT"
+aws s3 cp latest.json s3://azalea-updates/latest.json \
+  --endpoint-url "$ENDPOINT" \
+  --content-type application/json \
+  --cache-control "public, max-age=60"
+```
+
+Confirm: `https://updates.azalea.rexsystems.me/latest.json`
 
 ## In the app
 
