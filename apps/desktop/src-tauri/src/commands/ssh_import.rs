@@ -77,7 +77,9 @@ fn home_dir() -> PathBuf {
 }
 
 fn looks_like_private_key(contents: &str) -> bool {
-    contents.to_ascii_uppercase().contains("PRIVATE KEY")
+    let upper = contents.to_ascii_uppercase();
+    upper.contains("PRIVATE KEY")
+        || contents.lines().next().is_some_and(|l| l.starts_with("PuTTY-User-Key-File-"))
 }
 
 fn skip_ssh_filename(name: &str) -> bool {
@@ -92,7 +94,6 @@ fn skip_ssh_filename(name: &str) -> bool {
             | "environment"
             | "rc"
     ) || lower.ends_with(".pub")
-        || lower.ends_with(".ppk")
         || lower.ends_with(".json")
 }
 

@@ -1,5 +1,7 @@
 pub mod generate;
 pub mod keyring;
+pub mod ppk;
+pub mod sec1;
 
 pub use generate::{
     generate_key, import_private_key, import_private_key_with_id, load_key_pair,

@@ -108,7 +108,7 @@ fn format_import_error(err: russh_keys::Error, had_passphrase: bool) -> anyhow::
             "Invalid key file: base64 decoding failed. The file may be corrupted or use an unsupported encoding."
         ),
         russh_keys::Error::CouldNotReadKey => anyhow::anyhow!(
-            "Could not read key. Supported: OpenSSH, PKCS#1, PKCS#8 - Ed25519, RSA, ECDSA (P-256/P-384/P-521), and DSA."
+            "Could not read key. Supported: OpenSSH, PKCS#1, PKCS#8, SEC1 EC, PuTTY PPK — Ed25519, RSA, ECDSA (P-256/P-384/P-521)."
         ),
         other => anyhow::anyhow!("{other}"),
     }
@@ -152,7 +152,7 @@ fn read_ssh_u32(buf: &[u8], off: &mut usize) -> anyhow::Result<u32> {
     Ok(v)
 }
 
-fn mpint_to_biguint(bytes: &[u8]) -> rsa::BigUint {
+pub(crate) fn mpint_to_biguint(bytes: &[u8]) -> rsa::BigUint {
     // OpenSSH mpints may include a leading 0x00 sign byte.
     let trimmed = bytes.strip_prefix(&[0]).unwrap_or(bytes);
     rsa::BigUint::from_bytes_be(trimmed)
@@ -242,6 +242,51 @@ fn parse_via_openssh_lenient(normalized: &str) -> anyhow::Result<PrivateKey> {
             )
             .map_err(|err| anyhow::anyhow!("Ed25519 private key build failed: {err}"))
         }
+        b"ecdsa-sha2-nistp256" | b"ecdsa-sha2-nistp384" | b"ecdsa-sha2-nistp521" => {
+            use ssh_key::private::EcdsaKeypair;
+
+            let _curve = read_ssh_string(private, &mut po)?;
+            let _q = read_ssh_string(private, &mut po)?;
+            let d = read_ssh_string(private, &mut po)?;
+            let comment = read_ssh_string(private, &mut po)?;
+            let d = d.strip_prefix(&[0]).unwrap_or(d);
+            let algo = std::str::from_utf8(key_type).unwrap_or("");
+            let keypair = match algo {
+                "ecdsa-sha2-nistp256" => {
+                    let sk = p256::SecretKey::from_slice(d)
+                        .map_err(|e| anyhow::anyhow!("lenient P-256: {e}"))?;
+                    let public = sk.public_key();
+                    EcdsaKeypair::NistP256 {
+                        private: sk.into(),
+                        public: public.into(),
+                    }
+                }
+                "ecdsa-sha2-nistp384" => {
+                    let sk = p384::SecretKey::from_slice(d)
+                        .map_err(|e| anyhow::anyhow!("lenient P-384: {e}"))?;
+                    let public = sk.public_key();
+                    EcdsaKeypair::NistP384 {
+                        private: sk.into(),
+                        public: public.into(),
+                    }
+                }
+                "ecdsa-sha2-nistp521" => {
+                    let sk = p521::SecretKey::from_slice(d)
+                        .map_err(|e| anyhow::anyhow!("lenient P-521: {e}"))?;
+                    let public = sk.public_key();
+                    EcdsaKeypair::NistP521 {
+                        private: sk.into(),
+                        public: public.into(),
+                    }
+                }
+                _ => unreachable!(),
+            };
+            PrivateKey::new(
+                KeypairData::Ecdsa(keypair),
+                String::from_utf8_lossy(comment).into_owned(),
+            )
+            .map_err(|err| anyhow::anyhow!("ECDSA private key build failed: {err}"))
+        }
         other => anyhow::bail!(
             "lenient OpenSSH fallback unsupported for {}",
             String::from_utf8_lossy(other)
@@ -270,6 +315,33 @@ fn parse_via_pkcs1_pem(normalized: &str) -> anyhow::Result<PrivateKey> {
         .map_err(|err| anyhow::anyhow!("RSA private key build failed: {err}"))
 }
 
+fn ecdsa_from_p256_sk(sk: p256::SecretKey) -> ssh_key::private::KeypairData {
+    use ssh_key::private::{EcdsaKeypair, KeypairData};
+    let public = sk.public_key();
+    KeypairData::Ecdsa(EcdsaKeypair::NistP256 {
+        private: sk.into(),
+        public: public.into(),
+    })
+}
+
+fn ecdsa_from_p384_sk(sk: p384::SecretKey) -> ssh_key::private::KeypairData {
+    use ssh_key::private::{EcdsaKeypair, KeypairData};
+    let public = sk.public_key();
+    KeypairData::Ecdsa(EcdsaKeypair::NistP384 {
+        private: sk.into(),
+        public: public.into(),
+    })
+}
+
+fn ecdsa_from_p521_sk(sk: p521::SecretKey) -> ssh_key::private::KeypairData {
+    use ssh_key::private::{EcdsaKeypair, KeypairData};
+    let public = sk.public_key();
+    KeypairData::Ecdsa(EcdsaKeypair::NistP521 {
+        private: sk.into(),
+        public: public.into(),
+    })
+}
+
 fn parse_via_pkcs8_pem(normalized: &str, passphrase: Option<&str>) -> anyhow::Result<PrivateKey> {
     use pkcs8::DecodePrivateKey;
     use ssh_key::private::KeypairData;
@@ -278,14 +350,25 @@ fn parse_via_pkcs8_pem(normalized: &str, passphrase: Option<&str>) -> anyhow::Re
         let Some(phrase) = passphrase else {
             return Err(anyhow::anyhow!("KEY_NEEDS_PASSPHRASE"));
         };
-        // Prefer rsa PKCS8 encrypted when possible; fall through on failure.
-        if let Ok(rsa) = rsa::RsaPrivateKey::from_pkcs8_encrypted_pem(normalized, phrase.as_bytes())
-        {
+        let pw = phrase.as_bytes();
+        if let Ok(rsa) = rsa::RsaPrivateKey::from_pkcs8_encrypted_pem(normalized, pw) {
             let keypair: ssh_key::private::RsaKeypair = rsa
                 .try_into()
                 .map_err(|err| anyhow::anyhow!("RSA key conversion failed: {err}"))?;
             return PrivateKey::new(KeypairData::Rsa(keypair), "")
                 .map_err(|err| anyhow::anyhow!("RSA private key build failed: {err}"));
+        }
+        if let Ok(sk) = p256::SecretKey::from_pkcs8_encrypted_pem(normalized, pw) {
+            return PrivateKey::new(ecdsa_from_p256_sk(sk), "")
+                .map_err(|err| anyhow::anyhow!("{err}"));
+        }
+        if let Ok(sk) = p384::SecretKey::from_pkcs8_encrypted_pem(normalized, pw) {
+            return PrivateKey::new(ecdsa_from_p384_sk(sk), "")
+                .map_err(|err| anyhow::anyhow!("{err}"));
+        }
+        if let Ok(sk) = p521::SecretKey::from_pkcs8_encrypted_pem(normalized, pw) {
+            return PrivateKey::new(ecdsa_from_p521_sk(sk), "")
+                .map_err(|err| anyhow::anyhow!("{err}"));
         }
         anyhow::bail!("encrypted pkcs8 unsupported here");
     }
@@ -301,13 +384,28 @@ fn parse_via_pkcs8_pem(normalized: &str, passphrase: Option<&str>) -> anyhow::Re
         return PrivateKey::new(KeypairData::Rsa(keypair), "")
             .map_err(|err| anyhow::anyhow!("RSA private key build failed: {err}"));
     }
+    if let Ok(sk) = p256::SecretKey::from_pkcs8_pem(normalized) {
+        return PrivateKey::new(ecdsa_from_p256_sk(sk), "").map_err(|err| anyhow::anyhow!("{err}"));
+    }
+    if let Ok(sk) = p384::SecretKey::from_pkcs8_pem(normalized) {
+        return PrivateKey::new(ecdsa_from_p384_sk(sk), "").map_err(|err| anyhow::anyhow!("{err}"));
+    }
+    if let Ok(sk) = p521::SecretKey::from_pkcs8_pem(normalized) {
+        return PrivateKey::new(ecdsa_from_p521_sk(sk), "").map_err(|err| anyhow::anyhow!("{err}"));
+    }
 
     anyhow::bail!("pkcs8 parse failed")
 }
 
-fn parse_private_key(pem: &str, passphrase: Option<&str>) -> anyhow::Result<PrivateKey> {
-    let normalized = normalize_private_key_pem(pem);
+pub(crate) fn parse_private_key(pem: &str, passphrase: Option<&str>) -> anyhow::Result<PrivateKey> {
     let passphrase = passphrase.filter(|p| !p.is_empty());
+
+    // 0) PuTTY PPK (must run before PEM normalization — not PEM).
+    if crate::keys::ppk::looks_like_ppk(pem) {
+        return crate::keys::ppk::parse_ppk(pem, passphrase);
+    }
+
+    let normalized = normalize_private_key_pem(pem);
 
     // 1) OpenSSH format via ssh-key (more tolerant PEM than russh's line reader).
     if normalized.contains("BEGIN OPENSSH PRIVATE KEY") {
@@ -325,14 +423,23 @@ fn parse_private_key(pem: &str, passphrase: Option<&str>) -> anyhow::Result<Priv
         }
     }
 
-    // 2) russh multi-format decoder (OpenSSH / PKCS#1 / PKCS#8 / encrypted).
+    // 2) OpenSSL SEC1 EC keys (BEGIN EC PRIVATE KEY).
+    if normalized.contains("BEGIN EC PRIVATE KEY") {
+        match crate::keys::sec1::parse_sec1_ec_pem(&normalized, "") {
+            Ok(key) => return Ok(key),
+            Err(err) if err.to_string().contains("KEY_NEEDS_PASSPHRASE") => return Err(err),
+            Err(_) => {}
+        }
+    }
+
+    // 3) russh multi-format decoder (OpenSSH / PKCS#1 / PKCS#8 / encrypted).
     match russh_keys::decode_secret_key(&normalized, passphrase) {
         Ok(key) => return Ok(key),
         Err(russh_keys::Error::KeyIsEncrypted) => {
             return Err(anyhow::anyhow!("KEY_NEEDS_PASSPHRASE"));
         }
         Err(primary) => {
-            // 3) Direct PKCS#1 / PKCS#8 RSA fallbacks for mangled id_rsa files.
+            // 4) Direct PKCS#1 / PKCS#8 RSA fallbacks for mangled id_rsa files.
             if let Ok(key) = parse_via_pkcs1_pem(&normalized) {
                 return Ok(key);
             }
@@ -371,7 +478,8 @@ pub fn algorithm_label(algorithm: &Algorithm) -> String {
 fn parse_generate_algorithm(raw: Option<&str>) -> anyhow::Result<Algorithm> {
     match raw.map(str::trim).filter(|s| !s.is_empty()).unwrap_or("ed25519") {
         "ed25519" => Ok(Algorithm::Ed25519),
-        "rsa" | "rsa-4096" => Ok(Algorithm::Rsa { hash: None }),
+        // Bit size is applied in generate_key (ssh-key defaults RSA to 4096).
+        "rsa" | "rsa-4096" | "rsa-3072" | "rsa-2048" => Ok(Algorithm::Rsa { hash: None }),
         "ecdsa" | "ecdsa-p256" | "ecdsa-nistp256" => Ok(Algorithm::Ecdsa {
             curve: EcdsaCurve::NistP256,
         }),
@@ -382,8 +490,16 @@ fn parse_generate_algorithm(raw: Option<&str>) -> anyhow::Result<Algorithm> {
             curve: EcdsaCurve::NistP521,
         }),
         other => anyhow::bail!(
-            "Unsupported generate algorithm '{other}'. Use ed25519, rsa, ecdsa-p256, ecdsa-p384, or ecdsa-p521."
+            "Unsupported generate algorithm '{other}'. Use ed25519, rsa, rsa-2048, rsa-3072, rsa-4096, ecdsa-p256, ecdsa-p384, or ecdsa-p521."
         ),
+    }
+}
+
+fn rsa_bits_for_label(raw: Option<&str>) -> usize {
+    match raw.map(str::trim).unwrap_or("") {
+        "rsa-2048" => 2048,
+        "rsa-3072" => 3072,
+        _ => 4096, // "rsa", "rsa-4096", default
     }
 }
 
@@ -431,22 +547,53 @@ pub fn private_key_needs_passphrase(pem: &str) -> bool {
     }
 }
 
-fn store_private_key_material(id: &str, private_key: &PrivateKey, original_pem: &str) -> anyhow::Result<()> {
-    match private_key.to_openssh(LineEnding::LF) {
-        Ok(openssh) => keyring::store_private_key(id, &openssh),
-        Err(_) => {
-            // Some RSA keys fail OpenSSH re-encode on ssh-key 0.6; keep repaired original PEM.
-            keyring::store_private_key(id, &normalize_private_key_pem(original_pem))
-        }
+fn store_private_key_material(
+    id: &str,
+    private_key: &PrivateKey,
+    original_pem: &str,
+) -> anyhow::Result<()> {
+    // Always persist an *unencrypted* OpenSSH private key. Falling back to the
+    // original PEM is only safe when that PEM is already plaintext — never when
+    // it was passphrase-protected (load_key_pair has no passphrase).
+    if let Ok(openssh) = private_key.to_openssh(LineEnding::LF) {
+        return keyring::store_private_key(id, &openssh);
     }
+
+    let normalized = normalize_private_key_pem(original_pem);
+    let looks_encrypted = normalized.contains("ENCRYPTED")
+        || normalized.contains("Proc-Type:")
+        || normalized.contains("DEK-Info:")
+        || (crate::keys::ppk::looks_like_ppk(original_pem)
+            && original_pem.to_ascii_lowercase().contains("encryption: aes"));
+    if looks_encrypted {
+        anyhow::bail!(
+            "Imported key decrypted, but could not re-encode it to OpenSSH format for storage. Try converting with: ssh-keygen -p -m RFC4716 -f key"
+        );
+    }
+    keyring::store_private_key(id, &normalized)
 }
 
 pub fn generate_key(name: &str, algorithm: Option<&str>) -> anyhow::Result<SshKeyRecord> {
     let algo = parse_generate_algorithm(algorithm)?;
-    let private_key = PrivateKey::random(&mut rand::rngs::OsRng, algo)?;
+    let private_key = match &algo {
+        Algorithm::Rsa { .. } => {
+            use ssh_key::private::{KeypairData, RsaKeypair};
+            let bits = rsa_bits_for_label(algorithm);
+            let rsa = RsaKeypair::random(&mut rand::rngs::OsRng, bits)
+                .map_err(|e| anyhow::anyhow!("RSA {bits}-bit generate failed: {e}"))?;
+            PrivateKey::new(KeypairData::Rsa(rsa), name.to_string())?
+        }
+        _ => PrivateKey::random(&mut rand::rngs::OsRng, algo)?,
+    };
     let id = Uuid::new_v4().to_string();
-    let private_pem = private_key.to_openssh(LineEnding::LF)?.to_string();
+    let private_pem = private_key
+        .to_openssh(LineEnding::LF)
+        .map_err(|e| anyhow::anyhow!("Failed to encode generated key: {e}"))?
+        .to_string();
     keyring::store_private_key(&id, &private_pem)?;
+    // Verify the key can sign (guards against ssh-key RSA encode bugs).
+    russh_keys::helpers::sign_workaround(&private_key, b"azalea-key-check")
+        .map_err(|e| anyhow::anyhow!("Generated key failed self-check: {e}"))?;
     record_from_private_key(name, &private_key, id)
 }
 
@@ -476,6 +623,10 @@ pub fn import_private_key_with_id(
         | Algorithm::Dsa => {}
         other => anyhow::bail!("Unsupported key algorithm: {other}"),
     }
+
+    // Same signing path russh uses for SSH auth — reject keys that cannot sign.
+    russh_keys::helpers::sign_workaround(&private_key, b"azalea-import-check")
+        .map_err(|e| anyhow::anyhow!("Imported key failed sign check: {e}"))?;
 
     let id = id
         .map(str::to_string)
@@ -588,5 +739,100 @@ mod openssh_lenient_tests {
         };
         let key = parse_private_key(&pem, None).expect("lethal should import via lenient OpenSSH");
         assert!(matches!(key.algorithm(), Algorithm::Rsa { .. }));
+    }
+}
+
+
+
+#[cfg(test)]
+mod broad_import_tests {
+    use super::*;
+    use ssh_key::{Algorithm, EcdsaCurve};
+
+    const FIX: &str = "/tmp/azalea-key-fixtures";
+
+    fn must_parse(name: &str, pass: Option<&str>) -> PrivateKey {
+        let pem = std::fs::read_to_string(format!("{FIX}/{name}")).unwrap();
+        let key = parse_private_key(&pem, pass).unwrap_or_else(|e| panic!("{name}: {e}"));
+        russh_keys::helpers::sign_workaround(&key, b"chal").unwrap_or_else(|e| panic!("{name} sign: {e}"));
+        key
+    }
+
+    #[test]
+    fn all_formats_and_algos() {
+        if !std::path::Path::new(FIX).is_dir() {
+            eprintln!("skip: fixtures missing at {FIX}");
+            return;
+        }
+        assert!(matches!(must_parse("ed25519_openssh", None).algorithm(), Algorithm::Ed25519));
+        assert!(matches!(must_parse("rsa2048_openssh", None).algorithm(), Algorithm::Rsa { .. }));
+        assert!(matches!(must_parse("rsa2048_pkcs1", None).algorithm(), Algorithm::Rsa { .. }));
+        assert!(matches!(must_parse("rsa2048_pkcs8", None).algorithm(), Algorithm::Rsa { .. }));
+        assert!(matches!(must_parse("rsa3072_openssh", None).algorithm(), Algorithm::Rsa { .. }));
+        assert!(matches!(must_parse("rsa4096_openssh", None).algorithm(), Algorithm::Rsa { .. }));
+        assert!(matches!(must_parse("rsa2048_enc", Some("secret")).algorithm(), Algorithm::Rsa { .. }));
+        assert!(matches!(
+            must_parse("ecdsa256_openssh", None).algorithm(),
+            Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }
+        ));
+        assert!(matches!(
+            must_parse("ecdsa384_openssh", None).algorithm(),
+            Algorithm::Ecdsa { curve: EcdsaCurve::NistP384 }
+        ));
+        assert!(matches!(
+            must_parse("ecdsa521_openssh", None).algorithm(),
+            Algorithm::Ecdsa { curve: EcdsaCurve::NistP521 }
+        ));
+        assert!(matches!(
+            must_parse("ecdsa256_sec1", None).algorithm(),
+            Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }
+        ));
+        assert!(matches!(
+            must_parse("ecdsa384_sec1", None).algorithm(),
+            Algorithm::Ecdsa { curve: EcdsaCurve::NistP384 }
+        ));
+        assert!(matches!(
+            must_parse("ecdsa521_sec1", None).algorithm(),
+            Algorithm::Ecdsa { curve: EcdsaCurve::NistP521 }
+        ));
+        assert!(matches!(
+            must_parse("ecdsa256_pkcs8", None).algorithm(),
+            Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }
+        ));
+        assert!(matches!(must_parse("ed25519.ppk", None).algorithm(), Algorithm::Ed25519));
+        assert!(matches!(must_parse("rsa2048.ppk", None).algorithm(), Algorithm::Rsa { .. }));
+        assert!(matches!(
+            must_parse("ecdsa256.ppk", None).algorithm(),
+            Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }
+        ));
+    }
+
+    #[test]
+    fn generate_all_algos_can_sign() {
+        for label in [
+            "ed25519",
+            "rsa-2048",
+            "rsa-3072",
+            "rsa-4096",
+            "ecdsa-p256",
+            "ecdsa-p384",
+            "ecdsa-p521",
+        ] {
+            let algo = parse_generate_algorithm(Some(label)).unwrap();
+            let key = match &algo {
+                Algorithm::Rsa { .. } => {
+                    use ssh_key::private::{KeypairData, RsaKeypair};
+                    let bits = rsa_bits_for_label(Some(label));
+                    let rsa = RsaKeypair::random(&mut rand::rngs::OsRng, bits).unwrap();
+                    PrivateKey::new(KeypairData::Rsa(rsa), "t").unwrap()
+                }
+                _ => PrivateKey::random(&mut rand::rngs::OsRng, algo).unwrap(),
+            };
+            // Round-trip OpenSSH encode/decode (storage path).
+            let openssh = key.to_openssh(ssh_key::LineEnding::LF).unwrap().to_string();
+            let again = parse_private_key(&openssh, None).unwrap();
+            russh_keys::helpers::sign_workaround(&again, b"chal")
+                .unwrap_or_else(|e| panic!("generate {label}: {e}"));
+        }
     }
 }

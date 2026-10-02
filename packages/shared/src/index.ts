@@ -67,7 +67,15 @@ export interface SshKey {
 
 export interface CreateKeyInput {
   name: string;
-  algorithm?: "ed25519" | "rsa" | "ecdsa-p256" | "ecdsa-p384" | "ecdsa-p521";
+  algorithm?:
+    | "ed25519"
+    | "rsa"
+    | "rsa-2048"
+    | "rsa-3072"
+    | "rsa-4096"
+    | "ecdsa-p256"
+    | "ecdsa-p384"
+    | "ecdsa-p521";
 }
 
 export interface InstallPublicKeyResult {

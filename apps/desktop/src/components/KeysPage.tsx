@@ -33,6 +33,8 @@ interface KeysPageProps {
 const ALGORITHM_OPTIONS = [
   { value: "ed25519", label: "Ed25519 (recommended)" },
   { value: "rsa", label: "RSA 4096" },
+  { value: "rsa-3072", label: "RSA 3072" },
+  { value: "rsa-2048", label: "RSA 2048" },
   { value: "ecdsa-p256", label: "ECDSA P-256" },
   { value: "ecdsa-p384", label: "ECDSA P-384" },
   { value: "ecdsa-p521", label: "ECDSA P-521" },
@@ -308,7 +310,7 @@ export function KeysPage({
                     New key
                   </h3>
                   <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                    Create an Ed25519/RSA/ECDSA key or import an existing private key file.
+                    Create Ed25519/RSA/ECDSA keys, or import OpenSSH, PEM, SEC1, or PuTTY (.ppk) files.
                   </p>
                 </div>
               </div>
@@ -427,7 +429,7 @@ export function KeysPage({
                     No keys yet
                   </p>
                   <p className="mt-1 max-w-sm text-sm" style={{ color: "var(--text-muted)" }}>
-                    Generate a new identity above, or import an existing OpenSSH private key.
+                    Generate a new identity above, or import OpenSSH / PEM / SEC1 / PuTTY (.ppk).
                   </p>
                 </div>
               ) : (
