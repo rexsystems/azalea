@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { X } from "../icons";
 
 interface DrawerProps {
@@ -12,6 +12,17 @@ interface DrawerProps {
 
 /** Right panel on desktop; full-screen sheet on mobile (`data-mobile="true"`). */
 export function Drawer({ open, title, subtitle, onClose, children, footer }: DrawerProps) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (

@@ -90,6 +90,7 @@ fn skip_ssh_filename(name: &str) -> bool {
             | "rc"
     ) || lower.ends_with(".pub")
         || lower.ends_with(".ppk")
+        || lower.ends_with(".json")
 }
 
 fn key_name_from_path(path: &Path) -> String {

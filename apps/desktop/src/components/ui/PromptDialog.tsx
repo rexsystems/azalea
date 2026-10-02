@@ -11,6 +11,7 @@ interface PromptDialogProps {
   placeholder?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  inputType?: "text" | "password";
   onConfirm: (value: string) => void;
   onCancel: () => void;
 }
@@ -23,6 +24,7 @@ export function PromptDialog({
   placeholder,
   confirmLabel = "Save",
   cancelLabel = "Cancel",
+  inputType = "text",
   onConfirm,
   onCancel,
 }: PromptDialogProps) {
@@ -66,8 +68,10 @@ export function PromptDialog({
         <div className="mt-4">
           <Input
             autoFocus
+            type={inputType}
             value={value}
             placeholder={placeholder}
+            autoComplete={inputType === "password" ? "current-password" : undefined}
             onChange={(e) => setValue(e.target.value)}
           />
         </div>

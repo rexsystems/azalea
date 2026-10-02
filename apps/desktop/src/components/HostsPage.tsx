@@ -93,13 +93,27 @@ export function HostsPage({
   }, [hosts]);
 
   useEffect(() => {
-    if (selectedIds.size === 0) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedIds(new Set());
+      const target = e.target as HTMLElement | null;
+      const typing =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+
+      if (e.key === "Escape" && selectedIds.size > 0) {
+        setSelectedIds(new Set());
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a" && !typing) {
+        e.preventDefault();
+        setSelectedIds(new Set(filteredHosts.map((h) => h.id)));
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedIds.size]);
+  }, [selectedIds.size, filteredHosts]);
 
   const toggleSelect = (host: Host) => {
     setSelectedIds((prev) => {
@@ -110,6 +124,7 @@ export function HostsPage({
     });
   };
 
+  const selectAllFiltered = () => setSelectedIds(new Set(filteredHosts.map((h) => h.id)));
   const clearSelection = () => setSelectedIds(new Set());
 
   const selectedHosts = useMemo(
@@ -346,19 +361,26 @@ export function HostsPage({
         </div>
 
         {selectedIds.size > 0 && (
-          <div
-            className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2.5"
-            style={{ borderColor: "var(--accent)", background: "var(--bg-panel)" }}
-          >
-            <span className="text-sm" style={{ color: "var(--text)" }}>
+          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 px-0.5">
+            <span className="text-sm" style={{ color: "var(--text-muted)" }}>
               {selectedIds.size} selected
+              {filteredHosts.length > selectedIds.size && (
+                <button
+                  type="button"
+                  onClick={selectAllFiltered}
+                  className="ml-2 underline-offset-2 hover:underline"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Select all {filteredHosts.length}
+                </button>
+              )}
             </span>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
                 onClick={clearSelection}
-                className="hover-subtle inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
-                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                className="hover-subtle inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium"
+                style={{ color: "var(--text-secondary)" }}
               >
                 <X size={13} />
                 Clear
@@ -368,8 +390,8 @@ export function HostsPage({
                 onClick={() => {
                   onDeleteHosts(selectedHosts);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium"
-                style={{ borderColor: "var(--danger)", color: "var(--danger)" }}
+                className="hover-subtle inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium"
+                style={{ color: "var(--danger)" }}
               >
                 <Trash2 size={13} />
                 Delete

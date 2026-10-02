@@ -465,25 +465,33 @@ export function SettingsPage({
                   title="Privacy"
                   description="Optional anonymous counts and crash reports. Off by default."
                 />
-                <SettingToggle
-                  label="Anonymous usage & crash reports"
-                  description="Daily install ping plus short crash reports (error kind, redacted message, app version, OS). No hostnames, emails, keys, or commands."
-                  checked={telemetryOn}
-                  onChange={(on) => {
-                    setTelemetryEnabled(on);
-                    setTelemetryOn(on);
-                  }}
-                />
-                <SettingToggle
-                  label="Hide addresses on host cards"
-                  description="Show only the username on Home and Hosts cards. Hostname and IP stay available in Edit and connect flows."
-                  checked={hideHostAddresses}
-                  onChange={(on) => {
-                    setStoredHideHostAddresses(on);
-                    setHideHostAddresses(on);
-                    window.dispatchEvent(new Event("azalea-hide-host-addresses"));
-                  }}
-                />
+                <SettingRow label="Telemetry">
+                  <div className="space-y-2">
+                    <SettingToggle
+                      label="Anonymous usage & crash reports"
+                      description="Daily install ping plus short crash reports (error kind, redacted message, app version, OS). No hostnames, emails, keys, or commands."
+                      checked={telemetryOn}
+                      onChange={(on) => {
+                        setTelemetryEnabled(on);
+                        setTelemetryOn(on);
+                      }}
+                    />
+                  </div>
+                </SettingRow>
+                <SettingRow label="Hosts">
+                  <div className="space-y-2">
+                    <SettingToggle
+                      label="Hide addresses on host cards"
+                      description="Show only the username on Home and Hosts cards. Hostname and IP stay available in Edit and connect flows."
+                      checked={hideHostAddresses}
+                      onChange={(on) => {
+                        setStoredHideHostAddresses(on);
+                        setHideHostAddresses(on);
+                        window.dispatchEvent(new Event("azalea-hide-host-addresses"));
+                      }}
+                    />
+                  </div>
+                </SettingRow>
               </>
             )}
 

@@ -101,7 +101,17 @@ interface PromptState {
   defaultValue?: string;
   placeholder?: string;
   confirmLabel?: string;
+  inputType?: "text" | "password";
   onConfirm: (value: string) => void;
+}
+
+function isAuthFailureMessage(message: string): boolean {
+  return (
+    /public key authentication failed/i.test(message) ||
+    /password authentication failed/i.test(message) ||
+    /no credentials configured/i.test(message) ||
+    /could not load ssh key/i.test(message)
+  );
 }
 
 function App() {
@@ -1527,6 +1537,36 @@ function App() {
     }
   };
 
+  const tryPasswordAfterAuthFailure = () => {
+    const err = connectionError;
+    if (!err?.hostId) return;
+    const host = hosts.find((h) => h.id === err.hostId);
+    if (!host) return;
+    setPendingPrompt({
+      title: `Password for ${host.name}`,
+      message:
+        "Key auth failed or no password is saved. Enter the SSH password to store it and retry (key stays as fallback).",
+      placeholder: "SSH password",
+      confirmLabel: "Save & connect",
+      inputType: "password",
+      onConfirm: (password) => {
+        void (async () => {
+          try {
+            await updateHost(host.id, { password, auth_type: "password" });
+            setConnectionError(null);
+            setWakeBusy(false);
+            if (err.sessionId) {
+              await closeTab(err.sessionId);
+            }
+            await connectToHost({ ...host, auth_type: "password" });
+          } catch (e) {
+            setStatusMessage(String(e).replace(/^Error:\s*/, ""));
+          }
+        })();
+      },
+    });
+  };
+
   const wakeAndRetry = async () => {
     const err = connectionError;
     if (!err || wakeBusy) return;
@@ -2368,6 +2408,7 @@ function App() {
         defaultValue={pendingPrompt?.defaultValue}
         placeholder={pendingPrompt?.placeholder}
         confirmLabel={pendingPrompt?.confirmLabel}
+        inputType={pendingPrompt?.inputType}
         onConfirm={(value) => pendingPrompt?.onConfirm(value)}
         onCancel={() => setPendingPrompt(null)}
       />
@@ -2466,6 +2507,11 @@ function App() {
         logs={connectionError?.logs ?? []}
         onClose={dismissConnectionError}
         onRetry={connectionError?.hostId ? retryConnection : undefined}
+        onTryPassword={
+          connectionError?.hostId && isAuthFailureMessage(connectionError.message)
+            ? tryPasswordAfterAuthFailure
+            : undefined
+        }
         canWake={canWakeFailedHost}
         wakeBusy={wakeBusy}
         onWake={() => void wakeAndRetry()}

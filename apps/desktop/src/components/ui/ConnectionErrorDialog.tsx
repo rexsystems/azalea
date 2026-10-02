@@ -9,6 +9,7 @@ interface ConnectionErrorDialogProps {
   logs: string[];
   onClose: () => void;
   onRetry?: () => void;
+  onTryPassword?: () => void;
   canWake?: boolean;
   wakeBusy?: boolean;
   onWake?: () => void;
@@ -22,6 +23,7 @@ export function ConnectionErrorDialog({
   logs,
   onClose,
   onRetry,
+  onTryPassword,
   canWake = false,
   wakeBusy = false,
   onWake,
@@ -81,6 +83,11 @@ export function ConnectionErrorDialog({
           {canWake && onWake && (
             <Button variant="secondary" disabled={wakeBusy} onClick={onWake}>
               {wakeBusy ? "Waking…" : "Wake up"}
+            </Button>
+          )}
+          {onTryPassword && (
+            <Button variant="secondary" onClick={onTryPassword}>
+              Try password…
             </Button>
           )}
           {onRetry && (

@@ -1,5 +1,5 @@
 import type { Host, HostGroup } from "@azalea/shared";
-import { Pencil, Server } from "./icons";
+import { Pencil, Server, Tick } from "./icons";
 import { useHideHostAddresses } from "../hooks/useHideHostAddresses";
 import { formatHostEndpoint } from "../lib/utils";
 import { HostOsIcon } from "./HostOsIcon";
@@ -8,6 +8,8 @@ interface HostTileProps {
   host: Host;
   connecting?: boolean;
   selected?: boolean;
+  /** Show select checkboxes on all tiles while a multi-select session is active. */
+  selectionActive?: boolean;
   onConnect: (host: Host) => void;
   onEdit: (host: Host) => void;
   onSelectToggle?: (host: Host) => void;
@@ -19,6 +21,7 @@ export function HostTile({
   host,
   connecting,
   selected = false,
+  selectionActive = false,
   onConnect,
   onEdit,
   onSelectToggle,
@@ -26,6 +29,7 @@ export function HostTile({
   compact = false,
 }: HostTileProps) {
   const hideAddress = useHideHostAddresses();
+  const showCheckbox = selected || selectionActive;
 
   return (
     <div
@@ -37,7 +41,7 @@ export function HostTile({
         type="button"
         disabled={connecting}
         onClick={(e) => {
-          if (e.ctrlKey || e.metaKey) {
+          if (e.ctrlKey || e.metaKey || selectionActive) {
             e.preventDefault();
             onSelectToggle?.(host);
             return;
@@ -55,6 +59,26 @@ export function HostTile({
           boxShadow: selected ? "inset 0 0 0 1px var(--accent)" : undefined,
         }}
       >
+        {showCheckbox && (
+          <span
+            role="checkbox"
+            aria-checked={selected}
+            aria-label={selected ? "Deselect host" : "Select host"}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelectToggle?.(host);
+            }}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-ui"
+            style={{
+              background: selected ? "var(--accent)" : "var(--bg-input)",
+              borderColor: selected ? "var(--accent)" : "var(--border)",
+              color: "var(--accent-fg, #fff)",
+            }}
+          >
+            {selected ? <Tick size={12} strokeWidth={2.5} /> : null}
+          </span>
+        )}
         <HostOsIcon
           osId={host.os_id}
           seed={host.id || host.name}
@@ -86,7 +110,7 @@ export function HostTile({
           onEdit(host);
         }}
         className={`transition-ui absolute right-2.5 top-2.5 rounded-md p-1.5 ${
-          compact ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          compact || selectionActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         }`}
         style={{
           background: "var(--bg-panel)",
@@ -127,6 +151,7 @@ export function GroupSection({
   compact = false,
 }: GroupSectionProps) {
   const title = group?.name ?? "Ungrouped";
+  const selectionActive = Boolean(selectedHostIds && selectedHostIds.size > 0);
 
   return (
     <section className="mb-6">
@@ -176,6 +201,7 @@ export function GroupSection({
               host={host}
               connecting={connectingHostId === host.id}
               selected={selectedHostIds?.has(host.id)}
+              selectionActive={selectionActive}
               onConnect={onConnect}
               onEdit={onEditHost}
               onSelectToggle={onSelectToggle}

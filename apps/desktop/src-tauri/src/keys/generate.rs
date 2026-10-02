@@ -129,6 +129,126 @@ fn parse_via_ssh_key(normalized: &str, passphrase: Option<&str>) -> anyhow::Resu
     Ok(key)
 }
 
+fn read_ssh_string<'a>(buf: &'a [u8], off: &mut usize) -> anyhow::Result<&'a [u8]> {
+    if *off + 4 > buf.len() {
+        anyhow::bail!("truncated length past end");
+    }
+    let len = u32::from_be_bytes(buf[*off..*off + 4].try_into().unwrap()) as usize;
+    *off += 4;
+    if *off + len > buf.len() {
+        anyhow::bail!("string body past end");
+    }
+    let slice = &buf[*off..*off + len];
+    *off += len;
+    Ok(slice)
+}
+
+fn read_ssh_u32(buf: &[u8], off: &mut usize) -> anyhow::Result<u32> {
+    if *off + 4 > buf.len() {
+        anyhow::bail!("u32 past end");
+    }
+    let v = u32::from_be_bytes(buf[*off..*off + 4].try_into().unwrap());
+    *off += 4;
+    Ok(v)
+}
+
+fn mpint_to_biguint(bytes: &[u8]) -> rsa::BigUint {
+    // OpenSSH mpints may include a leading 0x00 sign byte.
+    let trimmed = bytes.strip_prefix(&[0]).unwrap_or(bytes);
+    rsa::BigUint::from_bytes_be(trimmed)
+}
+
+/// Some OpenSSH private keys (esp. older/exported RSA) use padding longer than
+/// the cipher block size. ssh-key 0.6 rejects those with "length invalid" even
+/// though OpenSSH itself accepts them. Rebuild from the decoded key material.
+fn parse_via_openssh_lenient(normalized: &str) -> anyhow::Result<PrivateKey> {
+    use base64::Engine;
+    use ssh_key::private::{Ed25519Keypair, KeypairData, RsaKeypair};
+
+    if !normalized.contains("BEGIN OPENSSH PRIVATE KEY") {
+        anyhow::bail!("not openssh");
+    }
+
+    let body: String = normalized
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with("-----"))
+        .collect();
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(body.as_bytes())
+        .map_err(|err| anyhow::anyhow!("OpenSSH base64 decode failed: {err}"))?;
+
+    const MAGIC: &[u8] = b"openssh-key-v1\0";
+    if !raw.starts_with(MAGIC) {
+        anyhow::bail!("missing openssh-key-v1 magic");
+    }
+
+    let mut off = MAGIC.len();
+    let cipher = read_ssh_string(&raw, &mut off)?;
+    let kdf = read_ssh_string(&raw, &mut off)?;
+    let _kdf_opts = read_ssh_string(&raw, &mut off)?;
+    let nkeys = read_ssh_u32(&raw, &mut off)?;
+    if nkeys != 1 {
+        anyhow::bail!("unsupported multi-key OpenSSH blob");
+    }
+    let _public = read_ssh_string(&raw, &mut off)?;
+    let private = read_ssh_string(&raw, &mut off)?;
+
+    if cipher != b"none" || kdf != b"none" {
+        anyhow::bail!("encrypted openssh needs passphrase path");
+    }
+
+    let mut po = 0usize;
+    let check1 = read_ssh_u32(private, &mut po)?;
+    let check2 = read_ssh_u32(private, &mut po)?;
+    if check1 != check2 {
+        anyhow::bail!("OpenSSH checkint mismatch");
+    }
+
+    let key_type = read_ssh_string(private, &mut po)?;
+    match key_type {
+        b"ssh-rsa" => {
+            let n = mpint_to_biguint(read_ssh_string(private, &mut po)?);
+            let e = mpint_to_biguint(read_ssh_string(private, &mut po)?);
+            let d = mpint_to_biguint(read_ssh_string(private, &mut po)?);
+            let _iqmp = mpint_to_biguint(read_ssh_string(private, &mut po)?);
+            let p = mpint_to_biguint(read_ssh_string(private, &mut po)?);
+            let q = mpint_to_biguint(read_ssh_string(private, &mut po)?);
+            let comment = read_ssh_string(private, &mut po)?;
+
+            let rsa_key = rsa::RsaPrivateKey::from_components(n, e, d, vec![p, q])
+                .map_err(|err| anyhow::anyhow!("RSA from OpenSSH components failed: {err}"))?;
+            let keypair: RsaKeypair = rsa_key
+                .try_into()
+                .map_err(|err| anyhow::anyhow!("RSA keypair convert failed: {err}"))?;
+            PrivateKey::new(
+                KeypairData::Rsa(keypair),
+                String::from_utf8_lossy(comment).into_owned(),
+            )
+            .map_err(|err| anyhow::anyhow!("RSA private key build failed: {err}"))
+        }
+        b"ssh-ed25519" => {
+            let _pk = read_ssh_string(private, &mut po)?;
+            let sk = read_ssh_string(private, &mut po)?;
+            let comment = read_ssh_string(private, &mut po)?;
+            let sk: [u8; 64] = sk
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("invalid ed25519 secret length"))?;
+            let keypair = Ed25519Keypair::from_bytes(&sk)
+                .map_err(|err| anyhow::anyhow!("Ed25519 keypair failed: {err}"))?;
+            PrivateKey::new(
+                KeypairData::Ed25519(keypair),
+                String::from_utf8_lossy(comment).into_owned(),
+            )
+            .map_err(|err| anyhow::anyhow!("Ed25519 private key build failed: {err}"))
+        }
+        other => anyhow::bail!(
+            "lenient OpenSSH fallback unsupported for {}",
+            String::from_utf8_lossy(other)
+        ),
+    }
+}
+
 fn parse_via_pkcs1_pem(normalized: &str) -> anyhow::Result<PrivateKey> {
     use pkcs1::DecodeRsaPrivateKey;
     use ssh_key::private::KeypairData;
@@ -191,8 +311,17 @@ fn parse_private_key(pem: &str, passphrase: Option<&str>) -> anyhow::Result<Priv
 
     // 1) OpenSSH format via ssh-key (more tolerant PEM than russh's line reader).
     if normalized.contains("BEGIN OPENSSH PRIVATE KEY") {
-        if let Ok(key) = parse_via_ssh_key(&normalized, passphrase) {
-            return Ok(key);
+        match parse_via_ssh_key(&normalized, passphrase) {
+            Ok(key) => return Ok(key),
+            Err(err) if err.to_string().contains("KEY_NEEDS_PASSPHRASE") => return Err(err),
+            Err(_) => {
+                // 1b) Lenient path for keys with oversized OpenSSH padding.
+                if passphrase.is_none() {
+                    if let Ok(key) = parse_via_openssh_lenient(&normalized) {
+                        return Ok(key);
+                    }
+                }
+            }
         }
     }
 
@@ -212,6 +341,11 @@ fn parse_private_key(pem: &str, passphrase: Option<&str>) -> anyhow::Result<Priv
             }
             if let Ok(key) = parse_via_ssh_key(&normalized, passphrase) {
                 return Ok(key);
+            }
+            if passphrase.is_none() {
+                if let Ok(key) = parse_via_openssh_lenient(&normalized) {
+                    return Ok(key);
+                }
             }
             return Err(format_import_error(primary, passphrase.is_some()));
         }
@@ -434,6 +568,25 @@ mod rsa_import_tests {
         let pem = std::fs::read_to_string("/tmp/test_id_rsa").unwrap();
         let escaped = pem.replace('\n', "\\n");
         let key = parse_private_key(&escaped, None).expect("escaped pkcs1");
+        assert!(matches!(key.algorithm(), Algorithm::Rsa { .. }));
+    }
+}
+
+#[cfg(test)]
+mod openssh_lenient_tests {
+    use super::*;
+
+    #[test]
+    fn imports_oversized_padding_rsa_if_present() {
+        let home = match std::env::var("HOME") {
+            Ok(h) => h,
+            Err(_) => return,
+        };
+        let path = std::path::PathBuf::from(home).join(".ssh/lethal");
+        let Ok(pem) = std::fs::read_to_string(&path) else {
+            return;
+        };
+        let key = parse_private_key(&pem, None).expect("lethal should import via lenient OpenSSH");
         assert!(matches!(key.algorithm(), Algorithm::Rsa { .. }));
     }
 }
