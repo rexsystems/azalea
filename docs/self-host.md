@@ -147,6 +147,9 @@ location /api/ {
   proxy_set_header Host $host;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
   proxy_set_header X-Forwarded-Proto $scheme;
+  # Older builds set Path=/v1/auth; browsers hit /api/v1/auth/* — rewrite or
+  # the refresh cookie never gets sent (401 on /api/v1/auth/refresh).
+  proxy_cookie_path /v1/auth /api/v1/auth;
 }
 ```
 

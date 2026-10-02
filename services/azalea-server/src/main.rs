@@ -76,6 +76,12 @@ async fn run_serve() -> anyhow::Result<()> {
         );
     }
 
+    // Default `/` so self-host behind nginx `/api` still sends the cookie.
+    let cookie_path = env::var("AZALEA_COOKIE_PATH")
+        .ok()
+        .filter(|p| p.starts_with('/'))
+        .unwrap_or_else(|| "/".into());
+
     let allowed_origins: Vec<String> = env::var("AZALEA_ALLOWED_ORIGINS")
         .ok()
         .map(|raw| {
@@ -103,6 +109,7 @@ async fn run_serve() -> anyhow::Result<()> {
         mail,
         allowed_origins: allowed_origins.clone(),
         allow_insecure_cookie,
+        cookie_path,
         auth_login_limiter: limiters.login,
         auth_write_limiter: limiters.write,
         auth_refresh_limiter: limiters.refresh,

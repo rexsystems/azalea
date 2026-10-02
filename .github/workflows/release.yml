@@ -43,6 +43,13 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable @ 2025-08
 
+      - name: Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+          shared-key: desktop-windows
+          cache-on-failure: true
+
       - name: Install dependencies
         run: npm ci
 
@@ -104,6 +111,13 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable @ 2025-08
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+          shared-key: desktop-linux
+          cache-on-failure: true
 
       - name: Install Linux dependencies
         run: |
@@ -212,6 +226,14 @@ jobs:
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable @ 2025-08
         with:
           targets: ${{ matrix.rust_target }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+          # Separate keys so arm64 / x86_64 caches do not clobber each other.
+          shared-key: desktop-macos-${{ matrix.rust_target }}
+          cache-on-failure: true
 
       - name: Install dependencies
         run: npm ci

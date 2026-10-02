@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::keys::{import_private_key, peek_private_key_meta, private_key_needs_passphrase};
+use crate::keys::{
+    get_private_key, import_private_key, import_private_key_with_id, peek_private_key_meta,
+    private_key_needs_passphrase,
+};
 use crate::models::Host;
 use crate::store::SharedDatabase;
 
@@ -455,6 +458,26 @@ pub fn import_ssh_dir(
             };
 
             if let Some(existing) = existing_keys.iter().find(|k| k.fingerprint == fingerprint) {
+                // Metadata can outlive keychain material (delete + partial restore).
+                // Refresh the private key under the existing id when missing.
+                let material_ok = get_private_key(&existing.id)
+                    .ok()
+                    .flatten()
+                    .is_some();
+                if !material_ok {
+                    match import_private_key_with_id(&name, &contents, passphrase, Some(&existing.id))
+                    {
+                        Ok(_) => {
+                            remember_path_key(path_to_key_id, path, &existing.id);
+                            *keys_imported += 1;
+                            return Some(existing.id.clone());
+                        }
+                        Err(err) => {
+                            keys_failed.push(format!("{name}: {err}"));
+                            return None;
+                        }
+                    }
+                }
                 *keys_skipped += 1;
                 remember_path_key(path_to_key_id, path, &existing.id);
                 return Some(existing.id.clone());
@@ -590,8 +613,13 @@ pub fn import_ssh_dir(
                 && h.username == host.username
         }) {
             hosts_skipped += 1;
-            // Repair prior imports that missed IdentityFile linking.
-            if existing.key_id.is_none() {
+            // Repair prior imports that missed IdentityFile linking, or hosts
+            // still pointing at a deleted / ghost key_id.
+            let key_broken = match existing.key_id.as_deref() {
+                None => true,
+                Some(kid) => get_private_key(kid).ok().flatten().is_none(),
+            };
+            if key_broken {
                 if let Some(kid) = key_id {
                     let mut updated = existing.clone();
                     updated.key_id = Some(kid);
@@ -639,7 +667,11 @@ pub fn import_ssh_dir(
                     continue;
                 };
                 let Some(existing) = vault_hosts.iter().find(|h| {
-                    h.key_id.is_none()
+                    let key_broken = match h.key_id.as_deref() {
+                        None => true,
+                        Some(kid) => get_private_key(kid).ok().flatten().is_none(),
+                    };
+                    key_broken
                         && h.hostname.eq_ignore_ascii_case(&ch.hostname)
                         && h.port == ch.port
                         && h.username == ch.username

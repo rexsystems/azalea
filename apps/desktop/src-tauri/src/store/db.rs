@@ -417,9 +417,37 @@ impl Database {
     }
 
     pub fn delete_key(&self, id: &str) -> anyhow::Result<()> {
+        // Drop host links first so reconnect prompts for a key instead of
+        // loading a ghost UUID after Keychain delete + re-import.
+        self.conn.execute(
+            "UPDATE hosts SET key_id = NULL, auth_type = CASE
+                WHEN auth_type = 'key' THEN 'none'
+                ELSE auth_type
+             END, updated_at = ?1
+             WHERE key_id = ?2",
+            params![chrono::Utc::now().timestamp(), id],
+        )?;
         self.conn
             .execute("DELETE FROM keys WHERE id = ?1", params![id])?;
         Ok(())
+    }
+
+    pub fn find_key_by_fingerprint(&self, fingerprint: &str) -> anyhow::Result<Option<SshKeyRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name, public_key, key_type, fingerprint, created_at
+             FROM keys WHERE fingerprint = ?1 LIMIT 1",
+        )?;
+        let mut rows = stmt.query_map(params![fingerprint], |row| {
+            Ok(SshKeyRecord {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                public_key: row.get(2)?,
+                key_type: row.get(3)?,
+                fingerprint: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })?;
+        rows.next().transpose().map_err(Into::into)
     }
 
     pub fn clear_all_hosts(&self) -> anyhow::Result<()> {

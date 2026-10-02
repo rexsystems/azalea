@@ -236,8 +236,17 @@ function App() {
   const DEFAULT_ROWS = 30;
 
   const hostNeedsKey = useCallback(async (host: Host) => {
-    if (host.key_id) return false;
     if (await api.hostHasPassword(host.id)) return false;
+    if (host.key_id) {
+      // Ghost key_id after Keychain delete: UI may show a re-imported key, but
+      // the host still points at the old UUID until the user re-picks.
+      try {
+        if (await api.privateKeyPresent(host.key_id)) return false;
+      } catch {
+        /* treat as missing */
+      }
+      return true;
+    }
     return true;
   }, []);
 
@@ -1984,7 +1993,10 @@ function App() {
             onImport={async (name, pem, passphrase) => {
               await importKey({ name, private_key_pem: pem, passphrase: passphrase ?? null });
             }}
-            onDelete={removeKey}
+            onDelete={async (id) => {
+              await removeKey(id);
+              await refreshHosts();
+            }}
             onImportFromSsh={handleOpenImportFromSsh}
           />
         );

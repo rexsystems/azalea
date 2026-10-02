@@ -2,7 +2,8 @@ use tauri::{AppHandle, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 use crate::keys::{
-    delete_private_key, generate_key as generate_ssh_key, get_private_key, import_private_key,
+    delete_private_key, generate_key as generate_ssh_key, get_private_key,
+    import_private_key_with_id, peek_private_key_meta,
 };
 use crate::models::{
     CreateKeyInput, ImportKeyInput, InstallPublicKeyInput, InstallPublicKeyResult, SshKeyRecord,
@@ -33,12 +34,44 @@ pub fn import_key(
     db: State<'_, SharedDatabase>,
     input: ImportKeyInput,
 ) -> Result<SshKeyRecord, String> {
-    let key = import_private_key(&input.name, &input.private_key_pem, input.passphrase.as_deref())
+    let passphrase = input.passphrase.as_deref();
+    let (_, fingerprint) =
+        peek_private_key_meta(&input.private_key_pem, passphrase).map_err(|err| err.to_string())?;
+
+    // Same fingerprint → reuse the existing id and refresh keychain material so
+    // hosts that already point at this key keep working after delete/re-import.
+    if let Some(existing) = db
+        .lock()
+        .find_key_by_fingerprint(&fingerprint)
+        .map_err(|err| err.to_string())?
+    {
+        let key = import_private_key_with_id(
+            &input.name,
+            &input.private_key_pem,
+            passphrase,
+            Some(&existing.id),
+        )
+        .map_err(|err| err.to_string())?;
+        return Ok(SshKeyRecord {
+            name: existing.name,
+            created_at: existing.created_at,
+            ..key
+        });
+    }
+
+    let key = import_private_key_with_id(&input.name, &input.private_key_pem, passphrase, None)
         .map_err(|err| err.to_string())?;
     db.lock()
         .insert_key(&key)
         .map_err(|err| err.to_string())?;
     Ok(key)
+}
+
+#[tauri::command]
+pub fn private_key_present(id: String) -> Result<bool, String> {
+    Ok(get_private_key(&id)
+        .map_err(|err| err.to_string())?
+        .is_some())
 }
 
 #[tauri::command]

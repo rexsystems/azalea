@@ -306,7 +306,11 @@ async fn refresh(
     if !client.is_desktop() {
         push_set_cookie(
             &mut response_headers,
-            &refresh_cookie_value(&new_refresh, state.secure_cookies()),
+            &refresh_cookie_value(
+                &new_refresh,
+                state.secure_cookies(),
+                state.cookie_path(),
+            ),
         );
     }
 
@@ -330,7 +334,7 @@ async fn logout(
     if !client.is_desktop() {
         push_set_cookie(
             &mut response_headers,
-            &clear_refresh_cookie_value(state.secure_cookies()),
+            &clear_refresh_cookie_value(state.secure_cookies(), state.cookie_path()),
         );
     }
 
@@ -381,7 +385,11 @@ fn create_session(
     let cookie = if client.is_desktop() {
         None
     } else {
-        Some(refresh_cookie_value(&refresh, state.secure_cookies()))
+        Some(refresh_cookie_value(
+            &refresh,
+            state.secure_cookies(),
+            state.cookie_path(),
+        ))
     };
     Ok((session, cookie))
 }

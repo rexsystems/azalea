@@ -177,11 +177,20 @@ export async function resetPassword(
 
 export async function ensureSession(): Promise<Session | null> {
   const current = getStoredSession();
-  // Always try to refresh: if the cookie is present we get a fresh access
-  // token, otherwise we fall back to the currently-stored session (which the
-  // caller may then decide is expired).
-  const refreshed = await refreshSession();
-  return refreshed ?? current;
+  // Prefer a refresh (cookie). If refresh fails, keep a still-valid access
+  // token instead of wiping localStorage — otherwise a missing cookie on
+  // self-host immediately logs the user out after a successful login.
+  try {
+    const session = await request<Session>("/v1/auth/refresh", {
+      method: "POST",
+      auth: false,
+      body: JSON.stringify({}),
+    });
+    storeSession(session);
+    return session;
+  } catch {
+    return current;
+  }
 }
 
 // ---------- Desktop PKCE authorization handoff ----------

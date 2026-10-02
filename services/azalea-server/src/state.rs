@@ -16,6 +16,9 @@ pub struct AppState {
     /// When true, the refresh cookie omits the `Secure` attribute so it works
     /// over plain-HTTP localhost during development. Never enable in prod.
     pub allow_insecure_cookie: bool,
+    /// `Path=` for the refresh cookie. Default `/` so self-host nginx `/api`
+    /// proxy still receives the cookie on `/api/v1/auth/refresh`.
+    pub cookie_path: String,
     /// Rate limiter shared across /v1/auth/login and /v1/auth/desktop/exchange.
     pub auth_login_limiter: RateLimiter,
     /// Rate limiter shared across /v1/auth/register, /v1/auth/forgot-password,
@@ -32,6 +35,14 @@ pub struct AppState {
 impl AppState {
     pub fn secure_cookies(&self) -> bool {
         !self.allow_insecure_cookie
+    }
+
+    pub fn cookie_path(&self) -> &str {
+        if self.cookie_path.starts_with('/') {
+            &self.cookie_path
+        } else {
+            "/"
+        }
     }
 
     /// Build the standard set of auth-endpoint rate limiters. Kept here so

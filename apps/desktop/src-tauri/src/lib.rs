@@ -138,6 +138,7 @@ pub fn run() {
             key_commands::generate_key,
             key_commands::import_key,
             key_commands::delete_key,
+            key_commands::private_key_present,
             key_commands::export_private_key,
             key_commands::install_public_key,
             ssh_import::scan_ssh_dir,

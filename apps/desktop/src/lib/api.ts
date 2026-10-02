@@ -72,6 +72,10 @@ export function deleteKey(id: string): Promise<void> {
   return invoke("delete_key", { id });
 }
 
+export function privateKeyPresent(id: string): Promise<boolean> {
+  return invoke("private_key_present", { id });
+}
+
 export function exportPrivateKey(id: string): Promise<string> {
   return invoke("export_private_key", { id });
 }

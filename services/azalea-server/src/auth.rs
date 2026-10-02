@@ -120,17 +120,20 @@ pub const REFRESH_TTL_DAYS: i64 = 30;
 
 pub const REFRESH_COOKIE_NAME: &str = "azalea_refresh";
 
-/// Build the `Set-Cookie` header value for the refresh-token cookie. When
-/// `secure` is false the cookie omits the `Secure` attribute so browsers on
-/// plain-HTTP localhost dev boxes still send it. Production must set
-/// `secure = true`.
-pub fn refresh_cookie_value(token: &str, secure: bool) -> String {
+/// Build the `Set-Cookie` header value for the refresh-token cookie.
+///
+/// `path` should be `/` for self-host behind nginx `/api` proxy. A narrower
+/// path like `/v1/auth` is never sent to `/api/v1/auth/refresh` and causes 401.
+/// When `secure` is false the cookie omits the `Secure` attribute so browsers
+/// on plain-HTTP localhost still send it.
+pub fn refresh_cookie_value(token: &str, secure: bool, path: &str) -> String {
     let max_age = REFRESH_TTL_DAYS * 24 * 60 * 60;
+    let path = if path.starts_with('/') { path } else { "/" };
     let mut parts = vec![
         format!("{REFRESH_COOKIE_NAME}={token}"),
         "HttpOnly".to_string(),
         "SameSite=Lax".to_string(),
-        "Path=/v1/auth".to_string(),
+        format!("Path={path}"),
         format!("Max-Age={max_age}"),
     ];
     if secure {
@@ -140,12 +143,13 @@ pub fn refresh_cookie_value(token: &str, secure: bool) -> String {
 }
 
 /// Build the `Set-Cookie` header value that deletes the refresh-token cookie.
-pub fn clear_refresh_cookie_value(secure: bool) -> String {
+pub fn clear_refresh_cookie_value(secure: bool, path: &str) -> String {
+    let path = if path.starts_with('/') { path } else { "/" };
     let mut parts = vec![
         format!("{REFRESH_COOKIE_NAME}=deleted"),
         "HttpOnly".to_string(),
         "SameSite=Lax".to_string(),
-        "Path=/v1/auth".to_string(),
+        format!("Path={path}"),
         "Max-Age=0".to_string(),
     ];
     if secure {
