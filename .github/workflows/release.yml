@@ -53,6 +53,10 @@ jobs:
           npm install --workspace @azalea/desktop --no-save --force \
             rollup esbuild @tauri-apps/cli
 
+      - name: Stamp release version
+        shell: bash
+        run: node .github/stamp-release-version.mjs "${{ github.run_number }}"
+
       - name: Build Azalea (Windows)
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -70,7 +74,7 @@ jobs:
         shell: bash
         run: |
           node .github/write-latest-json.mjs \
-            ${{ steps.meta.outputs.version }} \
+            "${{ steps.meta.outputs.version }}" \
             apps/desktop/src-tauri/target/release/bundle \
             windows-x86_64 \
             apps/desktop/src-tauri/target/release/bundle/latest-fragment.json
@@ -125,6 +129,9 @@ jobs:
           npm install --workspace @azalea/desktop --no-save --force \
             rollup esbuild @tauri-apps/cli
 
+      - name: Stamp release version
+        run: node .github/stamp-release-version.mjs "${{ github.run_number }}"
+
       - name: Build Azalea (deb + rpm + AppImage)
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -160,7 +167,7 @@ jobs:
       - name: Write updater fragment
         run: |
           node .github/write-latest-json.mjs \
-            ${{ steps.meta.outputs.version }} \
+            "${{ steps.meta.outputs.version }}" \
             apps/desktop/src-tauri/target/release/bundle \
             linux-x86_64 \
             apps/desktop/src-tauri/target/release/bundle/latest-fragment.json
@@ -215,6 +222,9 @@ jobs:
             rollup esbuild @tauri-apps/cli
           node -e "require('rollup'); require('@tauri-apps/cli'); console.log('native bindings ok')"
 
+      - name: Stamp release version
+        run: node .github/stamp-release-version.mjs "${{ github.run_number }}"
+
       - name: Build Azalea (macOS .app)
         env:
           CI: "true"
@@ -251,7 +261,7 @@ jobs:
         run: |
           BUNDLE="${{ steps.dmg.outputs.bundle_dir }}"
           node .github/write-latest-json.mjs \
-            ${{ steps.meta.outputs.version }} \
+            "${{ steps.meta.outputs.version }}" \
             "$BUNDLE" \
             ${{ matrix.platform_key }} \
             "$BUNDLE/latest-fragment.json"
@@ -279,17 +289,22 @@ jobs:
         with:
           path: artifacts
 
+      - name: Stamp release version
+        run: node .github/stamp-release-version.mjs "${{ github.run_number }}"
+
       - name: Read version
         id: meta
         run: |
           VERSION=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          BASE="${VERSION%%+*}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v${VERSION}-build.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          # Git tags avoid `+` (URL-unfriendly); app/manifest keep 0.1.2+67.
+          echo "tag=v${BASE}-build.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Merge updater manifest
         run: |
           node .github/merge-latest-json.mjs \
-            ${{ steps.meta.outputs.version }} \
+            "${{ steps.meta.outputs.version }}" \
             artifacts \
             artifacts/latest.json
           cat artifacts/latest.json

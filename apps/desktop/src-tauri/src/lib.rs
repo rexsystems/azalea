@@ -16,6 +16,58 @@ use sync::init_sync_state;
 use tauri::Manager;
 use tauri_plugin_prevent_default::Flags;
 
+/// Parse `+67` / `+build.67` from a semver version.
+fn semver_build_number(version: &semver::Version) -> Option<u64> {
+    let raw = version.build.as_str();
+    if raw.is_empty() {
+        return None;
+    }
+    raw.strip_prefix("build.")
+        .unwrap_or(raw)
+        .split('.')
+        .next()
+        .and_then(|s| s.parse().ok())
+}
+
+fn version_with_build_is_newer(current: &semver::Version, remote: &semver::Version) -> bool {
+    if remote.major != current.major
+        || remote.minor != current.minor
+        || remote.patch != current.patch
+        || remote.pre != current.pre
+    {
+        return remote > current;
+    }
+    match (semver_build_number(current), semver_build_number(remote)) {
+        (Some(cur), Some(rem)) => rem > cur,
+        // Stamped release is newer than an unstamped local/dev build of the same core version.
+        (None, Some(_)) => true,
+        (Some(_), None) => false,
+        (None, None) => false,
+    }
+}
+
+#[cfg(test)]
+mod version_compare_tests {
+    use super::*;
+    use semver::Version;
+
+    #[test]
+    fn build_metadata_compares() {
+        let a = Version::parse("0.1.1+66").unwrap();
+        let b = Version::parse("0.1.1+67").unwrap();
+        assert!(version_with_build_is_newer(&a, &b));
+        assert!(!version_with_build_is_newer(&b, &a));
+        assert!(!version_with_build_is_newer(&b, &b));
+    }
+
+    #[test]
+    fn unstamped_loses_to_stamped() {
+        let local = Version::parse("0.1.1").unwrap();
+        let remote = Version::parse("0.1.1+67").unwrap();
+        assert!(version_with_build_is_newer(&local, &remote));
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
@@ -36,7 +88,15 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                // Semver ignores `+build` metadata, so 0.1.1+66 == 0.1.1+67 by default.
+                // Compare numeric build metadata when major.minor.patch match.
+                .default_version_comparator(|current, release| {
+                    version_with_build_is_newer(&current, &release.version)
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
             if let Err(err) = crash_report::install_panic_hook(app.handle()) {

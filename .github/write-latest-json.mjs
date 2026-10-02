@@ -112,8 +112,10 @@ const baseUrl =
 const platforms = {};
 for (const { key, artifact } of picked) {
   const signature = readFileSync(`${artifact.full}.sig`, "utf8").trim();
+  // `+` in semver build metadata must be %2B in URLs or some clients treat it as space.
+  const fileUrl = `${baseUrl}/${artifact.name.replace(/\+/g, "%2B")}`;
   platforms[key] = {
-    url: `${baseUrl}/${artifact.name}`,
+    url: fileUrl,
     signature,
   };
   console.log("  ", key, "←", artifact.name);
