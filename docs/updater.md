@@ -54,19 +54,20 @@ CI builds macOS with `--bundles app` (signed `.app.tar.gz` for the updater), the
 
 Repo keeps a normal semver core in `tauri.conf.json` (e.g. `0.1.2`).
 
-Each CI release stamps it to `core+run_number` before building, e.g. `0.1.2+67`.
-That value is what the app reports and what `latest.json` publishes.
+Each CI release stamps it to `core+N` before building, e.g. `0.1.2+70` or `0.1.3+1`.
+`N` is per base version: CI looks at existing tags `v{base}-build.*` and uses max+1.
+When you bump the core (`0.1.2` → `0.1.3`), `N` resets to `1`.
+
+That stamped value is what the app reports and what `latest.json` publishes.
+Git tags stay URL-safe as `v0.1.3-build.1` (no `+`).
 
 Plain semver treats `+build` as ignored metadata, so Azalea uses a custom
 updater comparator that compares the numeric build when major/minor/patch match.
 Artifact URLs encode `+` as `%2B`.
 
-Bump the core (`0.1.2` → `0.1.3`) when you want a marketing/version-line change;
-bump happens automatically via `github.run_number` for every master release.
-
 ## After each master release
 
-1. CI stamps `0.x.y+<run_number>`, then builds Windows, Linux (deb/rpm/AppImage), and macOS.
+1. CI resolves `0.x.y+N`, then builds Windows, Linux (deb/rpm/AppImage), and macOS.
 2. CI merges platform fragments into `latest.json` with download URLs under `https://updates.azalea.rexsystems.me/…`.
 3. CI uploads installers + `latest.json` to R2 (`azalea-updates`).
 4. CI also attaches the same files to the GitHub Release (archive / fallback).

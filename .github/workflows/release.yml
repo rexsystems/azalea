@@ -13,6 +13,11 @@ on:
     branches: [master]
   workflow_dispatch:
 
+# One release at a time so per-base build numbers stay unique.
+concurrency:
+  group: release-desktop
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -21,15 +26,34 @@ permissions:
 # and signer steps that actually need it, so a compromised curl or npm script
 # in an unrelated step can't read it out of the environment.
 env:
-  VITE_AZALEA_BUILD: ${{ github.run_number }}
   # Public R2 custom domain — used when writing updater fragment download URLs.
   UPDATER_DOWNLOAD_BASE_URL: https://updates.azalea.rexsystems.me
   R2_BUCKET: azalea-updates
   R2_ENDPOINT: https://f92074baafe52a6a6b5b47c82488090d.r2.cloudflarestorage.com
 
 jobs:
+  # Allocate "<base>+<N>" once: N resets to 1 whenever tauri.conf version base changes.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.resolve.outputs.base }}
+      build: ${{ steps.resolve.outputs.build }}
+      stamped: ${{ steps.resolve.outputs.stamped }}
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Resolve per-base build number
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/resolve-release-build.mjs
+
   build-windows:
+    needs: [version]
     runs-on: windows-latest
+    env:
+      VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
 
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -62,7 +86,7 @@ jobs:
 
       - name: Stamp release version
         shell: bash
-        run: node .github/stamp-release-version.mjs "${{ github.run_number }}"
+        run: node .github/stamp-release-version.mjs "${{ needs.version.outputs.build }}"
 
       - name: Build Azalea (Windows)
         env:
@@ -98,7 +122,10 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/latest-fragment.json
 
   build-linux:
+    needs: [version]
     runs-on: ubuntu-24.04
+    env:
+      VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
 
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -144,7 +171,7 @@ jobs:
             rollup esbuild @tauri-apps/cli
 
       - name: Stamp release version
-        run: node .github/stamp-release-version.mjs "${{ github.run_number }}"
+        run: node .github/stamp-release-version.mjs "${{ needs.version.outputs.build }}"
 
       - name: Build Azalea (deb + rpm + AppImage)
         env:
@@ -201,6 +228,7 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/latest-fragment.json
 
   build-macos:
+    needs: [version]
     strategy:
       fail-fast: false
       matrix:
@@ -212,6 +240,8 @@ jobs:
             platform_key: darwin-x86_64
             artifact_name: macos-x64
     runs-on: macos-14
+    env:
+      VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
 
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -245,7 +275,7 @@ jobs:
           node -e "require('rollup'); require('@tauri-apps/cli'); console.log('native bindings ok')"
 
       - name: Stamp release version
-        run: node .github/stamp-release-version.mjs "${{ github.run_number }}"
+        run: node .github/stamp-release-version.mjs "${{ needs.version.outputs.build }}"
 
       - name: Build Azalea (macOS .app)
         env:
@@ -300,8 +330,10 @@ jobs:
             ${{ steps.fragment.outputs.bundle_dir }}/latest-fragment.json
 
   publish:
-    needs: [build-windows, build-linux, build-macos]
+    needs: [version, build-windows, build-linux, build-macos]
     runs-on: ubuntu-latest
+    env:
+      VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
 
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -312,16 +344,16 @@ jobs:
           path: artifacts
 
       - name: Stamp release version
-        run: node .github/stamp-release-version.mjs "${{ github.run_number }}"
+        run: node .github/stamp-release-version.mjs "${{ needs.version.outputs.build }}"
 
       - name: Read version
         id: meta
         run: |
           VERSION=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
-          BASE="${VERSION%%+*}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          # Git tags avoid `+` (URL-unfriendly); app/manifest keep 0.1.2+67.
-          echo "tag=v${BASE}-build.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          # Git tags avoid `+` (URL-unfriendly); app/manifest keep 0.1.3+1.
+          echo "tag=${{ needs.version.outputs.tag }}" >> "$GITHUB_OUTPUT"
+          echo "build=${{ needs.version.outputs.build }}" >> "$GITHUB_OUTPUT"
 
       - name: Merge updater manifest
         run: |
@@ -369,8 +401,9 @@ jobs:
         uses: softprops/action-gh-release@62c96d0c4e8a889135c1f3a25910db8dbe0e85f7 # v2.3.4
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          name: Azalea v${{ steps.meta.outputs.version }} (build ${{ github.run_number }})
+          name: Azalea v${{ steps.meta.outputs.version }} (build ${{ steps.meta.outputs.build }})
           generate_release_notes: true
           files: release-files/*
           draft: false
           prerelease: false
+

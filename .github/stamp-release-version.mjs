@@ -3,7 +3,8 @@
  * Stamp release version as "<base>+<build>" for CI.
  *
  * Updates tauri.conf.json, Cargo.toml, and desktop package.json so the
- * installed app version is e.g. 0.1.2+67 (semver core + GitHub run number).
+ * installed app version is e.g. 0.1.3+1 (semver core + per-base build number).
+ * Build numbers come from resolve-release-build.mjs (reset to 1 on each new base).
  *
  * Usage:
  *   node .github/stamp-release-version.mjs <build-number>
