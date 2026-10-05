@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Folder, KeyRound, Loader2, Server, Upload } from "./icons";
 import * as api from "../lib/api";
 import { Button } from "./ui/Button";
@@ -11,21 +11,7 @@ interface ImportSectionProps {
   onDataChanged: () => Promise<void>;
 }
 
-function ScrollCard({ children }: { children: ReactNode }) {
-  return (
-    <div
-      className="relative isolate overflow-hidden rounded-xl border"
-      style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
-    >
-      <div
-        className="import-scroll max-h-48 space-y-0.5 overflow-y-auto overflow-x-hidden py-2 pl-2 pr-1.5"
-        style={{ scrollbarGutter: "stable" }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
+const LIST_PAGE = 8;
 
 export function ImportSection({
   busy = false,
@@ -41,6 +27,8 @@ export function ImportSection({
   const [passphrase, setPassphrase] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [keysVisible, setKeysVisible] = useState(LIST_PAGE);
+  const [hostsVisible, setHostsVisible] = useState(LIST_PAGE);
 
   const hostKey = (h: api.SshDirHostCandidate) =>
     `${h.name}|${h.hostname}|${h.port}|${h.username}`;
@@ -52,6 +40,8 @@ export function ImportSection({
     try {
       const result = await api.scanSshDir();
       setScan(result);
+      setKeysVisible(LIST_PAGE);
+      setHostsVisible(LIST_PAGE);
       setSelectedKeys(
         new Set(result.keys.filter((k) => !k.already_imported).map((k) => k.path)),
       );
@@ -133,6 +123,10 @@ export function ImportSection({
 
   const disabled = busy || scanning || importing;
   const canImport = selectedKeys.size > 0 || selectedHosts.size > 0;
+  const visibleKeys = scan?.keys.slice(0, keysVisible) ?? [];
+  const visibleHosts = scan?.hosts.slice(0, hostsVisible) ?? [];
+  const moreKeys = Math.max(0, (scan?.keys.length ?? 0) - keysVisible);
+  const moreHosts = Math.max(0, (scan?.hosts.length ?? 0) - hostsVisible);
 
   return (
     <div className="space-y-6">
@@ -164,8 +158,11 @@ export function ImportSection({
               <KeyRound size={14} />
               Keys ({scan.keys.length})
             </div>
-            <ScrollCard>
-              {scan.keys.map((key) => {
+            <div
+              className="space-y-0.5 rounded-xl border py-2 pl-2 pr-1.5"
+              style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
+            >
+              {visibleKeys.map((key) => {
                 const checked = selectedKeys.has(key.path);
                 const rowDisabled = key.already_imported || disabled;
                 return (
@@ -184,7 +181,18 @@ export function ImportSection({
                   />
                 );
               })}
-            </ScrollCard>
+              {moreKeys > 0 && (
+                <button
+                  type="button"
+                  className="mt-1 w-full rounded-lg px-2 py-2 text-left text-xs font-medium hover-subtle"
+                  style={{ color: "var(--text-secondary)" }}
+                  disabled={disabled}
+                  onClick={() => setKeysVisible((n) => n + LIST_PAGE)}
+                >
+                  Load more ({moreKeys} left)
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -194,8 +202,11 @@ export function ImportSection({
               <Server size={14} />
               Config hosts ({scan.hosts.length})
             </div>
-            <ScrollCard>
-              {scan.hosts.map((host) => {
+            <div
+              className="space-y-0.5 rounded-xl border py-2 pl-2 pr-1.5"
+              style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
+            >
+              {visibleHosts.map((host) => {
                 const key = hostKey(host);
                 const checked = selectedHosts.has(key);
                 const rowDisabled = host.already_imported || disabled;
@@ -213,7 +224,18 @@ export function ImportSection({
                   />
                 );
               })}
-            </ScrollCard>
+              {moreHosts > 0 && (
+                <button
+                  type="button"
+                  className="mt-1 w-full rounded-lg px-2 py-2 text-left text-xs font-medium hover-subtle"
+                  style={{ color: "var(--text-secondary)" }}
+                  disabled={disabled}
+                  onClick={() => setHostsVisible((n) => n + LIST_PAGE)}
+                >
+                  Load more ({moreHosts} left)
+                </button>
+              )}
+            </div>
           </div>
         )}
 

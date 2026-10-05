@@ -759,8 +759,15 @@ function App() {
       (event) => {
         const { session_id, status, error } = event.payload;
 
-        // Local shell ended (exit / process killed): just close the tab.
+        // Shell ended cleanly (exit / Ctrl+D): close the tab, no confirm, no reconnect.
         if (status === "exited") {
+          setForwardStatuses((prev) => {
+            if (!(session_id in prev)) return prev;
+            const next = { ...prev };
+            delete next[session_id];
+            return next;
+          });
+          clearReconnectState(session_id);
           removeTab(session_id);
           return;
         }

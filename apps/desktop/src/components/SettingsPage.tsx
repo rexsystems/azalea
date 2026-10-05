@@ -178,8 +178,8 @@ export function SettingsPage({
       className="flex h-full flex-col overflow-hidden"
       style={{ background: "var(--bg-base)" }}
     >
-      <div className="settings-shell flex min-h-0 flex-1 flex-col !pb-0">
-        <div className="mb-5 shrink-0">
+      <div className="settings-shell flex min-h-0 flex-1 flex-col overflow-y-auto !pb-6">
+        <div className="mb-5">
           <h2
             className="text-2xl font-semibold tracking-tight sm:text-3xl"
             style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
@@ -192,7 +192,7 @@ export function SettingsPage({
         </div>
 
         <div
-          className="settings-tabs mb-5 flex shrink-0 gap-1 overflow-x-auto pb-1"
+          className="settings-tabs mb-5 flex gap-1 overflow-x-auto pb-1"
           role="tablist"
           aria-label="Settings sections"
         >
@@ -219,7 +219,7 @@ export function SettingsPage({
         </div>
 
         <div
-          className="min-h-0 flex-1 overflow-y-auto rounded-2xl border"
+          className="rounded-2xl border"
           style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
         >
           <div className="p-5 sm:p-6">
@@ -532,8 +532,6 @@ export function SettingsPage({
             )}
           </div>
         </div>
-
-        <div className="h-6 shrink-0 sm:h-8" />
       </div>
     </div>
   );

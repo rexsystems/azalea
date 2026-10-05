@@ -556,7 +556,17 @@ fn store_private_key_material(
     // original PEM is only safe when that PEM is already plaintext — never when
     // it was passphrase-protected (load_key_pair has no passphrase).
     if let Ok(openssh) = private_key.to_openssh(LineEnding::LF) {
-        return keyring::store_private_key(id, &openssh);
+        let openssh = openssh.to_string();
+        // Round-trip check: ssh-key has historically mangled some RSA encodings.
+        if let Ok(reloaded) = parse_private_key(&openssh, None) {
+            let fp_ok = reloaded.public_key().fingerprint(HashAlg::Sha256).to_string()
+                == private_key.public_key().fingerprint(HashAlg::Sha256).to_string();
+            let sign_ok = russh_keys::helpers::sign_workaround(&reloaded, b"azalea-store-check").is_ok();
+            if fp_ok && sign_ok {
+                return keyring::store_private_key(id, &openssh);
+            }
+        }
+        // Fall through to original PEM when re-encode is unsafe.
     }
 
     let normalized = normalize_private_key_pem(original_pem);
@@ -569,6 +579,19 @@ fn store_private_key_material(
         anyhow::bail!(
             "Imported key decrypted, but could not re-encode it to OpenSSH format for storage. Try converting with: ssh-keygen -p -m RFC4716 -f key"
         );
+    }
+    // Prefer storing a verified OpenSSH rewrite of PKCS#1/PKCS#8/PPK when the
+    // direct to_openssh path above failed the round-trip — re-parse normalized
+    // plaintext and try one more encode before keeping the original bytes.
+    if let Ok(parsed) = parse_private_key(&normalized, None) {
+        if let Ok(openssh) = parsed.to_openssh(LineEnding::LF) {
+            let openssh = openssh.to_string();
+            if let Ok(reloaded) = parse_private_key(&openssh, None) {
+                if russh_keys::helpers::sign_workaround(&reloaded, b"azalea-store-check").is_ok() {
+                    return keyring::store_private_key(id, &openssh);
+                }
+            }
+        }
     }
     keyring::store_private_key(id, &normalized)
 }

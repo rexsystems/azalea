@@ -62,3 +62,9 @@ p384 = { version = "0.13.0", features = ["pem", "pkcs8"] }
 p521 = { version = "0.13.3", features = ["pem", "pkcs8"] }
 hmac = "0.12"
 sha1 = "0.10"
+
+# Local russh patch: RSA publickey auth must advertise rsa-sha2-512 (RFC 8332).
+# Upstream 0.48 probes as ssh-rsa while signing with rsa-sha2-512, so modern
+# OpenSSH rejects imported/generated RSA keys.
+[patch.crates-io]
+russh = { path = "patches/russh" }

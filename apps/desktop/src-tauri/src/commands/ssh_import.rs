@@ -258,6 +258,18 @@ fn probe_key_candidate(
     })
 }
 
+/// OpenSSH `Host a b` aliases → display name `a | b` (patterns skipped).
+fn format_host_aliases(value: &str) -> Option<String> {
+    let aliases: Vec<&str> = value
+        .split_whitespace()
+        .filter(|alias| !alias.contains('*') && !alias.contains('?'))
+        .collect();
+    if aliases.is_empty() {
+        return None;
+    }
+    Some(aliases.join(" | "))
+}
+
 fn parse_config_hosts(config: &str) -> Vec<SshDirHostCandidate> {
     let mut out = Vec::new();
     let mut current_name: Option<String> = None;
@@ -272,10 +284,15 @@ fn parse_config_hosts(config: &str) -> Vec<SshDirHostCandidate> {
                  user: &str,
                  port: i64,
                  identity: Option<String>| {
-        if name.contains('*') || name.contains('?') {
+        if hostname.is_empty() {
             return;
         }
-        if hostname.is_empty() {
+        // One Host block = one candidate even when it has multiple aliases.
+        if out.iter().any(|h| {
+            h.hostname.eq_ignore_ascii_case(hostname)
+                && h.port == port
+                && h.username == user
+        }) {
             return;
         }
         out.push(SshDirHostCandidate {
@@ -308,8 +325,7 @@ fn parse_config_hosts(config: &str) -> Vec<SshDirHostCandidate> {
                     current_identity.clone(),
                 );
             }
-            let first = value.split_whitespace().next().unwrap_or(&value);
-            current_name = Some(first.to_string());
+            current_name = format_host_aliases(&value);
             current_hostname = None;
             current_user = "root".to_string();
             current_port = 22;
@@ -364,7 +380,14 @@ pub fn scan_ssh_dir(db: tauri::State<'_, SharedDatabase>) -> Result<SshDirScanRe
     for entry in entries.flatten() {
         let path = entry.path();
         if let Some(candidate) = probe_key_candidate(&path, &existing_keys) {
-            keys.push(candidate);
+            let dup = candidate.fingerprint.as_ref().is_some_and(|fp| {
+                keys.iter().any(|k: &SshDirKeyCandidate| k.fingerprint.as_ref() == Some(fp))
+            }) || keys
+                .iter()
+                .any(|k| paths_equivalent(&normalize_ssh_path(&k.path), &path));
+            if !dup {
+                keys.push(candidate);
+            }
         }
     }
 
@@ -392,7 +415,12 @@ pub fn scan_ssh_dir(db: tauri::State<'_, SharedDatabase>) -> Result<SshDirScanRe
             continue;
         }
         if let Some(candidate) = probe_key_candidate(&identity_path, &existing_keys) {
-            keys.push(candidate);
+            let dup_fp = candidate.fingerprint.as_ref().is_some_and(|fp| {
+                keys.iter().any(|k: &SshDirKeyCandidate| k.fingerprint.as_ref() == Some(fp))
+            });
+            if !dup_fp {
+                keys.push(candidate);
+            }
         }
     }
 
@@ -586,6 +614,10 @@ pub fn import_ssh_dir(
     let mut hosts_imported = 0usize;
     let mut hosts_skipped = 0usize;
     let existing_hosts = db.lock().list_hosts().map_err(|e| e.to_string())?;
+    let mut seen_hosts: Vec<(String, i64, String)> = existing_hosts
+        .iter()
+        .map(|h| (h.hostname.to_ascii_lowercase(), h.port, h.username.clone()))
+        .collect();
 
     for host in &input.hosts {
         let mut key_id = None;
@@ -608,6 +640,11 @@ pub fn import_ssh_dir(
             }
         }
 
+        let host_key = (
+            host.hostname.to_ascii_lowercase(),
+            host.port,
+            host.username.clone(),
+        );
         if let Some(existing) = existing_hosts.iter().find(|h| {
             h.hostname.eq_ignore_ascii_case(&host.hostname)
                 && h.port == host.port
@@ -633,6 +670,12 @@ pub fn import_ssh_dir(
             }
             continue;
         }
+        if seen_hosts.iter().any(|(h, p, u)| {
+            h == &host_key.0 && *p == host_key.1 && u == &host_key.2
+        }) {
+            hosts_skipped += 1;
+            continue;
+        }
 
         let now = chrono::Utc::now().timestamp();
         let auth_type = if key_id.is_some() { "key" } else { "none" };
@@ -654,6 +697,7 @@ pub fn import_ssh_dir(
         db.lock()
             .insert_host(&record)
             .map_err(|e| e.to_string())?;
+        seen_hosts.push(host_key);
         hosts_imported += 1;
     }
 

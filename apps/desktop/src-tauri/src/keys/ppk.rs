@@ -54,6 +54,7 @@ struct PpkFile {
     public: Vec<u8>,
     private: Vec<u8>,
     private_mac: String,
+    argon2_flavour: Option<String>,
     argon2_memory: Option<u32>,
     argon2_passes: Option<u32>,
     argon2_parallelism: Option<u32>,
@@ -67,6 +68,10 @@ fn ssh_string_bytes(data: &[u8]) -> Vec<u8> {
     out
 }
 
+fn is_unencrypted(encryption: &str) -> bool {
+    encryption.is_empty() || encryption == "none"
+}
+
 fn parse_ppk_text(text: &str) -> anyhow::Result<PpkFile> {
     let mut version = 0u8;
     let mut algorithm = String::new();
@@ -77,6 +82,7 @@ fn parse_ppk_text(text: &str) -> anyhow::Result<PpkFile> {
     let mut private_lines = Vec::new();
     let mut expect_public = 0usize;
     let mut expect_private = 0usize;
+    let mut argon2_flavour = None;
     let mut argon2_memory = None;
     let mut argon2_passes = None;
     let mut argon2_parallelism = None;
@@ -94,30 +100,33 @@ fn parse_ppk_text(text: &str) -> anyhow::Result<PpkFile> {
             expect_private -= 1;
             continue;
         }
-        if let Some(rest) = line.strip_prefix("PuTTY-User-Key-File-2: ") {
-            version = 2;
-            algorithm = rest.trim().to_string();
-        } else if let Some(rest) = line.strip_prefix("PuTTY-User-Key-File-3: ") {
-            version = 3;
-            algorithm = rest.trim().to_string();
-        } else if let Some(rest) = line.strip_prefix("Encryption: ") {
-            encryption = rest.trim().to_string();
-        } else if let Some(rest) = line.strip_prefix("Comment: ") {
-            comment = rest.to_string();
-        } else if let Some(rest) = line.strip_prefix("Public-Lines: ") {
-            expect_public = rest.trim().parse().unwrap_or(0);
-        } else if let Some(rest) = line.strip_prefix("Private-Lines: ") {
-            expect_private = rest.trim().parse().unwrap_or(0);
-        } else if let Some(rest) = line.strip_prefix("Argon2-Memory: ") {
-            argon2_memory = rest.trim().parse().ok();
-        } else if let Some(rest) = line.strip_prefix("Argon2-Passes: ") {
-            argon2_passes = rest.trim().parse().ok();
-        } else if let Some(rest) = line.strip_prefix("Argon2-Parallelism: ") {
-            argon2_parallelism = rest.trim().parse().ok();
-        } else if let Some(rest) = line.strip_prefix("Argon2-Salt: ") {
-            argon2_salt = hex::decode(rest.trim()).ok();
-        } else if let Some(rest) = line.strip_prefix("Private-MAC: ") {
-            private_mac = rest.trim().to_string();
+
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim();
+
+        match key {
+            "PuTTY-User-Key-File-2" => {
+                version = 2;
+                algorithm = value.to_string();
+            }
+            "PuTTY-User-Key-File-3" => {
+                version = 3;
+                algorithm = value.to_string();
+            }
+            "Encryption" => encryption = value.to_string(),
+            "Comment" => comment = value.to_string(),
+            "Public-Lines" => expect_public = value.parse().unwrap_or(0),
+            "Private-Lines" => expect_private = value.parse().unwrap_or(0),
+            "Key-Derivation" => argon2_flavour = Some(value.to_string()),
+            "Argon2-Memory" => argon2_memory = value.parse().ok(),
+            "Argon2-Passes" => argon2_passes = value.parse().ok(),
+            "Argon2-Parallelism" => argon2_parallelism = value.parse().ok(),
+            "Argon2-Salt" => argon2_salt = hex::decode(value).ok(),
+            "Private-MAC" => private_mac = value.to_string(),
+            _ => {}
         }
     }
 
@@ -136,6 +145,7 @@ fn parse_ppk_text(text: &str) -> anyhow::Result<PpkFile> {
         public: b64_body(&public_lines)?,
         private: b64_body(&private_lines)?,
         private_mac,
+        argon2_flavour,
         argon2_memory,
         argon2_passes,
         argon2_parallelism,
@@ -143,8 +153,46 @@ fn parse_ppk_text(text: &str) -> anyhow::Result<PpkFile> {
     })
 }
 
+fn argon2_algorithm(flavour: Option<&str>) -> anyhow::Result<argon2::Algorithm> {
+    match flavour.unwrap_or("Argon2id") {
+        "Argon2id" | "argon2id" => Ok(argon2::Algorithm::Argon2id),
+        "Argon2i" | "argon2i" => Ok(argon2::Algorithm::Argon2i),
+        "Argon2d" | "argon2d" => Ok(argon2::Algorithm::Argon2d),
+        other => anyhow::bail!("unsupported PPK Key-Derivation '{other}'"),
+    }
+}
+
+/// PPK3 Argon2 → 80 bytes: AES key (32) + IV (16) + MAC key (32).
+fn derive_ppk3_material(file: &PpkFile, passphrase: &str) -> anyhow::Result<[u8; 80]> {
+    let memory = file
+        .argon2_memory
+        .ok_or_else(|| anyhow::anyhow!("PPK3 missing Argon2-Memory"))?;
+    let passes = file
+        .argon2_passes
+        .ok_or_else(|| anyhow::anyhow!("PPK3 missing Argon2-Passes"))?;
+    let parallelism = file
+        .argon2_parallelism
+        .ok_or_else(|| anyhow::anyhow!("PPK3 missing Argon2-Parallelism"))?;
+    let salt = file
+        .argon2_salt
+        .as_deref()
+        .ok_or_else(|| anyhow::anyhow!("PPK3 missing Argon2-Salt"))?;
+    let params = argon2::Params::new(memory, passes, parallelism, Some(80))
+        .map_err(|e| anyhow::anyhow!("argon2 params: {e}"))?;
+    let argon = argon2::Argon2::new(
+        argon2_algorithm(file.argon2_flavour.as_deref())?,
+        argon2::Version::V0x13,
+        params,
+    );
+    let mut out = [0u8; 80];
+    argon
+        .hash_password_into(passphrase.as_bytes(), salt, &mut out)
+        .map_err(|e| anyhow::anyhow!("argon2: {e}"))?;
+    Ok(out)
+}
+
 fn verify_ppk_mac(file: &PpkFile, passphrase: Option<&str>, private_plain: &[u8]) -> anyhow::Result<()> {
-    let enc = if file.encryption.is_empty() {
+    let enc = if is_unencrypted(&file.encryption) {
         "none"
     } else {
         file.encryption.as_str()
@@ -160,34 +208,19 @@ fn verify_ppk_mac(file: &PpkFile, passphrase: Option<&str>, private_plain: &[u8]
         .map_err(|_| anyhow::anyhow!("PPK Private-MAC is not valid hex"))?;
 
     if file.version >= 3 {
-        // PPK3: MAC key is bytes 48..80 of Argon2id output (empty passphrase when unencrypted).
-        let phrase = passphrase.unwrap_or("");
-        let memory = file
-            .argon2_memory
-            .ok_or_else(|| anyhow::anyhow!("PPK3 missing Argon2-Memory"))?;
-        let passes = file
-            .argon2_passes
-            .ok_or_else(|| anyhow::anyhow!("PPK3 missing Argon2-Passes"))?;
-        let parallelism = file
-            .argon2_parallelism
-            .ok_or_else(|| anyhow::anyhow!("PPK3 missing Argon2-Parallelism"))?;
-        let salt = file
-            .argon2_salt
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("PPK3 missing Argon2-Salt"))?;
-        let params = argon2::Params::new(memory, passes, parallelism, Some(80))
-            .map_err(|e| anyhow::anyhow!("argon2 params: {e}"))?;
-        let argon = argon2::Argon2::new(
-            argon2::Algorithm::Argon2id,
-            argon2::Version::V0x13,
-            params,
-        );
-        let mut out = [0u8; 80];
-        argon
-            .hash_password_into(phrase.as_bytes(), salt, &mut out)
-            .map_err(|e| anyhow::anyhow!("argon2: {e}"))?;
-        let mut mac = HmacSha256::new_from_slice(&out[48..80])
-            .map_err(|e| anyhow::anyhow!("hmac: {e}"))?;
+        // Unencrypted PPK3 omits Argon2 headers; MAC uses a zero-length HMAC-SHA-256 key.
+        // Encrypted PPK3: MAC key is bytes 48..80 of Argon2 output.
+        let mut mac = if is_unencrypted(&file.encryption) {
+            HmacSha256::new_from_slice(&[])
+                .map_err(|e| anyhow::anyhow!("hmac: {e}"))?
+        } else {
+            let phrase = passphrase
+                .filter(|p| !p.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("KEY_NEEDS_PASSPHRASE"))?;
+            let out = derive_ppk3_material(file, phrase)?;
+            HmacSha256::new_from_slice(&out[48..80])
+                .map_err(|e| anyhow::anyhow!("hmac: {e}"))?
+        };
         mac.update(&mac_data);
         mac.verify_slice(&expected)
             .map_err(|_| anyhow::anyhow!("PPK MAC check failed (wrong passphrase or corrupt file)"))?;
@@ -214,30 +247,7 @@ fn verify_ppk_mac(file: &PpkFile, passphrase: Option<&str>, private_plain: &[u8]
 
 fn derive_aes_key_iv(file: &PpkFile, passphrase: &str) -> anyhow::Result<([u8; 32], [u8; 16])> {
     if file.version >= 3 {
-        let memory = file
-            .argon2_memory
-            .ok_or_else(|| anyhow::anyhow!("encrypted PPK3 missing Argon2-Memory"))?;
-        let passes = file
-            .argon2_passes
-            .ok_or_else(|| anyhow::anyhow!("encrypted PPK3 missing Argon2-Passes"))?;
-        let parallelism = file
-            .argon2_parallelism
-            .ok_or_else(|| anyhow::anyhow!("encrypted PPK3 missing Argon2-Parallelism"))?;
-        let salt = file
-            .argon2_salt
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("encrypted PPK3 missing Argon2-Salt"))?;
-        let params = argon2::Params::new(memory, passes, parallelism, Some(80))
-            .map_err(|e| anyhow::anyhow!("argon2 params: {e}"))?;
-        let argon = argon2::Argon2::new(
-            argon2::Algorithm::Argon2id,
-            argon2::Version::V0x13,
-            params,
-        );
-        let mut out = [0u8; 80];
-        argon
-            .hash_password_into(passphrase.as_bytes(), salt, &mut out)
-            .map_err(|e| anyhow::anyhow!("argon2: {e}"))?;
+        let out = derive_ppk3_material(file, passphrase)?;
         let mut key = [0u8; 32];
         let mut iv = [0u8; 16];
         key.copy_from_slice(&out[..32]);
@@ -261,7 +271,7 @@ fn derive_aes_key_iv(file: &PpkFile, passphrase: &str) -> anyhow::Result<([u8; 3
 }
 
 fn decrypt_private(file: &PpkFile, passphrase: Option<&str>) -> anyhow::Result<Vec<u8>> {
-    if file.encryption.is_empty() || file.encryption == "none" {
+    if is_unencrypted(&file.encryption) {
         return Ok(file.private.clone());
     }
     if file.encryption != "aes256-cbc" {
@@ -393,13 +403,8 @@ pub fn looks_like_ppk(text: &str) -> bool {
 pub fn parse_ppk(text: &str, passphrase: Option<&str>) -> anyhow::Result<PrivateKey> {
     let file = parse_ppk_text(text)?;
     let private = decrypt_private(&file, passphrase)?;
-    // MAC covers the *ciphertext* private blob for encrypted keys (PuTTY format).
-    let mac_private = if file.encryption.is_empty() || file.encryption == "none" {
-        private.as_slice()
-    } else {
-        file.private.as_slice()
-    };
-    verify_ppk_mac(&file, passphrase, mac_private)?;
+    // MAC is always over the decrypted private blob (incl. PKCS-style padding bytes).
+    verify_ppk_mac(&file, passphrase, &private)?;
     let key = build_key(&file.algorithm, &file.public, &private, &file.comment)?;
     // Ensure the reconstructed public key matches the PPK public blob.
     let encoded = key

@@ -1166,6 +1166,9 @@ async fn run_session(
 
     emit_status(&app, &session_id, "connected", None);
 
+    // Clean shell logout (Ctrl+D / exit) → "exited" (close tab, no reconnect).
+    // Cancel / dropped channel → "disconnected" (may reconnect).
+    let mut shell_exited = false;
     loop {
         tokio::select! {
             _ = &mut cancel_rx => {
@@ -1179,10 +1182,11 @@ async fn run_session(
                     Some(ChannelMsg::ExtendedData { data, .. }) => {
                         emit_output(&app, &session_id, data.as_ref());
                     }
-                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {
+                    Some(ChannelMsg::Eof) | Some(ChannelMsg::ExitStatus { .. }) => {
+                        shell_exited = true;
                         break;
                     }
-                    Some(ChannelMsg::ExitStatus { .. }) => {
+                    Some(ChannelMsg::Close) | None => {
                         break;
                     }
                     _ => {}
@@ -1210,7 +1214,16 @@ async fn run_session(
         .disconnect(Disconnect::ByApplication, "Session closed", "en")
         .await;
 
-    emit_status(&app, &session_id, "disconnected", None);
+    emit_status(
+        &app,
+        &session_id,
+        if shell_exited {
+            "exited"
+        } else {
+            "disconnected"
+        },
+        None,
+    );
     Ok(())
 }
 

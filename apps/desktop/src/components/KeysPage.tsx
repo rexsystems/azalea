@@ -278,8 +278,8 @@ export function KeysPage({
       className="flex h-full min-h-0 flex-col overflow-hidden"
       style={{ background: "var(--bg-base)" }}
     >
-      <div className="settings-shell keys-shell flex min-h-0 flex-1 flex-col">
-        <div className="mb-5 flex shrink-0 flex-wrap items-end justify-between gap-3">
+      <div className="settings-shell keys-shell flex min-h-0 flex-1 flex-col overflow-y-auto !pb-6">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <h2
               className="text-2xl font-semibold tracking-tight sm:text-3xl"
@@ -296,7 +296,7 @@ export function KeysPage({
         </div>
 
         <div
-          className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-2xl border"
+          className="min-w-0 rounded-2xl border"
           style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
         >
           <div className="space-y-8 p-5 pb-6 sm:p-6 sm:pb-8">

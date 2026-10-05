@@ -481,6 +481,17 @@ fn parse_json_host_object(value: &Value) -> Option<ParsedHostEntry> {
     })
 }
 
+fn format_ssh_host_aliases(value: &str) -> Option<String> {
+    let aliases: Vec<&str> = value
+        .split_whitespace()
+        .filter(|alias| !alias.contains('*') && !alias.contains('?'))
+        .collect();
+    if aliases.is_empty() {
+        return None;
+    }
+    Some(aliases.join(" | "))
+}
+
 fn import_ssh_config(db: &tauri::State<'_, SharedDatabase>, data: &str, replace: bool) -> Result<usize, String> {
     if replace {
         let db = db.lock();
@@ -497,8 +508,17 @@ fn import_ssh_config(db: &tauri::State<'_, SharedDatabase>, data: &str, replace:
     let mut current_port = 22i64;
     let mut imported = 0usize;
     let db = db.lock();
+    let existing_hosts = db.list_hosts().map_err(|err| err.to_string())?;
+    let mut seen: Vec<(String, i64, String)> = existing_hosts
+        .iter()
+        .map(|h| (h.hostname.to_ascii_lowercase(), h.port, h.username.clone()))
+        .collect();
 
     let mut flush = |name: &str, hostname: &str, user: &str, port: i64| -> Result<(), String> {
+        let host_key = (hostname.to_ascii_lowercase(), port, user.to_string());
+        if seen.iter().any(|(h, p, u)| h == &host_key.0 && *p == host_key.1 && u == &host_key.2) {
+            return Ok(());
+        }
         let now = chrono::Utc::now().timestamp();
         let id = Uuid::new_v4().to_string();
         let host = Host {
@@ -517,6 +537,7 @@ fn import_ssh_config(db: &tauri::State<'_, SharedDatabase>, data: &str, replace:
             updated_at: now,
         };
         db.insert_host(&host).map_err(|err| err.to_string())?;
+        seen.push(host_key);
         imported += 1;
         Ok(())
     };
@@ -535,7 +556,7 @@ fn import_ssh_config(db: &tauri::State<'_, SharedDatabase>, data: &str, replace:
             if let (Some(name), Some(hostname)) = (current_name.as_ref(), current_hostname.as_ref()) {
                 flush(name, hostname, &current_user, current_port)?;
             }
-            current_name = Some(value.split('*').next().unwrap_or(&value).trim().to_string());
+            current_name = format_ssh_host_aliases(&value);
             current_hostname = None;
             current_user = "root".to_string();
             current_port = 22;
