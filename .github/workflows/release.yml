@@ -387,8 +387,11 @@ jobs:
             exit 1
           fi
           # awscli is preinstalled on ubuntu-latest; S3-compatible API for R2.
+          # --delete drops previous build artifacts so the free-tier bucket
+          # does not accumulate every historical installer.
           aws s3 sync release-files/ "s3://${R2_BUCKET}/" \
             --endpoint-url "$R2_ENDPOINT" \
+            --delete \
             --only-show-errors
           # Always overwrite the updater manifest at the bucket root.
           aws s3 cp release-files/latest.json "s3://${R2_BUCKET}/latest.json" \
