@@ -94,17 +94,14 @@ function fmt(n) {
 
 function copyObject(fromKey, toKey) {
   // R2 rejects GetObjectTagging used by `aws s3 cp` server-side copies.
-  const copySource = `${bucket}/${fromKey
-    .split("/")
-    .map((p) => encodeURIComponent(p))
-    .join("/")}`;
+  // Keep `+` literal in the key — encoding it as %2B makes R2 look up the wrong object.
   aws([
     "s3api",
     "copy-object",
     "--bucket",
     bucket,
     "--copy-source",
-    copySource,
+    `${bucket}/${fromKey}`,
     "--key",
     toKey,
   ]);
