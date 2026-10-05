@@ -1,31 +1,31 @@
 {
-  "version": "0.1.1",
-  "notes": "Azalea 0.1.1",
-  "pub_date": "2026-09-07T20:36:48.184Z",
+  "version": "0.1.2+72",
+  "notes": "Azalea 0.1.2+72",
+  "pub_date": "2026-10-05T22:50:02.302Z",
   "platforms": {
     "linux-x86_64": {
-      "url": "https://updates.azalea.rexsystems.me/Azalea_0.1.1_amd64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkptestGdESHkrYUZWU3FDdVhmbCtXcU9RQzNzQ1R3ekNjVG1udElLNGJaUHFtc0VteVc0YTl4bDgzejhXUndxUTE4OHk1V3ZBS0NReXFyeE5yNml2MEFvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEzMjI5CWZpbGU6QXphbGVhXzAuMS4xX2FtZDY0LkFwcEltYWdlCkdPLzY1SW5DNzEycnExRllVUzNPSEUrMlI1Tk9BWENZam9oVUNWMklLK0laUEV5eWl6ZkFMdFpST2ovYzBraVNsSWlqeUxhQW1zZkhqQW1IaWJVaUN3PT0K"
+      "url": "https://updates.azalea.rexsystems.me/builds/v0.1.2-build.72/Azalea_0.1.2%2B72_amd64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TktoQlk1WFR6RHhZRGVhSndZbG9EY0wyNFR1MDA1dDBsVUhJK1hudzJFZ3g2cFFaMWFvdDFnaVVMc3dqb05GVkFkdkowVjRPYUVCQ1c1Ti9jWVZrcGdjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMjQwNTI3CWZpbGU6QXphbGVhXzAuMS4yKzcyX2FtZDY0LkFwcEltYWdlCXZlcnNpb246MC4xLjIrNzIKMGpSZXNNUnNKYmhWY2swODFxTmtMSjZqbjJaczA2cVhjLy90OFFGVkEzb2FiVWZBYlRTNDQ1ancrNW1iRE13emNEWU1QTDZQMmlGT0xyVDE2YUhKREE9PQo="
     },
     "linux-x86_64-rpm": {
-      "url": "https://updates.azalea.rexsystems.me/Azalea-0.1.1-1.x86_64.rpm",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0Tk1aRW9oQVlQQm9PNFZGS0ozYm52QWR5UE8vUEFaeG1sSVVHZDRxUWNLVXZCMHU3bVJtNFZjRkwxU0p0alFvVE5vOUVYMnZSUjUvSmMxZzFJNlRUdXdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEzMjI5CWZpbGU6QXphbGVhLTAuMS4xLTEueDg2XzY0LnJwbQpOejFKS1pRTlVUYUZaYVlheThwaVlkRm00enlRZGszUXdPaFdrT2gyT0dpZER1eHhFWGkzR3p0dkhtUG51YWFkNEh4WU9Neld2NVVpdlQ5Uy9XbXhEdz09Cg=="
+      "url": "https://updates.azalea.rexsystems.me/builds/v0.1.2-build.72/Azalea-0.1.2%2B72-1.x86_64.rpm",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkFwVkY3VTJseGlFbnhrMmpWSWlHY1g5KzFxcE42c2xzb0ppUGVSVnAva09xWGl5S2FndnlpTG1vQXIwOCtOUlhFMTRIVW9QUDJaL0l3SHgvcE5DSFE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMjQwNTI3CWZpbGU6QXphbGVhLTAuMS4yKzcyLTEueDg2XzY0LnJwbQl2ZXJzaW9uOjAuMS4yKzcyCnI1MXR0U3FOVUYzR0hOc2tScnRva0s3T3ZnWE9abGJ0Y1pFcSs2TkJXSThNajBRMXNrVlFISWNQVjVQMldXVXRXWU51Vkc2TmdPV3N2RkZiME0wa0JnPT0K"
     },
     "linux-x86_64-deb": {
-      "url": "https://updates.azalea.rexsystems.me/Azalea_0.1.1_amd64.deb",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkF5aktkbjkxaTBzOUY1cmtoS0RDSlhaQ2J2bnpBdVYvbWpsZGoxWloxeTRZdGZxWGVtVFNMN1R6RWhnZnh5aTllb1p3YVpGa2Vhc25MbnRmT0p0MndBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEzMjI5CWZpbGU6QXphbGVhXzAuMS4xX2FtZDY0LmRlYgp1SVQwTlZlUTN0OWtSM3p6YmwrSW5Lc3NhQjcrOTlSNXR1K2pWa2RJWC9lVHVDV01ZOUlxNnhDVDhzNnVrbG5FWDNHOW4vc3E1aW5iNTNDNmo4R3pBZz09Cg=="
+      "url": "https://updates.azalea.rexsystems.me/builds/v0.1.2-build.72/Azalea_0.1.2%2B72_amd64.deb",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkZJWWdFQWg1ZTVuUGpVTWVpdjNrSTd5bForcGdhVVk5V3A0U3NYS2dxcVJRSnlUL2p3dm5jTXFvaDZtMEtxcVdEYmd2Znh5NmthaHJvSCtDaVFpckFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMjQwNTI3CWZpbGU6QXphbGVhXzAuMS4yKzcyX2FtZDY0LmRlYgl2ZXJzaW9uOjAuMS4yKzcyClJtZzB1MTA0bnFFYmxlRTkwWkZyVTFUd2NLRW14ejRIWGVhcFBpQ3Nyc0wyUjZtaEpCbHQ2NGUzVmtEUWZNTG9SR3lMMVh2RTVxRHpVRmZlV2FQdkJnPT0K"
     },
     "darwin-aarch64": {
-      "url": "https://updates.azalea.rexsystems.me/Azalea.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkxhZ1hVZko0bFltZm45WmZMWXBia09zUXo4ZjRlYnZVRitzRUVSVTBuV0xtVEg5STRjYlB2ZDNacEFMTGtuenZoTXoyQ0sycFBnZEhZSXJlRi9laFFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEzMTEzCWZpbGU6QXphbGVhLmFwcC50YXIuZ3oKQk1PaUhPdUFZbjZXWGlLQ2NZRTFKdnJlWlY1ZkVLb0YyZFZ0bFpYNUd6Y3NXdXAzcmdLRDRPVGZqaHBHaTh3Nm96SEJZbURhMG51Z3pLaThwckwxRGc9PQo="
+      "url": "https://updates.azalea.rexsystems.me/builds/v0.1.2-build.72/Azalea.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkZxVFI4NjVZMFNCdzVhRnZZQVFjT3ROeXFvTTlRaWZUaFpuMkZmMFRMeGlxVm5Rem9mbUNDa0FLdzd3RUF4a29iZExNeUlFdWxyNkpTdVZuS3NDUUFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMjQwNDI3CWZpbGU6QXphbGVhLmFwcC50YXIuZ3oJdmVyc2lvbjowLjEuMis3MgpnbGVqZ0xnWlliSWlteDZvNFBDVEZiRFNad1kyUnFZUHJZeW9hZ1FMYWl1S04yMUZwNTNzbXJsZVJmcXdVL2s3WjU3azZ1ZGJmb0F2M2dKVm5MZytCQT09Cg=="
     },
     "darwin-x86_64": {
-      "url": "https://updates.azalea.rexsystems.me/Azalea.app.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkdFZDNpSWliNXJ0VjlPUlppemMya1lOd3A3aXpLSkx5L3puTE1IV2hhM3BJdXlVb0d1dno3d2pQQldRbmVjZFlSMDNFekRGNklYL0FXWkEzam42OFFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEyOTkzCWZpbGU6QXphbGVhLmFwcC50YXIuZ3oKaTRYNlZrUlVlcXMyOERPMFF1VzZ3R0ZiaEQvMWlFNUZRNzZCdjNlU1NBMGZFNFFjOVBPZVNCRTJsSG9aU0xHc1FDb1JySzFNRHBaNmJvWElHNUFUQ3c9PQo="
+      "url": "https://updates.azalea.rexsystems.me/builds/v0.1.2-build.72/Azalea.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TlB6U2NnUko5dFI4TGtXckFaSUVYTWFsZFJraXJrbTVESHBLbHhmNlVxMW1LMS81NG9Lc005K1lueG9lNi96NVlKOVIxa1dXYUh0SkdNT1RUcWpRUXdFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMjQwNDI0CWZpbGU6QXphbGVhLmFwcC50YXIuZ3oJdmVyc2lvbjowLjEuMis3MgphNUFwVXhmYUZRTGMzM0M4cU42R1pWYmV3L3FreE1sUDd4NFZFaXh4UnNreHc4RStVN3hCZ0dhbzhvTjhnTHV4NFRvTnNIY2pjMDFvWWY2b2Evc3VCdz09Cg=="
     },
     "windows-x86_64": {
-      "url": "https://updates.azalea.rexsystems.me/Azalea_0.1.1_x64-setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0Tk5wY2ZXUjJWd1RJU2tKNXFUc1dRTWJqVjRvcUcvSnQ0dDA2MVd6anlvaTdqNTlHM0VteFUyaFZtbzlDaHdnaHBiZ3pXY0dsalAyNWhsZFdzRDk1Z3dJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODEzNDA3CWZpbGU6QXphbGVhXzAuMS4xX3g2NC1zZXR1cC5leGUKMnMvbXpUK1lGOXNkN1hMS3VIZ2h2UHZGU1ptWmdUOXgwM2RJdFU2aHMzMzdla2M3bXk3MGZkYitzVXpVR3RreWR5Ui9WY3k0amZ3RGxmZ0hub2F0QUE9PQo="
+      "url": "https://updates.azalea.rexsystems.me/builds/v0.1.2-build.72/Azalea_0.1.2%2B72_x64-setup.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcVlobWZMRmo0TkYxRERnUFJLUHJTd3N3cWl1ODAza0ptZnl2ckxaeXd3Unh1Y3hOR0FqMng2MEFubzRNaG5UN2dGQ29JK3RKWm5Xdm00eGJ5cFNBRzN3YytUY1NUVGdvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxMjQwNjAxCWZpbGU6QXphbGVhXzAuMS4yKzcyX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjEuMis3Mgp1SEt2Q3hSNzZWeWJDajlmWEIvZHhjb29ML0dHTUhadjdxejJFVHlQUnRta01Wcm1VTFdUcTZROFpIWUR3RG9HMDdOT3NvTmxrRlVFdUxvMUlvR1lCZz09Cg=="
     }
   }
 }
