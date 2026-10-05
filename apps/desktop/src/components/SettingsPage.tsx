@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { Download } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ThemeId } from "../lib/theme";
@@ -8,6 +8,11 @@ import { iconPacks, type IconPackId } from "../lib/iconPack";
 import { useIconPack } from "./IconPackProvider";
 import { hugeiconsPack } from "./icons/hugeiconsPack";
 import { pixelartPack } from "./icons/pixelartPack";
+import {
+  CUSTOM_CSS_PLACEHOLDER,
+  getStoredCustomCss,
+  setStoredCustomCss,
+} from "../lib/customCss";
 import {
   clampFontSize,
   connectScreenOptions,
@@ -153,23 +158,42 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const { iconPack, changeIconPack } = useIconPack();
   const [tab, setTab] = useState<SettingsTab>("appearance");
+  const [importVisited, setImportVisited] = useState(false);
   const [appVersion, setAppVersion] = useState("…");
   const [telemetryOn, setTelemetryOn] = useState(() => isTelemetryEnabled());
   const [hideHostAddresses, setHideHostAddresses] = useState(() => getStoredHideHostAddresses());
+  const [customCssEnabled, setCustomCssEnabled] = useState(
+    () => getStoredCustomCss().enabled,
+  );
+  const [customCssDraft, setCustomCssDraft] = useState(() => getStoredCustomCss().css);
+  const [customCssSaved, setCustomCssSaved] = useState(false);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => setAppVersion("-"));
   }, []);
 
   useEffect(() => {
+    contentScrollRef.current?.scrollTo({ top: 0 });
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab === "import") setImportVisited(true);
+  }, [tab]);
+
+  const selectTab = (next: SettingsTab) => {
+    startTransition(() => setTab(next));
+  };
+
+  useEffect(() => {
     if (!focusSync) return;
-    setTab("account");
+    selectTab("account");
     onFocusSyncHandled?.();
   }, [focusSync, onFocusSyncHandled]);
 
   useEffect(() => {
     if (!focusImport) return;
-    setTab("import");
+    selectTab("import");
     onFocusImportHandled?.();
   }, [focusImport, onFocusImportHandled]);
 
@@ -178,7 +202,10 @@ export function SettingsPage({
       className="flex h-full flex-col overflow-hidden"
       style={{ background: "var(--bg-base)" }}
     >
-      <div className="settings-shell flex min-h-0 flex-1 flex-col overflow-y-auto !pb-6">
+      <div
+        className="settings-shell shrink-0 !pb-4"
+        style={{ background: "var(--bg-base)" }}
+      >
         <div className="mb-5">
           <h2
             className="text-2xl font-semibold tracking-tight sm:text-3xl"
@@ -192,7 +219,7 @@ export function SettingsPage({
         </div>
 
         <div
-          className="settings-tabs mb-5 flex gap-1 overflow-x-auto pb-1"
+          className="settings-tabs flex gap-1 overflow-x-auto pb-1"
           role="tablist"
           aria-label="Settings sections"
         >
@@ -204,7 +231,7 @@ export function SettingsPage({
                 type="button"
                 role="tab"
                 aria-selected={active}
-                onClick={() => setTab(item.id)}
+                onClick={() => selectTab(item.id)}
                 className="transition-ui shrink-0 rounded-lg px-3 py-2 text-sm font-medium"
                 style={{
                   background: active ? "var(--bg-panel)" : "transparent",
@@ -217,7 +244,12 @@ export function SettingsPage({
             );
           })}
         </div>
+      </div>
 
+      <div
+        ref={contentScrollRef}
+        className="settings-shell min-h-0 flex-1 overflow-y-auto !pt-0"
+      >
         <div
           className="rounded-2xl border"
           style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
@@ -316,6 +348,72 @@ export function SettingsPage({
                         </button>
                       );
                     })}
+                  </div>
+                </SettingRow>
+
+                <SettingRow
+                  label="Custom CSS"
+                  description="Inject your own CSS on top of the active theme. Override variables like --bg-base and --accent."
+                >
+                  <div className="grid gap-3">
+                    <SettingToggle
+                      label="Enable custom CSS"
+                      description="Applies after you save. Turns off instantly when disabled."
+                      checked={customCssEnabled}
+                      onChange={(checked) => {
+                        setCustomCssEnabled(checked);
+                        setStoredCustomCss({ enabled: checked, css: customCssDraft });
+                        setCustomCssSaved(false);
+                      }}
+                    />
+                    <textarea
+                      value={customCssDraft}
+                      onChange={(e) => {
+                        setCustomCssDraft(e.target.value);
+                        setCustomCssSaved(false);
+                      }}
+                      spellCheck={false}
+                      placeholder={CUSTOM_CSS_PLACEHOLDER}
+                      rows={12}
+                      className="select-text w-full resize-y rounded-xl border px-3.5 py-3 font-mono text-xs leading-relaxed outline-none"
+                      style={{
+                        background: "var(--bg-input)",
+                        borderColor: "var(--border-subtle)",
+                        color: "var(--text)",
+                        minHeight: "12rem",
+                      }}
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setStoredCustomCss({
+                            enabled: customCssEnabled,
+                            css: customCssDraft,
+                          });
+                          setCustomCssSaved(true);
+                        }}
+                      >
+                        Apply CSS
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => {
+                          setCustomCssDraft("");
+                          setCustomCssEnabled(false);
+                          setStoredCustomCss({ enabled: false, css: "" });
+                          setCustomCssSaved(false);
+                        }}
+                      >
+                        Clear
+                      </Button>
+                      {customCssSaved ? (
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                          Applied
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </SettingRow>
               </>
@@ -424,8 +522,8 @@ export function SettingsPage({
               </>
             )}
 
-            {tab === "import" && (
-              <>
+            {(tab === "import" || importVisited) && (
+              <div className={tab === "import" ? undefined : "hidden"} aria-hidden={tab !== "import"}>
                 <PanelHeader
                   title="Import"
                   description="Bring in keys and hosts from ~/.ssh, or restore from an Azalea backup / config file."
@@ -436,7 +534,7 @@ export function SettingsPage({
                   onImportBackupReplace={onImportBackupReplace}
                   onDataChanged={onImportDataRefresh ?? (async () => undefined)}
                 />
-              </>
+              </div>
             )}
 
             {tab === "backup" && (
@@ -463,13 +561,13 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="Privacy"
-                  description="Optional anonymous counts and crash reports. Off by default."
+                  description="Azalea asks once at startup whether to share anonymous usage and crash data. Change it anytime here."
                 />
-                <SettingRow label="Telemetry">
+                <SettingRow label="Diagnostics">
                   <div className="space-y-2">
                     <SettingToggle
-                      label="Anonymous usage & crash reports"
-                      description="Daily install ping plus short crash reports (error kind, redacted message, app version, OS). No hostnames, emails, keys, or commands."
+                      label="Share anonymous usage & crash reports"
+                      description="Daily install ping (active users) and crash reports to help fix bugs. Never includes hostnames, emails, keys, or commands."
                       checked={telemetryOn}
                       onChange={(on) => {
                         setTelemetryEnabled(on);

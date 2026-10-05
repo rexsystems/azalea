@@ -19,7 +19,7 @@ export function ImportSection({
   onImportBackupReplace,
   onDataChanged,
 }: ImportSectionProps) {
-  const [scanning, setScanning] = useState(false);
+  const [scanning, setScanning] = useState(true);
   const [importing, setImporting] = useState(false);
   const [scan, setScan] = useState<api.SshDirScanResult | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -64,7 +64,11 @@ export function ImportSection({
   }, []);
 
   useEffect(() => {
-    void runScan();
+    // Let the Import tab paint first, then scan off the UI tick.
+    const id = window.setTimeout(() => {
+      void runScan();
+    }, 0);
+    return () => window.clearTimeout(id);
   }, [runScan]);
 
   const needsPassphrase = useMemo(
@@ -145,6 +149,20 @@ export function ImportSection({
             Rescan
           </Button>
         </div>
+
+        {scanning && !scan && (
+          <div
+            className="flex items-center gap-2 rounded-xl border px-3 py-3 text-xs"
+            style={{
+              borderColor: "var(--border-subtle)",
+              color: "var(--text-muted)",
+              background: "var(--bg-card)",
+            }}
+          >
+            <Loader2 size={14} className="animate-spin shrink-0" />
+            Scanning ~/.ssh…
+          </div>
+        )}
 
         {scan && (
           <p className="text-[11px] tabular-nums" style={{ color: "var(--text-muted)" }}>
@@ -273,11 +291,11 @@ export function ImportSection({
           Import an Azalea backup JSON, OpenSSH config, or other supported host export.
         </p>
         <div className="grid grid-cols-2 gap-2">
-          <Button variant="secondary" disabled={disabled} onClick={onImportBackup}>
+          <Button variant="secondary" disabled={busy || importing} onClick={onImportBackup}>
             <Upload size={16} />
             Import file
           </Button>
-          <Button variant="danger" disabled={disabled} onClick={onImportBackupReplace}>
+          <Button variant="danger" disabled={busy || importing} onClick={onImportBackupReplace}>
             Replace &amp; import
           </Button>
         </div>

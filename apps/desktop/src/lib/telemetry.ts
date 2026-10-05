@@ -1,21 +1,13 @@
-/** Anonymous daily pings + crash reports (opt-in). No hosts, emails, or keys. */
+/** Opt-in anonymous daily install pings (active users). Crashes go to GlitchTip. */
 
-import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 
 const ENABLED_KEY = "azalea-telemetry-enabled";
 const ASKED_KEY = "azalea-telemetry-asked";
 const INSTALL_ID_KEY = "azalea-telemetry-install-id";
 const LAST_PING_DAY_KEY = "azalea-telemetry-last-ping-day";
-const CRASH_QUEUE_KEY = "azalea-telemetry-crash-queue";
-const CRASH_RATE_KEY = "azalea-telemetry-crash-rate";
 
 export const TELEMETRY_BASE_URL = "https://azalea-penguin.694206767.xyz";
-
-const MAX_QUEUE = 12;
-const MAX_CRASHES_PER_HOUR = 8;
-const MAX_MESSAGE = 240;
-const MAX_STACK = 800;
 
 export type CrashKind =
   | "js_error"
@@ -31,13 +23,8 @@ export interface CrashReport {
   stack?: string;
 }
 
-interface PendingCrashFile {
-  kind?: string;
-  message?: string;
-  stack?: string;
-  app_version?: string;
-  created_at?: string;
-}
+const MAX_MESSAGE = 240;
+const MAX_STACK = 800;
 
 export function getTelemetryAsked(): boolean {
   return localStorage.getItem(ASKED_KEY) === "1";
@@ -51,13 +38,16 @@ export function isTelemetryEnabled(): boolean {
   return localStorage.getItem(ENABLED_KEY) === "1";
 }
 
+function syncCrashReporting(enabled: boolean) {
+  void invoke("set_crash_reporting_enabled", { enabled }).catch(() => {
+    /* not in tauri / command missing */
+  });
+}
+
 export function setTelemetryEnabled(enabled: boolean) {
   localStorage.setItem(ENABLED_KEY, enabled ? "1" : "0");
   setTelemetryAsked();
-  if (enabled) {
-    void flushCrashQueue();
-    void flushPendingNativeCrash();
-  }
+  syncCrashReporting(enabled);
 }
 
 export function getOrCreateInstallId(): string {
@@ -120,150 +110,18 @@ function normalizeKind(kind: string | undefined): CrashKind {
   }
 }
 
-function fingerprint(kind: CrashKind, message: string | undefined): string {
-  return `${kind}:${(message ?? "").slice(0, 120)}`;
-}
-
-function readCrashRate(): { hour: string; count: number; fps: string[] } {
-  try {
-    const raw = localStorage.getItem(CRASH_RATE_KEY);
-    if (!raw) return { hour: "", count: 0, fps: [] };
-    const parsed = JSON.parse(raw) as { hour?: string; count?: number; fps?: string[] };
-    return {
-      hour: parsed.hour ?? "",
-      count: typeof parsed.count === "number" ? parsed.count : 0,
-      fps: Array.isArray(parsed.fps) ? parsed.fps.slice(0, 40) : [],
-    };
-  } catch {
-    return { hour: "", count: 0, fps: [] };
-  }
-}
-
-function crashRateWindow(): { hour: string; count: number; fps: string[] } {
-  const hour = new Date().toISOString().slice(0, 13);
-  const state = readCrashRate();
-  return state.hour === hour ? state : { hour, count: 0, fps: [] };
-}
-
-/** Returns 'send' | 'skip' (duplicate/cap — drop) */
-function crashSendDecision(kind: CrashKind, message: string | undefined): "send" | "skip" {
-  const next = crashRateWindow();
-  const fp = fingerprint(kind, message);
-  if (next.fps.includes(fp)) return "skip";
-  if (next.count >= MAX_CRASHES_PER_HOUR) return "skip";
-  return "send";
-}
-
-function noteCrashSent(kind: CrashKind, message: string | undefined) {
-  const next = crashRateWindow();
-  const fp = fingerprint(kind, message);
-  if (!next.fps.includes(fp)) next.fps = [...next.fps, fp].slice(-40);
-  next.count += 1;
-  localStorage.setItem(CRASH_RATE_KEY, JSON.stringify(next));
-}
-
-function readQueue(): CrashReport[] {
-  try {
-    const raw = localStorage.getItem(CRASH_QUEUE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as CrashReport[];
-    return Array.isArray(parsed) ? parsed.slice(0, MAX_QUEUE) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeQueue(items: CrashReport[]) {
-  localStorage.setItem(CRASH_QUEUE_KEY, JSON.stringify(items.slice(0, MAX_QUEUE)));
-}
-
-async function postCrash(
-  report: CrashReport,
-  appVersion: string,
-): Promise<"ok" | "retry" | "drop"> {
-  const kind = normalizeKind(report.kind);
-  const message = clip(report.message, MAX_MESSAGE);
-  const stack = clip(report.stack, MAX_STACK);
-  const decision = crashSendDecision(kind, message);
-  if (decision === "skip") return "drop";
-
-  try {
-    const res = await fetch(`${TELEMETRY_BASE_URL}/v1/crash`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        install_id: getOrCreateInstallId(),
-        kind,
-        message,
-        stack,
-        app_version: appVersion.slice(0, 32),
-        os: detectOs(),
-        arch: detectArch(),
-      }),
-    });
-    if (!res.ok) return "retry";
-    noteCrashSent(kind, message);
-    return "ok";
-  } catch {
-    return "retry";
-  }
-}
-
-/** Queue + send a crash report when telemetry is enabled. */
+/** Send a crash / error to GlitchTip when telemetry is enabled. */
 export async function reportCrash(report: CrashReport): Promise<void> {
   if (!isTelemetryEnabled()) return;
   const kind = normalizeKind(report.kind);
-  const payload: CrashReport = {
-    kind,
-    message: clip(report.message, MAX_MESSAGE),
-    stack: clip(report.stack, MAX_STACK),
-  };
-
-  let version = "unknown";
+  const message = clip(report.message, MAX_MESSAGE) ?? kind;
+  const stack = clip(report.stack, MAX_STACK);
   try {
-    version = await getVersion();
-  } catch {
-    /* ignore */
-  }
-
-  const result = await postCrash(payload, version);
-  if (result === "retry") {
-    const q = readQueue();
-    q.push(payload);
-    writeQueue(q);
-  }
-}
-
-export async function flushCrashQueue(): Promise<void> {
-  if (!isTelemetryEnabled()) return;
-  const q = readQueue();
-  if (q.length === 0) return;
-  let version = "unknown";
-  try {
-    version = await getVersion();
-  } catch {
-    /* ignore */
-  }
-  const remaining: CrashReport[] = [];
-  for (const item of q) {
-    const result = await postCrash(item, version);
-    if (result === "retry") remaining.push(item);
-  }
-  writeQueue(remaining);
-}
-
-export async function flushPendingNativeCrash(): Promise<void> {
-  if (!isTelemetryEnabled()) return;
-  try {
-    const pending = await invoke<PendingCrashFile | null>("take_pending_crash");
-    if (!pending) return;
-    await reportCrash({
-      kind: normalizeKind(pending.kind ?? "rust_panic"),
-      message: pending.message,
-      stack: pending.stack,
+    await invoke("report_client_error", {
+      input: { kind, message, stack: stack ?? null },
     });
   } catch {
-    /* command missing / not tauri */
+    /* offline / not tauri */
   }
 }
 
@@ -294,8 +152,9 @@ export async function maybeTelemetryPing(appVersion: string): Promise<void> {
 
 let crashHandlersInstalled = false;
 
-/** Global JS error hooks (idempotent). */
+/** Global JS error hooks (idempotent). Syncs GlitchTip enable flag on install. */
 export function installCrashReporting(): void {
+  syncCrashReporting(isTelemetryEnabled());
   if (crashHandlersInstalled || typeof window === "undefined") return;
   crashHandlersInstalled = true;
 

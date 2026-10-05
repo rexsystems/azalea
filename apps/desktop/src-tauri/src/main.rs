@@ -10,6 +10,8 @@ fn main() {
         }
     }
 
+    // Keep alive for the whole process so panics / events flush on exit.
+    let _sentry = azalea_lib::crash_report::init_sentry();
     azalea_lib::run()
 }
 

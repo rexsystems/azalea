@@ -9,6 +9,8 @@ import {
   setStoredConnectScreen,
   setStoredTerminalSettings,
 } from "./settings";
+import type { CustomCssSettings } from "./customCss";
+import { getStoredCustomCss, setStoredCustomCss } from "./customCss";
 import type { ThemeId } from "./theme";
 import { getStoredTheme, setStoredTheme } from "./theme";
 import type { IconPackId } from "./iconPack";
@@ -21,6 +23,7 @@ export interface AppSettingsExport {
   connectScreen: ConnectScreenMode;
   terminalSettings: TerminalSettings;
   autoSync: boolean;
+  customCss?: CustomCssSettings;
 }
 
 export function collectAppSettings(): AppSettingsExport {
@@ -30,6 +33,7 @@ export function collectAppSettings(): AppSettingsExport {
     connectScreen: getStoredConnectScreen(),
     terminalSettings: getStoredTerminalSettings(),
     autoSync: getStoredAutoSync(),
+    customCss: getStoredCustomCss(),
   };
 }
 
@@ -39,6 +43,12 @@ export function applyAppSettings(settings: Partial<AppSettingsExport>) {
   if (settings.connectScreen) setStoredConnectScreen(settings.connectScreen);
   if (settings.terminalSettings) setStoredTerminalSettings(settings.terminalSettings);
   if (typeof settings.autoSync === "boolean") setStoredAutoSync(settings.autoSync);
+  if (settings.customCss && typeof settings.customCss === "object") {
+    setStoredCustomCss({
+      enabled: Boolean(settings.customCss.enabled),
+      css: typeof settings.customCss.css === "string" ? settings.customCss.css : "",
+    });
+  }
 }
 
 export function exportBackup(settings: AppSettingsExport): Promise<string> {

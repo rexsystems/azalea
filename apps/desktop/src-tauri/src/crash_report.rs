@@ -1,120 +1,144 @@
-//! Persist native panics for opt-in crash reporting on next launch.
+//! Opt-in crash reporting to GlitchTip (Sentry-compatible).
+//!
+//! The Sentry client is always initialized so panics can be captured.
+//! `before_send` drops events until the user enables telemetry.
 
-use std::fs;
-use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use sentry::{ClientInitGuard, ClientOptions, Level};
+use serde::Deserialize;
 
-static PENDING_CRASH_PATH: OnceLock<PathBuf> = OnceLock::new();
+/// Public client DSN for https://error.mythical.systems (GlitchTip).
+const GLITCHTIP_DSN: &str =
+    "https://f201d7b7760e4107bd214cbb8673eadf@error.mythical.systems/3";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PendingCrash {
-    pub kind: String,
-    pub message: String,
-    #[serde(default)]
-    pub stack: Option<String>,
-    #[serde(default)]
-    pub app_version: Option<String>,
-    #[serde(default)]
-    pub created_at: Option<String>,
-}
+static REPORTING_ENABLED: AtomicBool = AtomicBool::new(false);
 
-fn path_for(app: &AppHandle) -> anyhow::Result<PathBuf> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| anyhow::anyhow!("app_data_dir: {e}"))?;
-    fs::create_dir_all(&dir)?;
-    Ok(dir.join("pending_crash.json"))
-}
-
-pub fn install_panic_hook(app: &AppHandle) -> anyhow::Result<()> {
-    let path = path_for(app)?;
-    let _ = PENDING_CRASH_PATH.set(path);
-
-    let default_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        let message = if let Some(s) = info.payload().downcast_ref::<&str>() {
-            (*s).to_string()
-        } else if let Some(s) = info.payload().downcast_ref::<String>() {
-            s.clone()
-        } else {
-            "rust panic".to_string()
-        };
-        let location = info
-            .location()
-            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
-            .unwrap_or_else(|| "unknown".into());
-        // Basename-ish: drop absolute path prefixes for privacy
-        let location = strip_path_prefix(&location);
-        let msg = format!("{message} @ {location}");
-        write_pending(PendingCrash {
-            kind: "rust_panic".into(),
-            message: msg.chars().take(240).collect(),
-            stack: None,
-            app_version: Some(env!("CARGO_PKG_VERSION").into()),
-            created_at: Some(chrono_now()),
-        });
-        default_hook(info);
-    }));
-    Ok(())
-}
-
-fn chrono_now() -> String {
-    // Avoid pulling chrono just for this; RFC3339-ish UTC via system time is fine.
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    format!("{secs}")
-}
-
-fn strip_path_prefix(s: &str) -> String {
-    let mut out = s.to_string();
+fn redact(text: &str) -> String {
+    let mut out = text.to_string();
+    // emails
+    out = out
+        .split_whitespace()
+        .map(|tok| {
+            if tok.contains('@') && tok.contains('.') {
+                "[email]"
+            } else {
+                tok
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    // IPv4
+    out = out
+        .split(|c: char| c.is_whitespace() || c == ',' || c == ';')
+        .map(|tok| {
+            let trimmed = tok.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
+            if is_ipv4(trimmed) {
+                "[ip]"
+            } else {
+                tok
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
     for marker in ["/home/", "/Users/", "/root/"] {
-        if let Some(idx) = out.find(marker) {
+        while let Some(idx) = out.find(marker) {
             let after = idx + marker.len();
-            if let Some(rel) = out[after..].find('/') {
-                let end = after + rel;
-                out.replace_range(idx..end, &format!("{marker}[user]"));
-            }
+            let rest = &out[after..];
+            let end = rest
+                .find(|c: char| c == '/' || c == '\\' || c.is_whitespace() || c == '"' || c == '\'')
+                .map(|i| after + i)
+                .unwrap_or(out.len());
+            out.replace_range(idx..end, &format!("{marker}[user]"));
+            break;
         }
     }
-    out
+    out.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(800)
+        .collect()
 }
 
-fn write_pending(crash: PendingCrash) {
-    let Some(path) = PENDING_CRASH_PATH.get() else {
-        return;
-    };
-    if let Ok(json) = serde_json::to_string_pretty(&crash) {
-        let _ = fs::write(path, json);
-        // Best-effort chmod 0600 on Unix so another user on the machine can
-        // never read a crash report (which can include a stack trace / rust
-        // panic message; low risk but no reason to be world-readable).
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if let Ok(meta) = fs::metadata(path) {
-                let mut perms = meta.permissions();
-                perms.set_mode(0o600);
-                let _ = fs::set_permissions(path, perms);
-            }
-        }
-    }
+fn is_ipv4(s: &str) -> bool {
+    let parts: Vec<_> = s.split('.').collect();
+    parts.len() == 4 && parts.iter().all(|p| p.parse::<u8>().is_ok())
+}
+
+/// Call once at process start; keep the returned guard for the app lifetime.
+pub fn init_sentry() -> ClientInitGuard {
+    sentry::init((
+        GLITCHTIP_DSN,
+        ClientOptions {
+            release: sentry::release_name!(),
+            traces_sample_rate: 0.0,
+            send_default_pii: false,
+            attach_stacktrace: true,
+            before_send: Some(Arc::new(|event| {
+                if REPORTING_ENABLED.load(Ordering::Relaxed) {
+                    Some(event)
+                } else {
+                    None
+                }
+            })),
+            ..Default::default()
+        },
+    ))
 }
 
 #[tauri::command]
-pub fn take_pending_crash(app: AppHandle) -> Result<Option<PendingCrash>, String> {
-    let path = path_for(&app).map_err(|e| e.to_string())?;
-    if !path.exists() {
-        return Ok(None);
+pub fn set_crash_reporting_enabled(enabled: bool) {
+    REPORTING_ENABLED.store(enabled, Ordering::Relaxed);
+    if enabled {
+        sentry::configure_scope(|scope| {
+            scope.set_tag("product", "azalea-desktop");
+        });
     }
-    let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    let _ = fs::remove_file(&path);
-    let parsed: PendingCrash = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
-    Ok(Some(parsed))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ClientErrorInput {
+    pub kind: String,
+    pub message: String,
+    pub stack: Option<String>,
+}
+
+#[tauri::command]
+pub fn report_client_error(input: ClientErrorInput) {
+    if !REPORTING_ENABLED.load(Ordering::Relaxed) {
+        return;
+    }
+    let kind = match input.kind.as_str() {
+        "js_error" | "js_unhandledrejection" | "react_boundary" | "rust_panic" | "native" => {
+            input.kind.clone()
+        }
+        _ => "unknown".into(),
+    };
+    let message = redact(&input.message);
+    if message.is_empty() {
+        return;
+    }
+    let stack = input
+        .stack
+        .as_deref()
+        .map(redact)
+        .filter(|s| !s.is_empty());
+
+    sentry::with_scope(
+        |scope| {
+            scope.set_tag("source", "frontend");
+            scope.set_tag("kind", &kind);
+            if let Some(ref s) = stack {
+                scope.set_extra("stack", s.clone().into());
+            }
+        },
+        || {
+            sentry::capture_message(&message, Level::Error);
+        },
+    );
 }

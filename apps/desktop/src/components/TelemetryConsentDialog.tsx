@@ -25,8 +25,8 @@ export function TelemetryConsentDialog({ onChoice }: TelemetryConsentDialogProps
           Help improve Azalea?
         </h2>
         <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-          Optional anonymous usage counts and crash reports (app version, OS, short error text).
-          No hostnames, emails, keys, or commands. You can change this anytime in Settings.
+          Share anonymous usage (app version, OS) and crash reports so we can fix bugs faster.
+          Never hostnames, emails, keys, or commands. You can change this anytime in Settings → Privacy.
         </p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button variant="secondary" className="w-full sm:w-auto" onClick={() => onChoice(false)}>

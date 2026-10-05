@@ -24,8 +24,6 @@ import { useSyncStatus } from "./hooks/useSyncStatus";
 import { useTerminalSettings } from "./hooks/useTerminalSettings";
 import { useTheme } from "./hooks/useTheme";
 import {
-  flushCrashQueue,
-  flushPendingNativeCrash,
   getTelemetryAsked,
   maybeTelemetryPing,
   setTelemetryEnabled,
@@ -60,6 +58,7 @@ import {
   importBackupFromFile,
   type AppSettingsExport,
 } from "./lib/backup";
+import { setStoredCustomCss } from "./lib/customCss";
 import { checkForUpdateSilent } from "./lib/updater";
 import { getStoredAutoSync, setStoredAutoSync } from "./lib/settings";
 import { useIsMobile } from "./hooks/useIsMobile";
@@ -228,8 +227,6 @@ function App() {
     void getVersion()
       .then((version) => maybeTelemetryPing(version))
       .catch(() => undefined);
-    void flushPendingNativeCrash();
-    void flushCrashQueue();
   }, [onboarded]);
 
   const DEFAULT_COLS = 120;
@@ -1640,6 +1637,13 @@ function App() {
     if (typeof settings.autoSync === "boolean") {
       setStoredAutoSync(settings.autoSync);
     }
+    if (settings.customCss && typeof settings.customCss === "object") {
+      const custom = settings.customCss as { enabled?: unknown; css?: unknown };
+      setStoredCustomCss({
+        enabled: Boolean(custom.enabled),
+        css: typeof custom.css === "string" ? custom.css : "",
+      });
+    }
   };
 
   const refreshSyncData = useCallback(async () => {
@@ -2596,8 +2600,6 @@ function App() {
               void getVersion()
                 .then((version) => maybeTelemetryPing(version))
                 .catch(() => undefined);
-              void flushPendingNativeCrash();
-              void flushCrashQueue();
             }
           }}
         />

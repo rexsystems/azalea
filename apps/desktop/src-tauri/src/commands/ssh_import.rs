@@ -6,7 +6,6 @@ use uuid::Uuid;
 
 use crate::keys::{
     get_private_key, import_private_key, import_private_key_with_id, peek_private_key_meta,
-    private_key_needs_passphrase,
 };
 use crate::models::Host;
 use crate::store::SharedDatabase;
@@ -80,6 +79,106 @@ fn looks_like_private_key(contents: &str) -> bool {
     let upper = contents.to_ascii_uppercase();
     upper.contains("PRIVATE KEY")
         || contents.lines().next().is_some_and(|l| l.starts_with("PuTTY-User-Key-File-"))
+}
+
+/// Cheap encryption check — no crypto parse. Used for ~/.ssh scans so the
+/// Import tab stays responsive when there are many key files.
+fn private_key_looks_encrypted(contents: &str) -> bool {
+    let lower = contents.to_ascii_lowercase();
+    if lower.contains("proc-type: 4,encrypted") || lower.contains("dek-info:") {
+        return true;
+    }
+    if lower.contains("encrypted") && lower.contains("private key") {
+        return true;
+    }
+    if crate::keys::ppk::looks_like_ppk(contents) {
+        for line in contents.lines() {
+            if let Some(rest) = line.strip_prefix("Encryption:") {
+                let v = rest.trim().to_ascii_lowercase();
+                return !v.is_empty() && v != "none";
+            }
+        }
+        return false;
+    }
+    if lower.contains("begin openssh private key") {
+        return openssh_private_is_encrypted(contents).unwrap_or(false);
+    }
+    false
+}
+
+fn openssh_private_is_encrypted(contents: &str) -> Option<bool> {
+    use base64::Engine;
+    let body: String = contents
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with("-----"))
+        .collect();
+    let raw = base64::engine::general_purpose::STANDARD
+        .decode(body.as_bytes())
+        .ok()?;
+    const MAGIC: &[u8] = b"openssh-key-v1\0";
+    if !raw.starts_with(MAGIC) || raw.len() < MAGIC.len() + 4 {
+        return None;
+    }
+    let mut off = MAGIC.len();
+    let cipher_len = u32::from_be_bytes(raw.get(off..off + 4)?.try_into().ok()?) as usize;
+    off += 4;
+    let cipher = raw.get(off..off + cipher_len)?;
+    Some(cipher != b"none")
+}
+
+fn guess_key_type_label(contents: &str) -> Option<String> {
+    let first = contents.lines().next().unwrap_or("").trim();
+    if let Some(rest) = first.strip_prefix("PuTTY-User-Key-File-2: ")
+        .or_else(|| first.strip_prefix("PuTTY-User-Key-File-3: "))
+    {
+        return Some(rest.trim().to_string());
+    }
+    let upper = contents.to_ascii_uppercase();
+    if upper.contains("BEGIN OPENSSH PRIVATE KEY") {
+        return None; // filled from .pub when present
+    }
+    if upper.contains("BEGIN RSA PRIVATE KEY") {
+        return Some("RSA".into());
+    }
+    if upper.contains("BEGIN EC PRIVATE KEY") {
+        return Some("ECDSA".into());
+    }
+    if upper.contains("BEGIN DSA PRIVATE KEY") {
+        return Some("DSA".into());
+    }
+    if upper.contains("BEGIN PRIVATE KEY") {
+        return Some("Private".into());
+    }
+    None
+}
+
+fn fingerprint_from_adjacent_pub(
+    private_path: &Path,
+    existing_keys: &[crate::models::SshKeyRecord],
+) -> (Option<String>, Option<String>, bool) {
+    use ssh_key::{HashAlg, PublicKey};
+
+    let mut pub_os = private_path.as_os_str().to_owned();
+    pub_os.push(".pub");
+    let pub_path = PathBuf::from(pub_os);
+    let Ok(text) = fs::read_to_string(pub_path) else {
+        return (None, None, false);
+    };
+    let Some(line) = text
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty() && !l.starts_with('#'))
+    else {
+        return (None, None, false);
+    };
+    let Ok(pk) = PublicKey::from_openssh(line) else {
+        return (None, None, false);
+    };
+    let kt = crate::keys::generate::algorithm_label(&pk.algorithm());
+    let fp = pk.fingerprint(HashAlg::Sha256).to_string();
+    let already = existing_keys.iter().any(|k| k.fingerprint == fp);
+    (Some(kt), Some(fp), already)
 }
 
 fn skip_ssh_filename(name: &str) -> bool {
@@ -234,20 +333,23 @@ fn probe_key_candidate(
     if skip_ssh_filename(file_name) {
         return None;
     }
-    let contents = fs::read_to_string(path).ok()?;
+    // Only read the start — enough for PEM/PPK headers. Avoids parsing every
+    // private key (slow RSA/crypto) when opening the Import tab.
+    let mut file = fs::File::open(path).ok()?;
+    let mut buf = vec![0u8; 8 * 1024];
+    let n = std::io::Read::read(&mut file, &mut buf).ok()?;
+    buf.truncate(n);
+    let contents = String::from_utf8_lossy(&buf);
     if !looks_like_private_key(&contents) {
         return None;
     }
     let name = key_name_from_path(path);
-    let encrypted = private_key_needs_passphrase(&contents);
-    let (key_type, fingerprint, already_imported) = if encrypted {
-        (None, None, false)
-    } else if let Ok((kt, fp)) = peek_private_key_meta(&contents, None) {
-        let already = existing_keys.iter().any(|k| k.fingerprint == fp);
-        (Some(kt), Some(fp), already)
-    } else {
-        (None, None, false)
-    };
+    let encrypted = private_key_looks_encrypted(&contents);
+    let (mut key_type, fingerprint, already_imported) =
+        fingerprint_from_adjacent_pub(path, existing_keys);
+    if key_type.is_none() {
+        key_type = guess_key_type_label(&contents);
+    }
     Some(SshDirKeyCandidate {
         path: path.display().to_string(),
         name,
@@ -358,8 +460,7 @@ fn parse_config_hosts(config: &str) -> Vec<SshDirHostCandidate> {
     out
 }
 
-#[tauri::command]
-pub fn scan_ssh_dir(db: tauri::State<'_, SharedDatabase>) -> Result<SshDirScanResult, String> {
+fn scan_ssh_dir_inner(db: &SharedDatabase) -> Result<SshDirScanResult, String> {
     let ssh_dir = default_ssh_dir();
     let ssh_dir_str = ssh_dir.display().to_string();
 
@@ -381,7 +482,8 @@ pub fn scan_ssh_dir(db: tauri::State<'_, SharedDatabase>) -> Result<SshDirScanRe
         let path = entry.path();
         if let Some(candidate) = probe_key_candidate(&path, &existing_keys) {
             let dup = candidate.fingerprint.as_ref().is_some_and(|fp| {
-                keys.iter().any(|k: &SshDirKeyCandidate| k.fingerprint.as_ref() == Some(fp))
+                keys.iter()
+                    .any(|k: &SshDirKeyCandidate| k.fingerprint.as_ref() == Some(fp))
             }) || keys
                 .iter()
                 .any(|k| paths_equivalent(&normalize_ssh_path(&k.path), &path));
@@ -416,7 +518,8 @@ pub fn scan_ssh_dir(db: tauri::State<'_, SharedDatabase>) -> Result<SshDirScanRe
         }
         if let Some(candidate) = probe_key_candidate(&identity_path, &existing_keys) {
             let dup_fp = candidate.fingerprint.as_ref().is_some_and(|fp| {
-                keys.iter().any(|k: &SshDirKeyCandidate| k.fingerprint.as_ref() == Some(fp))
+                keys.iter()
+                    .any(|k: &SshDirKeyCandidate| k.fingerprint.as_ref() == Some(fp))
             });
             if !dup_fp {
                 keys.push(candidate);
@@ -432,6 +535,16 @@ pub fn scan_ssh_dir(db: tauri::State<'_, SharedDatabase>) -> Result<SshDirScanRe
         keys,
         hosts,
     })
+}
+
+#[tauri::command]
+pub async fn scan_ssh_dir(
+    db: tauri::State<'_, SharedDatabase>,
+) -> Result<SshDirScanResult, String> {
+    let db = db.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || scan_ssh_dir_inner(&db))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

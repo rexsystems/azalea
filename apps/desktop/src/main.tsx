@@ -6,11 +6,13 @@ import { PopoutTerminal } from "./components/PopoutTerminal";
 import { IconPackProvider } from "./components/IconPackProvider";
 import { applyIconPack, getStoredIconPack } from "./lib/iconPack";
 import { installCrashReporting } from "./lib/telemetry";
+import { applyCustomCss } from "./lib/customCss";
 import { applyTheme, getStoredTheme } from "./lib/theme";
 import "./styles/globals.css";
 
 const initialTheme = getStoredTheme();
 applyTheme(initialTheme);
+applyCustomCss();
 applyIconPack(getStoredIconPack());
 installCrashReporting();
 
