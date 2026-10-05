@@ -92,6 +92,24 @@ function fmt(n) {
   return `${(n / 1024 ** 3).toFixed(2)} GiB`;
 }
 
+function copyObject(fromKey, toKey) {
+  // R2 rejects GetObjectTagging used by `aws s3 cp` server-side copies.
+  const copySource = `${bucket}/${fromKey
+    .split("/")
+    .map((p) => encodeURIComponent(p))
+    .join("/")}`;
+  aws([
+    "s3api",
+    "copy-object",
+    "--bucket",
+    bucket,
+    "--copy-source",
+    copySource,
+    "--key",
+    toKey,
+  ]);
+}
+
 function deleteKeys(keys) {
   for (let i = 0; i < keys.length; i += 1000) {
     const chunk = keys.slice(i, i + 1000);
@@ -156,24 +174,14 @@ if (needsMigrate) {
     const newKey = `${livePrefix}/${fileName}`;
     if (oldKey !== newKey && keySet.has(oldKey)) {
       if (!dryRun) {
-        aws([
-          "s3",
-          "cp",
-          `s3://${bucket}/${oldKey}`,
-          `s3://${bucket}/${newKey}`,
-        ]);
+        copyObject(oldKey, newKey);
       }
       moved.push(`${oldKey} → ${newKey}`);
       const sigOld = `${oldKey}.sig`;
       const sigNew = `${newKey}.sig`;
       if (keySet.has(sigOld)) {
         if (!dryRun) {
-          aws([
-            "s3",
-            "cp",
-            `s3://${bucket}/${sigOld}`,
-            `s3://${bucket}/${sigNew}`,
-          ]);
+          copyObject(sigOld, sigNew);
         }
         moved.push(`${sigOld} → ${sigNew}`);
       }
@@ -199,7 +207,7 @@ if (needsMigrate) {
     const newKey = `${livePrefix}/${key}`;
     if (keySet.has(newKey)) continue;
     if (!dryRun) {
-      aws(["s3", "cp", `s3://${bucket}/${key}`, `s3://${bucket}/${newKey}`]);
+      copyObject(key, newKey);
     }
     moved.push(`${key} → ${newKey}`);
   }
