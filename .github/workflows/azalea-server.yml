@@ -19,12 +19,12 @@ env:
 
 jobs:
   docker-server:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: useblacksmith/checkout@v1 # v5.0.0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Log in to GHCR
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
@@ -43,13 +43,11 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push
-        uses: docker/build-push-action@ee4ca427a2f43b6a16632044ca514c076267da23 # v6.19.0
+        uses: useblacksmith/build-push-action@v2 # v6.19.0
         with:
           context: services/azalea-server
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha,scope=azalea-server
-          cache-to: type=gha,mode=max,scope=azalea-server
           labels: |
             ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
@@ -85,12 +83,12 @@ jobs:
           fi
 
   docker-web:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: useblacksmith/checkout@v1 # v5.0.0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
 
       - name: Log in to GHCR
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
@@ -109,7 +107,7 @@ jobs:
             type=sha,prefix=
 
       - name: Build and push
-        uses: docker/build-push-action@ee4ca427a2f43b6a16632044ca514c076267da23 # v6.19.0
+        uses: useblacksmith/build-push-action@v2 # v6.19.0
         with:
           context: apps/azalea-web
           push: true
@@ -117,8 +115,6 @@ jobs:
             NEXT_PUBLIC_AZALEA_API_URL=/api
             NEXT_PUBLIC_SITE_URL=
           tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha,scope=azalea-web
-          cache-to: type=gha,mode=max,scope=azalea-web
           labels: |
             ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
