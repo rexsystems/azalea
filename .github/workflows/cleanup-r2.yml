@@ -1,0 +1,44 @@
+name: Cleanup R2
+
+# One-shot / occasional prune of old Azalea installers on Cloudflare R2.
+# Keeps latest.json + artifacts for the live stamped version only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List deletes only (no changes)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  UPDATER_DOWNLOAD_BASE_URL: https://updates.azalea.rexsystems.me
+  R2_BUCKET: azalea-updates
+  R2_ENDPOINT: https://f92074baafe52a6a6b5b47c82488090d.r2.cloudflarestorage.com
+
+jobs:
+  prune:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: useblacksmith/checkout@v1 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+
+      - name: Prune old R2 objects
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "R2 secrets missing"
+            exit 1
+          fi
+          node .github/cleanup-r2.mjs
