@@ -54,6 +54,7 @@ jobs:
     runs-on: blacksmith-4vcpu-windows-2025
     env:
       VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
+      UPDATER_ARTIFACT_PREFIX: builds/${{ needs.version.outputs.tag }}
 
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -126,6 +127,7 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
+      UPDATER_ARTIFACT_PREFIX: builds/${{ needs.version.outputs.tag }}
 
     steps:
       - uses: useblacksmith/checkout@v1 # v5.0.0
@@ -242,6 +244,7 @@ jobs:
     runs-on: blacksmith-6vcpu-macos-15
     env:
       VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
+      UPDATER_ARTIFACT_PREFIX: builds/${{ needs.version.outputs.tag }}
 
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -365,40 +368,48 @@ jobs:
 
       - name: Prepare release files
         run: |
-          mkdir -p release-files
-          # Installers / updater payloads (skip fragment JSON; merged latest.json is enough)
+          TAG="${{ needs.version.outputs.tag }}"
+          PREFIX="builds/${TAG}"
+          mkdir -p "release-r2/${PREFIX}" release-gh
+          # Installers / updater payloads into versioned R2 folder
           find artifacts -type f \( \
             -name '*.exe' -o -name '*.msi' -o -name '*.nsis.zip' \
             -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.AppImage.tar.gz' \
             -o -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \
-          \) -exec cp -n {} release-files/ \;
-          # Prefer AppImage / nsis updater payloads; keep all .sig files (rpm/deb/AppImage/exe)
-          cp artifacts/latest.json release-files/latest.json
-          ls -la release-files
+          \) -exec cp -n {} "release-r2/${PREFIX}/" \;
+          cp artifacts/latest.json release-r2/latest.json
+          # GitHub Releases stay flat (asset list UI); R2 gets the foldered layout.
+          cp -n "release-r2/${PREFIX}/"* release-gh/ 2>/dev/null || true
+          cp release-r2/latest.json release-gh/latest.json
+          echo "R2 layout:"
+          find release-r2 -type f | sort
+          echo "GH assets:"
+          ls -la release-gh
 
       - name: Upload to Cloudflare R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: auto
+          LIVE_BUILD_PREFIX: builds/${{ needs.version.outputs.tag }}
         run: |
           if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
             echo "R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY secrets missing; skip R2 upload."
             exit 1
           fi
-          # awscli is preinstalled on ubuntu-latest; S3-compatible API for R2.
-          # --delete drops previous build artifacts so the free-tier bucket
-          # does not accumulate every historical installer.
-          aws s3 sync release-files/ "s3://${R2_BUCKET}/" \
+          # Publish this build under builds/<tag>/ (no whole-bucket --delete).
+          aws s3 sync "release-r2/${LIVE_BUILD_PREFIX}/" "s3://${R2_BUCKET}/${LIVE_BUILD_PREFIX}/" \
             --endpoint-url "$R2_ENDPOINT" \
-            --delete \
             --only-show-errors
-          # Always overwrite the updater manifest at the bucket root.
-          aws s3 cp release-files/latest.json "s3://${R2_BUCKET}/latest.json" \
+          # Updater manifest always lives at the bucket root.
+          aws s3 cp release-r2/latest.json "s3://${R2_BUCKET}/latest.json" \
             --endpoint-url "$R2_ENDPOINT" \
             --content-type application/json \
             --cache-control "public, max-age=60"
+          # Drop older build folders + any leftover flat root installers.
+          node .github/cleanup-r2.mjs
           echo "Published https://updates.azalea.rexsystems.me/latest.json"
+          echo "Artifacts under https://updates.azalea.rexsystems.me/${LIVE_BUILD_PREFIX}/"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@62c96d0c4e8a889135c1f3a25910db8dbe0e85f7 # v2.3.4
@@ -406,7 +417,7 @@ jobs:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: Azalea v${{ steps.meta.outputs.version }} (build ${{ steps.meta.outputs.build }})
           generate_release_notes: true
-          files: release-files/*
+          files: release-gh/*
           draft: false
           prerelease: false
 

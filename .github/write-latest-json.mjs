@@ -18,6 +18,7 @@
  */
 import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
+import { artifactPublicUrl, buildPrefixFromVersion } from "./r2-layout.mjs";
 
 const version = process.argv[2];
 const bundleDir = process.argv[3];
@@ -109,16 +110,20 @@ const baseUrl =
   process.env.UPDATER_DOWNLOAD_BASE_URL ??
   "https://updates.azalea.rexsystems.me";
 
+const artifactPrefix =
+  (process.env.UPDATER_ARTIFACT_PREFIX || "").replace(/^\/+|\/+$/g, "") ||
+  buildPrefixFromVersion(version);
+
 const platforms = {};
 for (const { key, artifact } of picked) {
   const signature = readFileSync(`${artifact.full}.sig`, "utf8").trim();
-  // `+` in semver build metadata must be %2B in URLs or some clients treat it as space.
-  const fileUrl = `${baseUrl}/${artifact.name.replace(/\+/g, "%2B")}`;
+  const objectKey = `${artifactPrefix}/${artifact.name}`;
+  const fileUrl = artifactPublicUrl(baseUrl, objectKey);
   platforms[key] = {
     url: fileUrl,
     signature,
   };
-  console.log("  ", key, "←", artifact.name);
+  console.log("  ", key, "←", objectKey);
 }
 
 const fragment = {

@@ -6,13 +6,28 @@ Installer binaries and `latest.json` are published to **Cloudflare R2** (`azalea
 
 `https://updates.azalea.rexsystems.me`
 
+## R2 layout
+
+```
+latest.json                              # updater entrypoint (always at root)
+builds/v0.1.2-build.72/
+  Azalea_0.1.2+72_amd64.AppImage
+  Azalea_0.1.2+72_amd64.AppImage.sig
+  Azalea_0.1.2+72_amd64.deb
+  …
+  Azalea.app.tar.gz
+  Azalea_0.1.2+72_aarch64.dmg
+```
+
+Each release lands in `builds/<git-tag>/`. CI keeps only the live folder (plus `latest.json`) so free-tier storage does not accumulate history. Manual prune: Actions → **Cleanup R2**.
+
 ## Endpoints (in order)
 
 1. `https://updates.azalea.rexsystems.me/latest.json` (primary; R2)
 2. `https://azalea.rexsystems.me/updates/latest.json` (site fallback)
 3. `https://github.com/rexsystems/azalea/releases/latest/download/latest.json` (GitHub fallback)
 
-Download URLs inside the manifest also point at `updates.azalea.rexsystems.me/<artifact>`.
+Download URLs inside the manifest point at `updates.azalea.rexsystems.me/builds/<tag>/<artifact>`.
 
 ## Platforms in `latest.json`
 
@@ -68,8 +83,8 @@ Artifact URLs encode `+` as `%2B`.
 ## After each master release
 
 1. CI resolves `0.x.y+N`, then builds Windows, Linux (deb/rpm/AppImage), and macOS.
-2. CI merges platform fragments into `latest.json` with download URLs under `https://updates.azalea.rexsystems.me/…`.
-3. CI uploads installers + `latest.json` to R2 (`azalea-updates`).
+2. CI merges platform fragments into `latest.json` with download URLs under `https://updates.azalea.rexsystems.me/builds/<tag>/…`.
+3. CI uploads installers into `builds/<tag>/` and writes `latest.json` at the bucket root, then prunes older build folders.
 4. CI also attaches the same files to the GitHub Release (archive / fallback).
 5. Optionally copy `latest.json` into **azalea-web** `public/updates/` so the marketing site fallback stays in sync:
 
@@ -87,12 +102,15 @@ export AWS_SECRET_ACCESS_KEY=...
 export AWS_DEFAULT_REGION=auto
 ENDPOINT=https://f92074baafe52a6a6b5b47c82488090d.r2.cloudflarestorage.com
 
-# From a folder with latest.json + AppImage/exe/deb/rpm/app.tar.gz
-aws s3 sync . s3://azalea-updates/ --endpoint-url "$ENDPOINT"
+# Upload one release folder + root manifest
+TAG=v0.1.2-build.72
+aws s3 sync "./$TAG/" "s3://azalea-updates/builds/$TAG/" --endpoint-url "$ENDPOINT"
 aws s3 cp latest.json s3://azalea-updates/latest.json \
   --endpoint-url "$ENDPOINT" \
   --content-type application/json \
   --cache-control "public, max-age=60"
+# Optional: prune everything except the live build folder
+node .github/cleanup-r2.mjs
 ```
 
 Confirm: `https://updates.azalea.rexsystems.me/latest.json`

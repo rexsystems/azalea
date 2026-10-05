@@ -1,20 +1,37 @@
 #!/usr/bin/env node
 /**
- * Delete stale Azalea installers from Cloudflare R2.
- * Keeps latest.json + every object referenced by it (+ matching .sig files).
+ * Prune / organize Azalea installers on Cloudflare R2.
+ *
+ * Layout:
+ *   latest.json                      ← bucket root (updater entrypoint)
+ *   builds/v0.1.2-build.72/<file>    ← one folder per release
+ *
+ * Keeps latest.json + the live build folder. Optionally migrates leftover
+ * flat root artifacts into that folder and rewrites latest.json URLs.
  *
  * Env:
  *   R2_BUCKET, R2_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
- *   DRY_RUN=1  — list deletes only
+ *   DRY_RUN=1     — list only
+ *   MIGRATE=0     — skip flat→folder migration (default: migrate when needed)
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  artifactPublicUrl,
+  buildPrefixFromVersion,
+  encodeArtifactPath,
+} from "./r2-layout.mjs";
 
 const bucket = process.env.R2_BUCKET || "azalea-updates";
 const endpoint = process.env.R2_ENDPOINT;
+const baseUrl =
+  process.env.UPDATER_DOWNLOAD_BASE_URL ||
+  "https://updates.azalea.rexsystems.me";
 const dryRun = process.env.DRY_RUN === "1" || process.env.DRY_RUN === "true";
+const migrate =
+  process.env.MIGRATE !== "0" && process.env.MIGRATE !== "false";
 
 if (!endpoint) {
   console.error("R2_ENDPOINT missing");
@@ -26,15 +43,14 @@ if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
 }
 
 function aws(args, { json = false } = {}) {
-  const out = execFileSync(
-    "aws",
-    [...args, "--endpoint-url", endpoint],
-    {
-      encoding: "utf8",
-      env: { ...process.env, AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION || "auto" },
-      maxBuffer: 64 * 1024 * 1024,
+  const out = execFileSync("aws", [...args, "--endpoint-url", endpoint], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      AWS_DEFAULT_REGION: process.env.AWS_DEFAULT_REGION || "auto",
     },
-  );
+    maxBuffer: 64 * 1024 * 1024,
+  });
   return json ? JSON.parse(out || "null") : out;
 }
 
@@ -60,50 +76,14 @@ function listAllKeys() {
   return keys;
 }
 
-function basenameFromUrl(url) {
+function keyFromUrl(url) {
   try {
     const u = new URL(url);
-    return decodeURIComponent(u.pathname.split("/").filter(Boolean).pop() || "");
+    return decodeURIComponent(u.pathname.replace(/^\//, ""));
   } catch {
     return "";
   }
 }
-
-const tmpLatest = join(tmpdir(), `azalea-latest-${process.pid}.json`);
-aws(["s3", "cp", `s3://${bucket}/latest.json`, tmpLatest]);
-const latest = JSON.parse(readFileSync(tmpLatest, "utf8"));
-unlinkSync(tmpLatest);
-
-const keep = new Set(["latest.json"]);
-for (const platform of Object.values(latest.platforms || {})) {
-  const name = basenameFromUrl(platform?.url || "");
-  if (!name) continue;
-  keep.add(name);
-  keep.add(`${name}.sig`);
-}
-
-// Current stamped version (e.g. 0.1.2+72) — keep any same-version artifacts (DMGs, etc.)
-const version = String(latest.version || "");
-const versionEncoded = version.replace(/\+/g, "%2B");
-
-const objects = listAllKeys();
-const totalBytes = objects.reduce((n, o) => n + o.size, 0);
-
-const toDelete = [];
-for (const { key, size } of objects) {
-  if (keep.has(key)) continue;
-  // Keep same-build siblings (dmg / extra bundles) for the live version only.
-  if (version && (key.includes(version) || key.includes(versionEncoded))) {
-    keep.add(key);
-    continue;
-  }
-  toDelete.push({ key, size });
-}
-
-const keepBytes = objects
-  .filter((o) => keep.has(o.key))
-  .reduce((n, o) => n + o.size, 0);
-const deleteBytes = toDelete.reduce((n, o) => n + o.size, 0);
 
 function fmt(n) {
   if (n < 1024) return `${n} B`;
@@ -112,10 +92,171 @@ function fmt(n) {
   return `${(n / 1024 ** 3).toFixed(2)} GiB`;
 }
 
+function deleteKeys(keys) {
+  for (let i = 0; i < keys.length; i += 1000) {
+    const chunk = keys.slice(i, i + 1000);
+    const payload = {
+      Objects: chunk.map((key) => ({ Key: key })),
+      Quiet: true,
+    };
+    const payloadPath = join(tmpdir(), `azalea-r2-del-${process.pid}-${i}.json`);
+    writeFileSync(payloadPath, JSON.stringify(payload));
+    try {
+      aws([
+        "s3api",
+        "delete-objects",
+        "--bucket",
+        bucket,
+        "--delete",
+        `file://${payloadPath}`,
+      ]);
+    } finally {
+      try {
+        unlinkSync(payloadPath);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+const tmpLatest = join(tmpdir(), `azalea-latest-${process.pid}.json`);
+aws(["s3", "cp", `s3://${bucket}/latest.json`, tmpLatest]);
+let latest = JSON.parse(readFileSync(tmpLatest, "utf8"));
+unlinkSync(tmpLatest);
+
+const version = String(latest.version || "");
+const livePrefix = buildPrefixFromVersion(version);
+const livePrefixSlash = `${livePrefix}/`;
+
 console.log(`Bucket s3://${bucket}`);
 console.log(`Live version: ${version || "(unknown)"}`);
+console.log(`Live folder: ${livePrefix}/`);
+
+let objects = listAllKeys();
+const keySet = new Set(objects.map((o) => o.key));
+
+// --- migrate flat root installers into builds/<tag>/ when needed ---
+const platformKeys = Object.values(latest.platforms || {})
+  .map((p) => keyFromUrl(p?.url || ""))
+  .filter(Boolean);
+const needsMigrate =
+  migrate &&
+  platformKeys.some((k) => k && !k.startsWith("builds/"));
+
+if (needsMigrate) {
+  console.log("Migrating flat artifacts into", livePrefixSlash);
+  const rewritten = { ...latest, platforms: { ...latest.platforms } };
+  const moved = [];
+
+  for (const [plat, info] of Object.entries(latest.platforms || {})) {
+    const oldKey = keyFromUrl(info?.url || "");
+    if (!oldKey) continue;
+    const fileName = oldKey.split("/").pop();
+    const newKey = `${livePrefix}/${fileName}`;
+    if (oldKey !== newKey && keySet.has(oldKey)) {
+      if (!dryRun) {
+        aws([
+          "s3",
+          "cp",
+          `s3://${bucket}/${oldKey}`,
+          `s3://${bucket}/${newKey}`,
+        ]);
+      }
+      moved.push(`${oldKey} → ${newKey}`);
+      const sigOld = `${oldKey}.sig`;
+      const sigNew = `${newKey}.sig`;
+      if (keySet.has(sigOld)) {
+        if (!dryRun) {
+          aws([
+            "s3",
+            "cp",
+            `s3://${bucket}/${sigOld}`,
+            `s3://${bucket}/${sigNew}`,
+          ]);
+        }
+        moved.push(`${sigOld} → ${sigNew}`);
+      }
+    } else if (!keySet.has(oldKey) && keySet.has(newKey)) {
+      // already moved
+    } else if (keySet.has(oldKey) && oldKey.startsWith("builds/")) {
+      // already foldered
+    }
+
+    rewritten.platforms[plat] = {
+      ...info,
+      url: artifactPublicUrl(baseUrl, newKey),
+    };
+  }
+
+  // Also scoop same-version root siblings (dmg/msi) into the live folder.
+  const versionNeedle = version;
+  const versionEncoded = version.replace(/\+/g, "%2B");
+  for (const { key } of objects) {
+    if (key.includes("/")) continue; // already nested or latest.json
+    if (key === "latest.json") continue;
+    if (!(key.includes(versionNeedle) || key.includes(versionEncoded))) continue;
+    const newKey = `${livePrefix}/${key}`;
+    if (keySet.has(newKey)) continue;
+    if (!dryRun) {
+      aws(["s3", "cp", `s3://${bucket}/${key}`, `s3://${bucket}/${newKey}`]);
+    }
+    moved.push(`${key} → ${newKey}`);
+  }
+
+  for (const line of moved) console.log("  ", line);
+
+  if (!dryRun) {
+    const outPath = join(tmpdir(), `azalea-latest-rewritten-${process.pid}.json`);
+    writeFileSync(outPath, `${JSON.stringify(rewritten, null, 2)}\n`);
+    aws([
+      "s3",
+      "cp",
+      outPath,
+      `s3://${bucket}/latest.json`,
+      "--content-type",
+      "application/json",
+      "--cache-control",
+      "public, max-age=60",
+    ]);
+    unlinkSync(outPath);
+    latest = rewritten;
+  } else {
+    latest = rewritten;
+    console.log("DRY_RUN=1 — skipped copy / latest.json rewrite");
+  }
+
+  objects = dryRun ? objects : listAllKeys();
+}
+
+// --- prune anything outside latest.json + live build folder ---
+const keep = new Set(["latest.json"]);
+for (const platform of Object.values(latest.platforms || {})) {
+  const key = keyFromUrl(platform?.url || "");
+  if (!key) continue;
+  keep.add(key);
+  keep.add(`${key}.sig`);
+}
+
+const toDelete = [];
+for (const { key, size } of objects) {
+  if (key === "latest.json") continue;
+  if (key.startsWith(livePrefixSlash)) {
+    keep.add(key);
+    continue;
+  }
+  if (keep.has(key)) continue;
+  toDelete.push({ key, size });
+}
+
+const totalBytes = objects.reduce((n, o) => n + o.size, 0);
+const keepBytes = objects
+  .filter((o) => keep.has(o.key) || o.key.startsWith(livePrefixSlash) || o.key === "latest.json")
+  .reduce((n, o) => n + o.size, 0);
+const deleteBytes = toDelete.reduce((n, o) => n + o.size, 0);
+
 console.log(`Objects: ${objects.length} (${fmt(totalBytes)})`);
-console.log(`Keep: ${keep.size} (${fmt(keepBytes)})`);
+console.log(`Keep: ~${fmt(keepBytes)}`);
 console.log(`Delete: ${toDelete.length} (${fmt(deleteBytes)})`);
 console.log("Keeping:");
 for (const k of [...keep].sort()) console.log(`  + ${k}`);
@@ -131,35 +272,11 @@ for (const { key, size } of toDelete.sort((a, b) => a.key.localeCompare(b.key)))
 }
 
 if (dryRun) {
-  console.log("DRY_RUN=1 — no changes made.");
+  console.log("DRY_RUN=1 — no deletes performed.");
   process.exit(0);
 }
 
-// Batch delete (max 1000 per request).
-for (let i = 0; i < toDelete.length; i += 1000) {
-  const chunk = toDelete.slice(i, i + 1000);
-  const payload = {
-    Objects: chunk.map(({ key }) => ({ Key: key })),
-    Quiet: true,
-  };
-  const payloadPath = join(tmpdir(), `azalea-r2-del-${process.pid}-${i}.json`);
-  writeFileSync(payloadPath, JSON.stringify(payload));
-  try {
-    aws([
-      "s3api",
-      "delete-objects",
-      "--bucket",
-      bucket,
-      "--delete",
-      `file://${payloadPath}`,
-    ]);
-  } finally {
-    try {
-      unlinkSync(payloadPath);
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
+deleteKeys(toDelete.map((o) => o.key));
 console.log(`Deleted ${toDelete.length} objects (~${fmt(deleteBytes)}).`);
+console.log(`Live manifest: ${baseUrl}/latest.json`);
+console.log(`Live artifacts: ${baseUrl}/${encodeArtifactPath(livePrefix)}/`);
