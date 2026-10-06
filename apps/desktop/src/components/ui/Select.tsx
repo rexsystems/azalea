@@ -126,8 +126,8 @@ export function Select({
           }`}
           style={{
             paddingLeft: leadingIcon ? (compact ? "1.75rem" : "2.5rem") : compact ? "0.625rem" : "0.875rem",
-            background: "var(--bg-input)",
-            borderColor: open ? "var(--accent)" : "var(--border-subtle)",
+            background: compact ? "var(--bg-card)" : "var(--bg-input)",
+            borderColor: open ? "var(--accent)" : compact ? "var(--border)" : "var(--border-subtle)",
             color: selected ? "var(--text)" : "var(--text-muted)",
           }}
         >
@@ -150,9 +150,9 @@ export function Select({
             menuPlacement === "top" ? "bottom-[calc(100%+4px)]" : "top-[calc(100%+4px)]"
           }`}
           style={{
-            background: "var(--bg-panel)",
+            background: "var(--bg-card)",
             borderColor: "var(--border)",
-            boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35)",
+            boxShadow: "0 10px 28px rgba(0, 0, 0, 0.45)",
           }}
         >
           {options.map((option) => {

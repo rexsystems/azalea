@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, State};
+use tauri::ipc::Channel;
+use tauri::State;
 
 use crate::keys::{
     ai_api_key_present as key_present, delete_ai_api_key as key_delete, get_ai_api_key,
@@ -158,9 +159,9 @@ pub async fn ai_chat(input: AiChatInput) -> Result<AiChatResult, String> {
 
 #[tauri::command]
 pub async fn ai_chat_stream(
-    app: AppHandle,
     request_id: String,
     input: AiChatInput,
+    on_event: Channel<AiStreamEvent>,
     cancels: State<'_, AiCancelMap>,
 ) -> Result<(), String> {
     let api_key = require_key(&input.provider_id)?;
@@ -176,7 +177,7 @@ pub async fn ai_chat_stream(
     let result = match dialect.as_str() {
         "anthropic" => {
             stream_anthropic(
-                &app,
+                &on_event,
                 &request_id,
                 &base,
                 &api_key,
@@ -188,7 +189,7 @@ pub async fn ai_chat_stream(
         }
         _ => {
             stream_openai(
-                &app,
+                &on_event,
                 &request_id,
                 &base,
                 &api_key,
@@ -226,15 +227,12 @@ fn validate_chat(base: &str, input: &AiChatInput) -> Result<(), String> {
     Ok(())
 }
 
-fn emit_stream(app: &AppHandle, request_id: &str, kind: &str, text: Option<String>) {
-    let _ = app.emit(
-        "ai-stream",
-        AiStreamEvent {
-            request_id: request_id.to_string(),
-            kind: kind.to_string(),
-            text,
-        },
-    );
+fn emit_stream(on_event: &Channel<AiStreamEvent>, request_id: &str, kind: &str, text: Option<String>) {
+    let _ = on_event.send(AiStreamEvent {
+        request_id: request_id.to_string(),
+        kind: kind.to_string(),
+        text,
+    });
 }
 
 async fn chat_openai(
@@ -282,7 +280,7 @@ async fn chat_openai(
 }
 
 async fn stream_openai(
-    app: &AppHandle,
+    on_event: &Channel<AiStreamEvent>,
     request_id: &str,
     base: &str,
     api_key: &str,
@@ -316,7 +314,7 @@ async fn stream_openai(
     if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
         let err = format_http_error(status.as_u16(), &text);
-        emit_stream(app, request_id, "error", Some(err.clone()));
+        emit_stream(on_event, request_id, "error", Some(err.clone()));
         return Err(err);
     }
 
@@ -324,7 +322,7 @@ async fn stream_openai(
     let mut buffer = String::new();
     while let Some(chunk) = stream.next().await {
         if cancel.load(std::sync::atomic::Ordering::SeqCst) {
-            emit_stream(app, request_id, "done", None);
+            emit_stream(on_event, request_id, "done", None);
             return Ok(());
         }
         let bytes = chunk.map_err(|err| format!("Stream error: {err}"))?;
@@ -337,7 +335,7 @@ async fn stream_openai(
             }
             let data = line[5..].trim();
             if data == "[DONE]" {
-                emit_stream(app, request_id, "done", None);
+                emit_stream(on_event, request_id, "done", None);
                 return Ok(());
             }
             if let Ok(parsed) = serde_json::from_str::<Value>(data) {
@@ -346,13 +344,13 @@ async fn stream_openai(
                     .and_then(|v| v.as_str())
                 {
                     if !delta.is_empty() {
-                        emit_stream(app, request_id, "delta", Some(delta.to_string()));
+                        emit_stream(on_event, request_id, "delta", Some(delta.to_string()));
                     }
                 }
             }
         }
     }
-    emit_stream(app, request_id, "done", None);
+    emit_stream(on_event, request_id, "done", None);
     Ok(())
 }
 
@@ -400,7 +398,7 @@ async fn chat_anthropic(
 }
 
 async fn stream_anthropic(
-    app: &AppHandle,
+    on_event: &Channel<AiStreamEvent>,
     request_id: &str,
     base: &str,
     api_key: &str,
@@ -436,7 +434,7 @@ async fn stream_anthropic(
     if !status.is_success() {
         let text = response.text().await.unwrap_or_default();
         let err = format_http_error(status.as_u16(), &text);
-        emit_stream(app, request_id, "error", Some(err.clone()));
+        emit_stream(on_event, request_id, "error", Some(err.clone()));
         return Err(err);
     }
 
@@ -444,7 +442,7 @@ async fn stream_anthropic(
     let mut buffer = String::new();
     while let Some(chunk) = stream.next().await {
         if cancel.load(std::sync::atomic::Ordering::SeqCst) {
-            emit_stream(app, request_id, "done", None);
+            emit_stream(on_event, request_id, "done", None);
             return Ok(());
         }
         let bytes = chunk.map_err(|err| format!("Stream error: {err}"))?;
@@ -467,11 +465,11 @@ async fn stream_anthropic(
                         .and_then(|v| v.as_str())
                     {
                         if !delta.is_empty() {
-                            emit_stream(app, request_id, "delta", Some(delta.to_string()));
+                            emit_stream(on_event, request_id, "delta", Some(delta.to_string()));
                         }
                     }
                 } else if event_type == "message_stop" {
-                    emit_stream(app, request_id, "done", None);
+                    emit_stream(on_event, request_id, "done", None);
                     return Ok(());
                 } else if event_type == "error" {
                     let msg = parsed
@@ -479,13 +477,13 @@ async fn stream_anthropic(
                         .and_then(|v| v.as_str())
                         .unwrap_or("Anthropic stream error")
                         .to_string();
-                    emit_stream(app, request_id, "error", Some(msg.clone()));
+                    emit_stream(on_event, request_id, "error", Some(msg.clone()));
                     return Err(msg);
                 }
             }
         }
     }
-    emit_stream(app, request_id, "done", None);
+    emit_stream(on_event, request_id, "done", None);
     Ok(())
 }
 

@@ -16,7 +16,7 @@ import type {
   UpdateGroupInput,
   UpdateHostInput,
 } from "@azalea/shared";
-import { invoke } from "@tauri-apps/api/core";
+import { Channel, invoke } from "@tauri-apps/api/core";
 
 export function listGroups(): Promise<HostGroup[]> {
   return invoke("list_groups");
@@ -613,7 +613,32 @@ export function aiChatStream(
     model: string;
     messages: AiChatMessage[];
   },
+  handlers: {
+    onDelta: (text: string) => void;
+    onDone: () => void;
+    onError: (text: string) => void;
+  },
 ): Promise<void> {
+  let settled = false;
+  const onEvent = new Channel<AiStreamEvent>();
+  onEvent.onmessage = (payload) => {
+    if (payload.kind === "delta" && payload.text) {
+      handlers.onDelta(payload.text);
+      return;
+    }
+    if (payload.kind === "error") {
+      if (settled) return;
+      settled = true;
+      handlers.onError(payload.text || "Stream failed");
+      return;
+    }
+    if (payload.kind === "done") {
+      if (settled) return;
+      settled = true;
+      handlers.onDone();
+    }
+  };
+
   return invoke("ai_chat_stream", {
     requestId,
     input: {
@@ -623,6 +648,12 @@ export function aiChatStream(
       model: input.model,
       messages: input.messages,
     },
+    onEvent,
+  }).then(() => {
+    if (!settled) {
+      settled = true;
+      handlers.onDone();
+    }
   });
 }
 

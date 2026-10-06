@@ -5,7 +5,6 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { listen } from "@tauri-apps/api/event";
 import {
   ArrowUp,
   Brain,
@@ -87,12 +86,6 @@ const MAX_WIDTH = 560;
 const DEFAULT_WIDTH = 400;
 const MAX_AGENT_STEPS = 8;
 
-type StreamHandler = {
-  onDelta: (text: string) => void;
-  onDone: () => void;
-  onError: (text: string) => void;
-};
-
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
@@ -169,7 +162,6 @@ export function AiPanel({
   const [loadingModels, setLoadingModels] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const requestIdRef = useRef<string | null>(null);
-  const streamHandlersRef = useRef<Map<string, StreamHandler>>(new Map());
   const messagesRef = useRef(messages);
   const prefsRef = useRef(prefs);
   const threadIdRef = useRef(threadId);
@@ -285,36 +277,6 @@ export function AiPanel({
   }, [prefs.providerId, prefs.region, prefs.customBaseUrl, derivedUrl, provider.supportsModelList]);
 
   useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    void listen<api.AiStreamEvent>("ai-stream", (event) => {
-      if (cancelled) return;
-      const payload = event.payload;
-      const handler = streamHandlersRef.current.get(payload.requestId);
-      if (!handler) return;
-      if (payload.kind === "delta" && payload.text) {
-        handler.onDelta(payload.text);
-      } else if (payload.kind === "error") {
-        streamHandlersRef.current.delete(payload.requestId);
-        handler.onError(payload.text || "Stream failed");
-      } else if (payload.kind === "done") {
-        streamHandlersRef.current.delete(payload.requestId);
-        handler.onDone();
-      }
-    }).then((fn) => {
-      if (cancelled) {
-        fn();
-        return;
-      }
-      unlisten = fn;
-    });
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
-
-  useEffect(() => {
     if (!settingsOpen) return;
     const close = (e: MouseEvent) => {
       if (composerRef.current && !composerRef.current.contains(e.target as Node)) {
@@ -367,17 +329,6 @@ export function AiPanel({
     requestIdRef.current = null;
   };
 
-  const appendAssistantDelta = (assistantId: string, text: string) => {
-    setMessages((prev) => {
-      const next = [...prev];
-      const last = next[next.length - 1];
-      if (last?.role === "assistant" && last.id === assistantId) {
-        next[next.length - 1] = { ...last, content: last.content + text };
-      }
-      return next;
-    });
-  };
-
   const streamTurn = async (
     assistantId: string,
     chatMessages: { role: string; content: string }[],
@@ -390,31 +341,38 @@ export function AiPanel({
     setStreamingId(assistantId);
 
     let content = "";
-    const done = new Promise<string>((resolve, reject) => {
-      streamHandlersRef.current.set(requestId, {
-        onDelta: (text) => {
-          content += text;
-          appendAssistantDelta(assistantId, text);
-        },
-        onDone: () => resolve(content),
-        onError: (text) => reject(new Error(text)),
-      });
+    await new Promise<void>((resolve, reject) => {
+      void api
+        .aiChatStream(
+          requestId,
+          {
+            providerId: p.providerId,
+            dialect: prov.dialect,
+            baseUrl,
+            model: p.model,
+            messages: chatMessages,
+          },
+          {
+            onDelta: (text) => {
+              content += text;
+              const snapshot = content;
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "assistant" && last.id === assistantId) {
+                  next[next.length - 1] = { ...last, content: snapshot };
+                }
+                return next;
+              });
+            },
+            onDone: () => resolve(),
+            onError: (text) => reject(new Error(text)),
+          },
+        )
+        .catch((err) => reject(err instanceof Error ? err : new Error(String(err))));
     });
 
-    try {
-      await api.aiChatStream(requestId, {
-        providerId: p.providerId,
-        dialect: prov.dialect,
-        baseUrl,
-        model: p.model,
-        messages: chatMessages,
-      });
-    } catch (err) {
-      streamHandlersRef.current.delete(requestId);
-      throw err;
-    }
-
-    return done;
+    return content;
   };
 
   const runCommandsObserving = async (commands: string[]): Promise<string> => {
@@ -587,6 +545,7 @@ export function AiPanel({
     setBusy(true);
     setAgentStatus(prefs.mode === "agent" ? "Thinking…" : null);
     persist(working);
+    let keepAgentStatus = false;
 
     try {
       const payload = buildPayload(working, text);
@@ -613,21 +572,23 @@ export function AiPanel({
       if (p.access === "confirm") {
         setPendingApprove(commands);
         setAgentStatus("Waiting for approval…");
+        keepAgentStatus = true;
         return;
       }
 
       const observation = await runCommandsObserving(commands);
       const result = await continueAgentAfterOutput(working, observation);
-      if (result === "waiting") return;
+      if (result === "waiting") {
+        keepAgentStatus = true;
+        return;
+      }
     } catch (err) {
       if (!abortAgentRef.current) setError(String(err));
     } finally {
       setBusy(false);
       setStreamingId(null);
       requestIdRef.current = null;
-      if (abortAgentRef.current || prefsRef.current.access !== "confirm") {
-        setAgentStatus(null);
-      }
+      if (!keepAgentStatus) setAgentStatus(null);
     }
   };
 
