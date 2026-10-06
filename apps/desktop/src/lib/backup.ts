@@ -11,6 +11,7 @@ import {
 } from "./settings";
 import type { CustomCssSettings } from "./customCss";
 import { getStoredCustomCss, setStoredCustomCss } from "./customCss";
+import { applyAiSettings, collectAiSettings, type AiSettingsExport } from "./ai";
 import type { ThemeId } from "./theme";
 import { getStoredTheme, setStoredTheme } from "./theme";
 import type { IconPackId } from "./iconPack";
@@ -24,6 +25,8 @@ export interface AppSettingsExport {
   terminalSettings: TerminalSettings;
   autoSync: boolean;
   customCss?: CustomCssSettings;
+  /** Non-secret AI prefs only. API keys stay in the OS keychain. */
+  ai?: AiSettingsExport;
 }
 
 export function collectAppSettings(): AppSettingsExport {
@@ -34,6 +37,7 @@ export function collectAppSettings(): AppSettingsExport {
     terminalSettings: getStoredTerminalSettings(),
     autoSync: getStoredAutoSync(),
     customCss: getStoredCustomCss(),
+    ai: collectAiSettings(),
   };
 }
 
@@ -48,6 +52,9 @@ export function applyAppSettings(settings: Partial<AppSettingsExport>) {
       enabled: Boolean(settings.customCss.enabled),
       css: typeof settings.customCss.css === "string" ? settings.customCss.css : "",
     });
+  }
+  if (settings.ai && typeof settings.ai === "object") {
+    applyAiSettings(settings.ai);
   }
 }
 

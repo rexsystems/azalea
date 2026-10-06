@@ -564,3 +564,83 @@ export function importSshDir(input: {
     },
   });
 }
+
+export function aiSetApiKey(providerId: string, apiKey: string): Promise<void> {
+  return invoke("ai_set_api_key", { providerId, apiKey });
+}
+
+export function aiClearApiKey(providerId: string): Promise<void> {
+  return invoke("ai_clear_api_key", { providerId });
+}
+
+export function aiApiKeyPresent(providerId: string): Promise<boolean> {
+  return invoke("ai_api_key_present", { providerId });
+}
+
+export interface AiChatMessage {
+  role: "system" | "user" | "assistant" | string;
+  content: string;
+}
+
+export interface AiChatResult {
+  content: string;
+}
+
+export function aiChat(input: {
+  providerId: string;
+  dialect: string;
+  baseUrl: string;
+  model: string;
+  messages: AiChatMessage[];
+}): Promise<AiChatResult> {
+  return invoke("ai_chat", {
+    input: {
+      providerId: input.providerId,
+      dialect: input.dialect,
+      baseUrl: input.baseUrl,
+      model: input.model,
+      messages: input.messages,
+    },
+  });
+}
+
+export function aiChatStream(
+  requestId: string,
+  input: {
+    providerId: string;
+    dialect: string;
+    baseUrl: string;
+    model: string;
+    messages: AiChatMessage[];
+  },
+): Promise<void> {
+  return invoke("ai_chat_stream", {
+    requestId,
+    input: {
+      providerId: input.providerId,
+      dialect: input.dialect,
+      baseUrl: input.baseUrl,
+      model: input.model,
+      messages: input.messages,
+    },
+  });
+}
+
+export function aiChatCancel(requestId: string): Promise<void> {
+  return invoke("ai_chat_cancel", { requestId });
+}
+
+export interface AiModelInfo {
+  id: string;
+  label: string;
+}
+
+export function aiListModels(providerId: string, baseUrl: string): Promise<AiModelInfo[]> {
+  return invoke("ai_list_models", { providerId, baseUrl });
+}
+
+export type AiStreamEvent = {
+  requestId: string;
+  kind: "delta" | "done" | "error" | string;
+  text?: string | null;
+};

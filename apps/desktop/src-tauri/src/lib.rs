@@ -7,7 +7,7 @@ mod store;
 mod sync;
 
 use crate::commands::{
-    accounts, backup, files, forwards, groups, hosts, keys as key_commands, known_hosts,
+    accounts, ai, backup, files, forwards, groups, hosts, keys as key_commands, known_hosts,
     local_terminal, sftp, snippets, ssh as ssh_commands, ssh_import, sync as sync_commands, wol,
 };
 use sessions::{init_local_terminal_manager, init_session_manager};
@@ -117,6 +117,7 @@ pub fn run() {
             app.manage(init_session_manager());
             app.manage(init_local_terminal_manager());
             app.manage(sync_state);
+            app.manage(ai::AiCancelMap::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -196,6 +197,13 @@ pub fn run() {
             accounts::copy_account_data,
             crash_report::set_crash_reporting_enabled,
             crash_report::report_client_error,
+            ai::ai_set_api_key,
+            ai::ai_clear_api_key,
+            ai::ai_api_key_present,
+            ai::ai_list_models,
+            ai::ai_chat,
+            ai::ai_chat_stream,
+            ai::ai_chat_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

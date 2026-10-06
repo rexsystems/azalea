@@ -47,7 +47,7 @@ base64 = "0.22"
 parking_lot = "0.12"
 chrono = "0.4"
 rand = "0.8"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 argon2 = "0.5"
 aes-gcm = "0.10"
 sha2 = "0.10"
@@ -63,6 +63,7 @@ p384 = { version = "0.13.0", features = ["pem", "pkcs8"] }
 p521 = { version = "0.13.3", features = ["pem", "pkcs8"] }
 hmac = "0.12"
 sha1 = "0.10"
+futures-util = "0.3.34"
 
 # Local russh patch: RSA publickey auth must advertise rsa-sha2-512 (RFC 8332).
 # Upstream 0.48 probes as ssh-rsa while signing with rsa-sha2-512, so modern

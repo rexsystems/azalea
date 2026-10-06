@@ -272,3 +272,40 @@ pub fn delete_private_key(key_id: &str) -> anyhow::Result<()> {
         &legacy_key_file_path(key_id)?,
     )
 }
+
+fn ai_key_path(provider_id: &str) -> anyhow::Result<PathBuf> {
+    Ok(passwords_dir()?.join(format!("ai-{}.enc", safe_id(provider_id)?)))
+}
+
+fn legacy_ai_key_path(provider_id: &str) -> anyhow::Result<PathBuf> {
+    Ok(passwords_dir()?.join(format!("ai-{}", safe_id(provider_id)?)))
+}
+
+pub fn store_ai_api_key(provider_id: &str, api_key: &str) -> anyhow::Result<()> {
+    store_secret(
+        &format!("ai-key-{}", safe_id(provider_id)?),
+        &ai_key_path(provider_id)?,
+        &legacy_ai_key_path(provider_id)?,
+        api_key,
+    )
+}
+
+pub fn get_ai_api_key(provider_id: &str) -> anyhow::Result<Option<String>> {
+    load_secret(
+        &format!("ai-key-{}", safe_id(provider_id)?),
+        &ai_key_path(provider_id)?,
+        &legacy_ai_key_path(provider_id)?,
+    )
+}
+
+pub fn delete_ai_api_key(provider_id: &str) -> anyhow::Result<()> {
+    delete_secret(
+        &format!("ai-key-{}", safe_id(provider_id)?),
+        &ai_key_path(provider_id)?,
+        &legacy_ai_key_path(provider_id)?,
+    )
+}
+
+pub fn ai_api_key_present(provider_id: &str) -> anyhow::Result<bool> {
+    Ok(get_ai_api_key(provider_id)?.is_some())
+}

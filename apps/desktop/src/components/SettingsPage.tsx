@@ -27,6 +27,7 @@ import { Slider } from "./ui/Slider";
 import { SyncSection } from "./SyncSection";
 import { ImportSection } from "./ImportSection";
 import { UpdateSection } from "./UpdateSection";
+import { AiSettingsSection } from "./AiSettingsSection";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { isTelemetryEnabled, setTelemetryEnabled } from "../lib/telemetry";
 
@@ -34,6 +35,7 @@ type SettingsTab =
   | "appearance"
   | "connect"
   | "terminal"
+  | "ai"
   | "account"
   | "import"
   | "backup"
@@ -69,6 +71,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "appearance", label: "Appearance" },
   { id: "connect", label: "Connect" },
   { id: "terminal", label: "Terminal" },
+  { id: "ai", label: "AI" },
   { id: "account", label: "Account" },
   { id: "import", label: "Import" },
   { id: "backup", label: "Backup" },
@@ -548,6 +551,21 @@ export function SettingsPage({
                       To import a backup or OpenSSH files, use the Import tab.
                     </p>
                   </div>
+                </SettingRow>
+              </>
+            )}
+
+            {tab === "ai" && (
+              <>
+                <PanelHeader
+                  title="AI"
+                  description="Bring your own API keys. Prompts go to the provider you choose. Off by default."
+                />
+                <SettingRow
+                  label="Terminal AI"
+                  description="Ask and Agent modes in the active terminal session."
+                >
+                  <AiSettingsSection />
                 </SettingRow>
               </>
             )}

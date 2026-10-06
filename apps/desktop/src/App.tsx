@@ -12,7 +12,15 @@ import type {
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { ArrowLeftRight, Columns2, ExternalLink, FolderTree, SquareTerminal, Zap } from "./components/icons";
+import {
+  ArrowLeftRight,
+  Columns2,
+  ExternalLink,
+  FileCode,
+  FolderTree,
+  SquareTerminal,
+  Zap,
+} from "./components/icons";
 import * as api from "./lib/api";
 import type { HostFormValues } from "./lib/utils";
 import { looksLikeUnreachableError, parseQuickConnect, wolBroadcastForHost } from "./lib/utils";
@@ -28,6 +36,7 @@ import {
   maybeTelemetryPing,
   setTelemetryEnabled,
 } from "./lib/telemetry";
+import { applyAiSettings, getAiAsked, isAiEnabled, setAiEnabled } from "./lib/ai";
 import { AddServerDrawer } from "./components/AddServerDrawer";
 import { AutoSyncPrompt } from "./components/AutoSyncPrompt";
 import { PostConnectSyncDialog, type PostConnectMode } from "./components/PostConnectSyncDialog";
@@ -38,12 +47,14 @@ import { ConnectionScreen } from "./components/ConnectionScreen";
 import { ReconnectOverlay, type ReconnectInfo, type ReconnectPhase } from "./components/ReconnectOverlay";
 import { FileBrowserPanel } from "./components/FileBrowserPanel";
 import { FirstRunWizard } from "./components/FirstRunWizard";
+import { AiConsentDialog } from "./components/AiConsentDialog";
 import { TelemetryConsentDialog } from "./components/TelemetryConsentDialog";
 import { ForwardsPopover } from "./components/ForwardsPopover";
 import { HomePage } from "./components/HomePage";
 import { HostsPage } from "./components/HostsPage";
 import { KeysPage } from "./components/KeysPage";
 import { SettingsPage } from "./components/SettingsPage";
+import { AiPanel } from "./components/AiPanel";
 import { SnippetsPopover } from "./components/SnippetsPopover";
 import { TabBar } from "./components/TabBar";
 import { TerminalView } from "./components/Terminal";
@@ -183,7 +194,9 @@ function App() {
   const [reconnectUi, setReconnectUi] = useState<Record<string, ReconnectInfo>>({});
   const [filesPanelTabs, setFilesPanelTabs] = useState<Set<string>>(() => new Set());
   const [snippetsOpen, setSnippetsOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [forwardsOpen, setForwardsOpen] = useState(false);
+  const terminalContextRef = useRef<Record<string, string>>({});
   const [forwardStatuses, setForwardStatuses] = useState<
     Record<string, Record<string, PortForwardStatus>>
   >({});
@@ -197,6 +210,8 @@ function App() {
   const [autoSyncPreview, setAutoSyncPreview] = useState<api.SyncPreview | null>(null);
   const [autoSyncBusy, setAutoSyncBusy] = useState(false);
   const [showTelemetryConsent, setShowTelemetryConsent] = useState(false);
+  const [showAiConsent, setShowAiConsent] = useState(false);
+  const [aiEnabled, setAiEnabledState] = useState(() => isAiEnabled());
 
   useEffect(() => {
     if (connectionError) setPendingConfirm(null);
@@ -227,7 +242,21 @@ function App() {
     void getVersion()
       .then((version) => maybeTelemetryPing(version))
       .catch(() => undefined);
+    if (!getAiAsked()) {
+      setShowAiConsent(true);
+    }
   }, [onboarded]);
+
+  useEffect(() => {
+    const onAi = (event: Event) => {
+      const detail = (event as CustomEvent<boolean>).detail;
+      const on = Boolean(detail);
+      setAiEnabledState(on);
+      if (!on) setAiOpen(false);
+    };
+    window.addEventListener("azalea-ai-enabled", onAi);
+    return () => window.removeEventListener("azalea-ai-enabled", onAi);
+  }, []);
 
   const DEFAULT_COLS = 120;
   const DEFAULT_ROWS = 30;
@@ -391,6 +420,34 @@ function App() {
     let binary = "";
     for (const byte of bytes) binary += String.fromCharCode(byte);
     void api.writeTerminal(sessionId, btoa(binary));
+  }, []);
+
+  const insertTextToTerminal = useCallback((sessionId: string, text: string) => {
+    const bytes = new TextEncoder().encode(text);
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    void api.writeTerminal(sessionId, btoa(binary));
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void listen<{ session_id: string; data: string }>("terminal-output", (event) => {
+      try {
+        const binary = atob(event.payload.data);
+        const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+        const chunk = new TextDecoder().decode(bytes);
+        const id = event.payload.session_id;
+        const prev = terminalContextRef.current[id] ?? "";
+        terminalContextRef.current[id] = (prev + chunk).slice(-8000);
+      } catch {
+        /* ignore decode errors */
+      }
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
   }, []);
 
   const splitActiveTab = useCallback(() => {
@@ -1644,6 +1701,9 @@ function App() {
         css: typeof custom.css === "string" ? custom.css : "",
       });
     }
+    if (settings.ai && typeof settings.ai === "object") {
+      applyAiSettings(settings.ai as Parameters<typeof applyAiSettings>[0]);
+    }
   };
 
   const refreshSyncData = useCallback(async () => {
@@ -2239,6 +2299,18 @@ function App() {
               }
             />
           )}
+
+          {viewingTerminal && aiEnabled && aiOpen && activeTab && (
+            <AiPanel
+              key={`ai-${activeTab.id}`}
+              sessionId={activeTab.id}
+              osId={hosts.find((h) => h.id === activeTab.hostId)?.os_id}
+              onInsertCommand={(command) => insertTextToTerminal(activeTab.id, command)}
+              onRunCommand={(command) => sendCommandToTerminal(activeTab.id, command)}
+              onClose={() => setAiOpen(false)}
+              getTerminalContext={() => terminalContextRef.current[activeTab.id] ?? ""}
+            />
+          )}
         </div>
       )}
 
@@ -2345,6 +2417,7 @@ function App() {
                                   active: forwardsOpen || activeForwardCount > 0,
                                   onClick: () => {
                                     setSnippetsOpen(false);
+                                    setAiOpen(false);
                                     setForwardsOpen((v) => !v);
                                   },
                                 },
@@ -2355,14 +2428,29 @@ function App() {
                     ...(!isMobile
                       ? [
                           {
-                            icon: Zap,
+                            icon: FileCode,
                             title: "Snippets",
                             active: snippetsOpen,
                             onClick: () => {
                               setForwardsOpen(false);
+                              setAiOpen(false);
                               setSnippetsOpen((v) => !v);
                             },
                           },
+                          ...(aiEnabled
+                            ? [
+                                {
+                                  icon: Zap,
+                                  title: "AI",
+                                  active: aiOpen,
+                                  onClick: () => {
+                                    setForwardsOpen(false);
+                                    setSnippetsOpen(false);
+                                    setAiOpen((v) => !v);
+                                  },
+                                },
+                              ]
+                            : []),
                           {
                             icon: Columns2,
                             title: activeTab.splitWithId ? "Unsplit" : "Split view",
@@ -2387,7 +2475,9 @@ function App() {
                 className="hover-subtle transition-ui rounded-lg p-2"
                 style={{ color: active ? "var(--accent)" : "var(--text-muted)" }}
                 title={title}
-                {...(title === "Port forwarding" || title === "Snippets"
+                {...(title === "Port forwarding" ||
+                title === "Snippets" ||
+                title === "AI"
                   ? { "data-azalea-popover-trigger": "" }
                   : {})}
               >
@@ -2603,6 +2693,26 @@ function App() {
                 .then((version) => maybeTelemetryPing(version))
                 .catch(() => undefined);
             }
+            if (!getAiAsked()) {
+              setShowAiConsent(true);
+            }
+          }}
+        />
+      )}
+
+      {showAiConsent &&
+        !showTelemetryConsent &&
+        onboarded === true &&
+        !postConnectSync &&
+        !autoSyncPrompt &&
+        !autoSyncPreview &&
+        !pendingConfirm &&
+        !pendingPrompt && (
+        <AiConsentDialog
+          onChoice={(enabled) => {
+            setAiEnabled(enabled);
+            setAiEnabledState(enabled);
+            setShowAiConsent(false);
           }}
         />
       )}

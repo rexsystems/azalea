@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod ai;
 pub mod backup;
 pub mod files;
 pub mod forwards;
