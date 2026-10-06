@@ -1,6 +1,7 @@
 const STORAGE_KEY = "azalea-custom-css";
 const STYLE_ELEMENT_ID = "azalea-custom-css";
 const MAX_CSS_CHARS = 64_000;
+export const CUSTOM_CSS_EVENT = "azalea-custom-css";
 
 export interface CustomCssSettings {
   enabled: boolean;
@@ -45,6 +46,13 @@ export function setStoredCustomCss(settings: CustomCssSettings) {
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   applyCustomCss(next);
+  window.dispatchEvent(new CustomEvent(CUSTOM_CSS_EVENT, { detail: next }));
+}
+
+/** Enable/disable without overwriting unsaved draft CSS. */
+export function setCustomCssEnabledFlag(enabled: boolean) {
+  const stored = getStoredCustomCss();
+  setStoredCustomCss({ enabled: Boolean(enabled), css: stored.css });
 }
 
 /** Strip sequences that could break out of a <style> element. */

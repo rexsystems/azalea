@@ -2323,6 +2323,13 @@ function App() {
               osId={hosts.find((h) => h.id === activeTab.hostId)?.os_id}
               onInsertCommand={(command) => insertTextToTerminal(activeTab.id, command)}
               onRunCommand={(command) => sendCommandToTerminal(activeTab.id, command)}
+              onWriteFile={
+                api.isLocalSession(activeTab.id)
+                  ? undefined
+                  : async (path, contents) => {
+                      await api.sftpWriteText(activeTab.id, path, contents);
+                    }
+              }
               onClose={() => setAiOpen(false)}
               getTerminalContext={() => terminalContextRef.current[activeTab.id] ?? ""}
             />

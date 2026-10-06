@@ -9,6 +9,7 @@ import {
   ArrowUp,
   Brain,
   Clock,
+  Download,
   Loader2,
   Message,
   Plus,
@@ -27,6 +28,7 @@ import {
   buildSystemPrompt,
   deleteAiMemory,
   deleteAiThread,
+  exportAiThreadsJson,
   formatHistoryCatalogForPrompt,
   formatMemoryForPrompt,
   formatRelatedChatsForPrompt,
@@ -36,7 +38,8 @@ import {
   getProvider,
   listAllAiThreads,
   newAiThreadId,
-  parseSuggestedCommands,
+  parseSuggestedActions,
+  pendingActionsEqual,
   resolveProviderBaseUrl,
   saveAiThread,
   searchAiThreads,
@@ -49,10 +52,12 @@ import {
   type AiMemoryNote,
   type AiMode,
   type AiModelOption,
+  type AiPendingAction,
   type AiProviderId,
 } from "../lib/ai";
 import * as api from "../lib/api";
 import { AiMarkdown } from "./AiMarkdown";
+import { Button } from "./ui/Button";
 import { Checkbox } from "./ui/Checkbox";
 import { Select } from "./ui/Select";
 
@@ -62,6 +67,7 @@ interface AiPanelProps {
   osId?: string | null;
   onInsertCommand: (command: string) => void;
   onRunCommand: (command: string) => void;
+  onWriteFile?: (path: string, contents: string) => Promise<void>;
   onClose: () => void;
   getTerminalContext?: () => string;
 }
@@ -124,6 +130,7 @@ export function AiPanel({
   osId,
   onInsertCommand,
   onRunCommand,
+  onWriteFile,
   onClose,
   getTerminalContext,
 }: AiPanelProps) {
@@ -152,7 +159,8 @@ export function AiPanel({
   const [historyQuery, setHistoryQuery] = useState("");
   const [memoryNotes, setMemoryNotes] = useState<AiMemoryNote[]>(() => getAiMemory());
   const [memoryDraft, setMemoryDraft] = useState("");
-  const [pendingApprove, setPendingApprove] = useState<string[]>([]);
+  const [pendingApprove, setPendingApprove] = useState<AiPendingAction[]>([]);
+  const [snippetStatus, setSnippetStatus] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
@@ -225,7 +233,10 @@ export function AiPanel({
 
   const persist = (nextMessages: AiChatMessageStored[], id = threadIdRef.current) => {
     const firstUser = nextMessages.find(
-      (m) => m.role === "user" && !m.content.startsWith("Command output:"),
+      (m) =>
+        m.role === "user" &&
+        !m.content.startsWith("Command output:") &&
+        !m.content.startsWith("Action results:"),
     );
     const title = firstUser?.content.slice(0, 48) || "New chat";
     const thread: AiChatThread = {
@@ -375,27 +386,45 @@ export function AiPanel({
     return content;
   };
 
-  const runCommandsObserving = async (commands: string[]): Promise<string> => {
+  const runActionsObserving = async (actions: AiPendingAction[]): Promise<string> => {
     const chunks: string[] = [];
-    for (let i = 0; i < commands.length; i++) {
+    for (let i = 0; i < actions.length; i++) {
       if (abortAgentRef.current) break;
-      const command = commands[i];
+      const action = actions[i];
       setAgentStatus(
-        commands.length > 1
-          ? `Running ${i + 1}/${commands.length}…`
-          : "Running command…",
+        actions.length > 1
+          ? `Running ${i + 1}/${actions.length}…`
+          : action.type === "write"
+            ? "Writing file…"
+            : "Running command…",
       );
-      const before = getTerminalContext?.() ?? "";
-      const beforeLen = before.length;
-      onRunCommand(command);
-      const after = await waitForTerminalQuiet(
-        getTerminalContext,
-        beforeLen,
-        () => abortAgentRef.current,
-      );
-      const raw = after.slice(Math.max(0, beforeLen - 120));
-      const cleaned = stripAnsi(raw).trim().slice(-4000);
-      chunks.push(`$ ${command}\n${cleaned || "(no new output)"}`);
+
+      if (action.type === "shell") {
+        const before = getTerminalContext?.() ?? "";
+        const beforeLen = before.length;
+        onRunCommand(action.command);
+        const after = await waitForTerminalQuiet(
+          getTerminalContext,
+          beforeLen,
+          () => abortAgentRef.current,
+        );
+        const raw = after.slice(Math.max(0, beforeLen - 120));
+        const cleaned = stripAnsi(raw).trim().slice(-4000);
+        chunks.push(`$ ${action.command}\n${cleaned || "(no new output)"}`);
+        continue;
+      }
+
+      try {
+        if (!onWriteFile) {
+          chunks.push(`write ${action.path}\nError: File write needs an SSH session.`);
+          continue;
+        }
+        await onWriteFile(action.path, action.content);
+        const bytes = new TextEncoder().encode(action.content).length;
+        chunks.push(`write ${action.path}\nWrote ${bytes} bytes.`);
+      } catch (err) {
+        chunks.push(`write ${action.path}\nError: ${String(err)}`);
+      }
     }
     return chunks.join("\n\n");
   };
@@ -463,7 +492,7 @@ export function AiPanel({
       const obsMsg: AiChatMessageStored = {
         id: `obs-${Date.now()}-${step}`,
         role: "user",
-        content: `Command output:\n\`\`\`\n${nextObservation}\n\`\`\`\nContinue based on this output. If the task is done, summarize with no bash fences.`,
+        content: `Action results:\n\`\`\`\n${nextObservation}\n\`\`\`\nContinue based on this. If the task is done, summarize with no bash/write fences.`,
         createdAt: Date.now(),
       };
       const assistantId = `a-${Date.now()}-${step}`;
@@ -500,19 +529,19 @@ export function AiPanel({
       setMessages(history);
       persist(history);
 
-      const commands = parseSuggestedCommands(content);
-      if (!commands.length) {
+      const actions = parseSuggestedActions(content);
+      if (!actions.length) {
         setPendingApprove([]);
         return "done";
       }
 
       if (p.access === "confirm") {
-        setPendingApprove(commands);
+        setPendingApprove(actions);
         setAgentStatus("Waiting for approval…");
         return "waiting";
       }
 
-      nextObservation = await runCommandsObserving(commands);
+      nextObservation = await runActionsObserving(actions);
       setPendingApprove([]);
     }
     return "done";
@@ -563,20 +592,20 @@ export function AiPanel({
         return;
       }
 
-      const commands = parseSuggestedCommands(content);
-      if (!commands.length) {
+      const actions = parseSuggestedActions(content);
+      if (!actions.length) {
         setPendingApprove([]);
         return;
       }
 
       if (p.access === "confirm") {
-        setPendingApprove(commands);
+        setPendingApprove(actions);
         setAgentStatus("Waiting for approval…");
         keepAgentStatus = true;
         return;
       }
 
-      const observation = await runCommandsObserving(commands);
+      const observation = await runActionsObserving(actions);
       const result = await continueAgentAfterOutput(working, observation);
       if (result === "waiting") {
         keepAgentStatus = true;
@@ -592,8 +621,8 @@ export function AiPanel({
     }
   };
 
-  const approveCommand = async (command: string) => {
-    const remaining = pendingApprove.filter((c) => c !== command);
+  const approveAction = async (action: AiPendingAction) => {
+    const remaining = pendingApprove.filter((a) => !pendingActionsEqual(a, action));
     setPendingApprove(remaining);
     if (busy) return;
 
@@ -602,7 +631,7 @@ export function AiPanel({
     setError(null);
 
     try {
-      const observation = await runCommandsObserving([command]);
+      const observation = await runActionsObserving([action]);
       approvedObsRef.current.push(observation);
       if (remaining.length === 0) {
         const all = approvedObsRef.current.join("\n\n");
@@ -618,6 +647,79 @@ export function AiPanel({
       setBusy(false);
       setStreamingId(null);
       requestIdRef.current = null;
+    }
+  };
+
+  const approveAll = async () => {
+    if (!pendingApprove.length || busy) return;
+    const actions = [...pendingApprove];
+    setPendingApprove([]);
+    abortAgentRef.current = false;
+    setBusy(true);
+    setError(null);
+    try {
+      const prior = approvedObsRef.current.join("\n\n");
+      approvedObsRef.current = [];
+      const observation = await runActionsObserving(actions);
+      const combined = [prior, observation].filter(Boolean).join("\n\n");
+      const result = await continueAgentAfterOutput(messagesRef.current, combined);
+      if (result === "done") setAgentStatus(null);
+    } catch (err) {
+      if (!abortAgentRef.current) setError(String(err));
+    } finally {
+      setBusy(false);
+      setStreamingId(null);
+      requestIdRef.current = null;
+    }
+  };
+
+  const rejectAll = async () => {
+    if (!pendingApprove.length || busy) return;
+    setPendingApprove([]);
+    approvedObsRef.current = [];
+    abortAgentRef.current = false;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await continueAgentAfterOutput(
+        messagesRef.current,
+        "User rejected the proposed actions. Propose a safer alternative or ask what to do next. Do not repeat the same actions.",
+      );
+      if (result === "done") setAgentStatus(null);
+    } catch (err) {
+      if (!abortAgentRef.current) setError(String(err));
+    } finally {
+      setBusy(false);
+      setStreamingId(null);
+      requestIdRef.current = null;
+    }
+  };
+
+  const exportThread = async (thread: AiChatThread | null, all = false) => {
+    const list = all ? listAllAiThreads() : thread ? [thread] : [];
+    if (!list.length) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const safe = (thread?.title || "chat")
+      .replace(/[^\w.-]+/g, "-")
+      .replace(/-+/g, "-")
+      .slice(0, 40);
+    const name = all ? `azalea-chats-${stamp}.json` : `azalea-chat-${safe || "chat"}-${stamp}.json`;
+    try {
+      await api.saveTextFile(name, [{ name: "JSON", extensions: ["json"] }], exportAiThreadsJson(list));
+    } catch (err) {
+      setError(String(err));
+    }
+  };
+
+  const saveSnippetFromChat = async (command: string) => {
+    const first = command.split("\n").find((l) => l.trim())?.trim() ?? "Snippet";
+    const name = first.slice(0, 48) || "Snippet from chat";
+    try {
+      await api.createSnippet({ name, command });
+      setSnippetStatus("Snippet saved");
+      window.setTimeout(() => setSnippetStatus(null), 2000);
+    } catch (err) {
+      setError(String(err));
     }
   };
 
@@ -744,6 +846,16 @@ export function AiPanel({
                 color: "var(--text)",
               }}
             />
+            {threads.length > 0 && (
+              <button
+                type="button"
+                className="mt-2 text-[11px] font-medium"
+                style={{ color: "var(--text-secondary)" }}
+                onClick={() => void exportThread(null, true)}
+              >
+                Export all chats
+              </button>
+            )}
           </div>
           <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-2">
             {historyThreads.length === 0 ? (
@@ -776,6 +888,15 @@ export function AiPanel({
                       <div className="mt-1 line-clamp-2 text-[12px]" style={{ color: "var(--text-secondary)" }}>
                         {threadPreview(t, 120)}
                       </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="hover-subtle shrink-0 rounded-lg p-1.5 opacity-60 hover:opacity-100"
+                      style={{ color: "var(--text-muted)" }}
+                      title="Export chat"
+                      onClick={() => void exportThread(t)}
+                    >
+                      <Download size={14} />
                     </button>
                     <button
                       type="button"
@@ -889,7 +1010,10 @@ export function AiPanel({
           </div>
         )}
         {messages.map((item) => {
-          const isObs = item.role === "user" && item.content.startsWith("Command output:");
+          const isObs =
+            item.role === "user" &&
+            (item.content.startsWith("Command output:") ||
+              item.content.startsWith("Action results:"));
           return (
             <div key={item.id} className="space-y-1.5">
               <div
@@ -918,18 +1042,47 @@ export function AiPanel({
                   text={item.content || (busy && item.id === streamingId ? "…" : "")}
                   onInsertCommand={prefs.mode === "ask" ? onInsertCommand : undefined}
                   onRunCommand={prefs.mode === "ask" ? onRunCommand : undefined}
+                  onWriteFile={
+                    prefs.mode === "ask" && onWriteFile
+                      ? (path, content) => {
+                          void onWriteFile(path, content).catch((err) => setError(String(err)));
+                        }
+                      : undefined
+                  }
+                  onSaveSnippet={(command) => void saveSnippetFromChat(command)}
                   pendingApprove={
                     item.id === messages[messages.length - 1]?.id ? pendingApprove : []
                   }
-                  onApprove={(command) => void approveCommand(command)}
+                  onApprove={(action) => void approveAction(action)}
                 />
               )}
             </div>
           );
         })}
+        {pendingApprove.length > 0 && (
+          <div
+            className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2"
+            style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
+          >
+            <span className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
+              {pendingApprove.length} pending
+            </span>
+            <Button size="sm" disabled={busy} onClick={() => void approveAll()}>
+              Approve all
+            </Button>
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void rejectAll()}>
+              Reject all
+            </Button>
+          </div>
+        )}
         {agentStatus && (
           <p className="text-[12px] font-medium" style={{ color: "var(--text-secondary)" }}>
             {agentStatus}
+          </p>
+        )}
+        {snippetStatus && (
+          <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
+            {snippetStatus}
           </p>
         )}
         {error && (
@@ -1052,7 +1205,7 @@ export function AiPanel({
                       />
                       {prefs.access === "full" && (
                         <p className="text-[11px] leading-relaxed" style={{ color: "#fca5a5" }}>
-                          Full access runs commands without asking.
+                          Full access runs commands and file writes without asking.
                         </p>
                       )}
                     </div>
@@ -1062,6 +1215,31 @@ export function AiPanel({
                     checked={prefs.includeTerminalContext}
                     onChange={(checked) => patchPrefs({ includeTerminalContext: checked })}
                   />
+                  <button
+                    type="button"
+                    className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px]"
+                    style={{ color: "var(--text-secondary)" }}
+                    onClick={() => {
+                      const current = getAiThread(threadId);
+                      void exportThread(current);
+                      setSettingsOpen(false);
+                    }}
+                  >
+                    <Download size={13} />
+                    Export this chat
+                  </button>
+                  <button
+                    type="button"
+                    className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px]"
+                    style={{ color: "var(--text-secondary)" }}
+                    onClick={() => {
+                      void exportThread(null, true);
+                      setSettingsOpen(false);
+                    }}
+                  >
+                    <Download size={13} />
+                    Export all chats
+                  </button>
                   {provider.supportsModelList && (
                     <button
                       type="button"

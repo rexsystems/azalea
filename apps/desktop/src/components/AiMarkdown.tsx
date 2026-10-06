@@ -1,27 +1,60 @@
 import type { ReactNode } from "react";
+import type { AiPendingAction } from "../lib/ai";
+import { pendingActionKey } from "../lib/ai";
 import { Button } from "./ui/Button";
+
+function parseWriteHeader(lang: string): string | null {
+  const m = /^write\s+path=(.+)$/i.exec(lang.trim());
+  return m ? m[1].trim() : null;
+}
+
+function findPending(
+  pending: AiPendingAction[] | undefined,
+  action: AiPendingAction,
+): AiPendingAction | undefined {
+  if (!pending?.length) return undefined;
+  const key = pendingActionKey(action);
+  return pending.find((p) => pendingActionKey(p) === key);
+}
 
 /** Lightweight markdown for AI chat: paragraphs, bold, inline code, fenced blocks. */
 export function AiMarkdown({
   text,
   onRunCommand,
   onInsertCommand,
+  onWriteFile,
+  onSaveSnippet,
   pendingApprove,
   onApprove,
 }: {
   text: string;
   onRunCommand?: (command: string) => void;
   onInsertCommand?: (command: string) => void;
-  pendingApprove?: string[];
-  onApprove?: (command: string) => void;
+  onWriteFile?: (path: string, content: string) => void;
+  onSaveSnippet?: (command: string) => void;
+  pendingApprove?: AiPendingAction[];
+  onApprove?: (action: AiPendingAction) => void;
 }) {
   const parts = splitMarkdown(text);
   return (
     <div className="space-y-3 text-[14px] leading-[1.65]" style={{ color: "var(--text)" }}>
       {parts.map((part, i) => {
         if (part.type === "code") {
-          const isShell = /^(bash|sh|shell|zsh)?$/.test(part.lang);
-          const awaiting = pendingApprove?.includes(part.code);
+          const writePath = parseWriteHeader(part.lang);
+          const isWrite = Boolean(writePath);
+          const langNorm = part.lang.trim().toLowerCase();
+          const isShell = !isWrite && /^(bash|sh|shell|zsh)?$/.test(langNorm);
+          const shellAction: AiPendingAction | null = isShell
+            ? { type: "shell", command: part.code }
+            : null;
+          const writeAction: AiPendingAction | null =
+            isWrite && writePath ? { type: "write", path: writePath, content: part.code } : null;
+          const awaiting = shellAction
+            ? findPending(pendingApprove, shellAction)
+            : writeAction
+              ? findPending(pendingApprove, writeAction)
+              : undefined;
+
           return (
             <div
               key={i}
@@ -29,26 +62,45 @@ export function AiMarkdown({
               style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
             >
               <div
-                className="flex items-center justify-between border-b px-2.5 py-1.5 text-[11px] font-medium"
+                className="flex items-center justify-between gap-2 border-b px-2.5 py-1.5 text-[11px] font-medium"
                 style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
               >
-                <span>{part.lang || "code"}</span>
-                {isShell && (onRunCommand || onInsertCommand || awaiting) && (
-                  <div className="flex gap-1">
+                <span className="min-w-0 truncate">
+                  {isWrite ? `write ${writePath}` : part.lang || "code"}
+                </span>
+                {(isShell || isWrite) && (
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1">
                     {awaiting ? (
-                      <Button size="sm" onClick={() => onApprove?.(part.code)}>
+                      <Button
+                        size="sm"
+                        onClick={() => onApprove?.(awaiting)}
+                      >
                         Approve
                       </Button>
                     ) : (
                       <>
-                        {onInsertCommand && (
+                        {isShell && onInsertCommand && (
                           <Button size="sm" variant="ghost" onClick={() => onInsertCommand(part.code)}>
                             Insert
                           </Button>
                         )}
-                        {onRunCommand && (
+                        {isShell && onRunCommand && (
                           <Button size="sm" variant="secondary" onClick={() => onRunCommand(part.code)}>
                             Run
+                          </Button>
+                        )}
+                        {isShell && onSaveSnippet && (
+                          <Button size="sm" variant="ghost" onClick={() => onSaveSnippet(part.code)}>
+                            Save snippet
+                          </Button>
+                        )}
+                        {isWrite && writePath && onWriteFile && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => onWriteFile(writePath, part.code)}
+                          >
+                            Write
                           </Button>
                         )}
                       </>
@@ -90,7 +142,7 @@ function splitMarkdown(source: string): Part[] {
     }
     parts.push({
       type: "code",
-      lang: (m[1] || "").trim().toLowerCase(),
+      lang: (m[1] || "").trim(),
       code: m[2].replace(/\n$/, ""),
     });
     last = m.index + m[0].length;

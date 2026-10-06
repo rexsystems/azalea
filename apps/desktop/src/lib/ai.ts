@@ -734,19 +734,72 @@ export function applyAiSettings(settings: Partial<AiSettingsExport> | undefined)
 }
 
 export function parseSuggestedCommands(text: string): string[] {
-  const out: string[] = [];
-  const re = /```(?:bash|sh|shell|zsh)?\s*\n([\s\S]*?)```/gi;
+  return parseSuggestedActions(text)
+    .filter((a): a is Extract<AiPendingAction, { type: "shell" }> => a.type === "shell")
+    .map((a) => a.command);
+}
+
+export interface AiFileWrite {
+  path: string;
+  content: string;
+}
+
+export type AiPendingAction =
+  | { type: "shell"; command: string }
+  | { type: "write"; path: string; content: string };
+
+export function parseSuggestedFileWrites(text: string): AiFileWrite[] {
+  return parseSuggestedActions(text)
+    .filter((a): a is Extract<AiPendingAction, { type: "write" }> => a.type === "write")
+    .map((a) => ({ path: a.path, content: a.content }));
+}
+
+/** Ordered shell + write actions from an assistant reply. */
+export function parseSuggestedActions(text: string): AiPendingAction[] {
+  const out: AiPendingAction[] = [];
+  const re = /```([^\n`]*)\n([\s\S]*?)```/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
-    const body = m[1]
-      .split("\n")
-      .map((l) => l.trimEnd())
-      .filter((l) => l.trim() && !l.trim().startsWith("#"))
-      .join("\n")
-      .trim();
-    if (body) out.push(body);
+    const header = (m[1] || "").trim();
+    const body = m[2].replace(/\n$/, "");
+    const writeMatch = /^write\s+path=(.+)$/i.exec(header);
+    if (writeMatch) {
+      const path = writeMatch[1].trim();
+      if (path) out.push({ type: "write", path, content: body });
+      continue;
+    }
+    if (/^(bash|sh|shell|zsh)?$/i.test(header)) {
+      const command = body
+        .split("\n")
+        .map((l) => l.trimEnd())
+        .filter((l) => l.trim() && !l.trim().startsWith("#"))
+        .join("\n")
+        .trim();
+      if (command) out.push({ type: "shell", command });
+    }
   }
   return out;
+}
+
+export function pendingActionKey(action: AiPendingAction): string {
+  if (action.type === "shell") return `shell:${action.command}`;
+  return `write:${action.path}\n${action.content}`;
+}
+
+export function pendingActionsEqual(a: AiPendingAction, b: AiPendingAction): boolean {
+  return pendingActionKey(a) === pendingActionKey(b);
+}
+
+export function exportAiThreadsJson(threads: AiChatThread[]): string {
+  return `${JSON.stringify(
+    {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      threads,
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 export function buildSystemPrompt(mode: AiMode, access: AiAccess, osHint?: string | null): string {
@@ -756,12 +809,15 @@ export function buildSystemPrompt(mode: AiMode, access: AiAccess, osHint?: strin
     "To drop outdated memory, use a fenced ```forget-memory block with matching text.",
     "Only store useful durable notes (host OS quirks, preferred tools, project paths). Never store passwords or API keys.",
   ];
+  const writeHint =
+    'To write a remote file via SFTP, use a fenced block like ```write path=/absolute/or/relative/file\\n...contents...``` (never put secrets or keys in file contents).';
   if (mode === "ask") {
     return [
       "You are Azalea Ask, a capable assistant inside an SSH/local terminal client.",
       `Remote OS hint: ${os}.`,
       "Be concrete and helpful. Use markdown. Put runnable shell commands in fenced ```bash blocks.",
-      "Do not claim you executed anything. The user Inserts or Runs commands.",
+      writeHint,
+      "Do not claim you executed anything. The user Inserts, Runs, or Writes.",
       "Never ask for passwords or API keys.",
       "You can use local memory and prior chat snippets when provided.",
       ...memoryHints,
@@ -771,11 +827,12 @@ export function buildSystemPrompt(mode: AiMode, access: AiAccess, osHint?: strin
     "You are Azalea Agent inside an SSH/local terminal client.",
     `Remote OS hint: ${os}.`,
     access === "full"
-      ? "Access mode is FULL: commands in ```bash blocks run automatically. Prefer safe, reversible steps."
-      : "Access mode is CONFIRM: the user approves each command before it runs.",
+      ? "Access mode is FULL: ```bash and ```write blocks run automatically. Prefer safe, reversible steps."
+      : "Access mode is CONFIRM: the user approves each ```bash / ```write before it runs.",
     "Put each executable command in its own ```bash fence. Explain briefly before/after.",
-    "After a command runs you will receive its terminal output. Use that to decide the next step.",
-    "When the task is finished, reply with a short summary and no bash fences.",
+    writeHint,
+    "After a command or write runs you will receive its result. Use that to decide the next step.",
+    "When the task is finished, reply with a short summary and no bash/write fences.",
     "Never ask for passwords or API keys in chat.",
     "You can use local memory and prior chat snippets when provided.",
     ...memoryHints,

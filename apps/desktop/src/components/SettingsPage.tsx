@@ -9,8 +9,11 @@ import { useIconPack } from "./IconPackProvider";
 import { hugeiconsPack } from "./icons/hugeiconsPack";
 import { pixelartPack } from "./icons/pixelartPack";
 import {
+  CUSTOM_CSS_EVENT,
   CUSTOM_CSS_PLACEHOLDER,
+  clearCustomCss,
   getStoredCustomCss,
+  setCustomCssEnabledFlag,
   setStoredCustomCss,
 } from "../lib/customCss";
 import {
@@ -179,6 +182,25 @@ export function SettingsPage({
   useEffect(() => {
     contentScrollRef.current?.scrollTo({ top: 0 });
   }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "appearance") return;
+    const stored = getStoredCustomCss();
+    setCustomCssEnabled(stored.enabled);
+    setCustomCssDraft(stored.css);
+    setCustomCssSaved(false);
+  }, [tab]);
+
+  useEffect(() => {
+    const sync = (event: Event) => {
+      const detail = (event as CustomEvent<{ enabled: boolean; css: string }>).detail;
+      if (!detail) return;
+      setCustomCssEnabled(detail.enabled);
+      setCustomCssDraft(detail.css);
+    };
+    window.addEventListener(CUSTOM_CSS_EVENT, sync);
+    return () => window.removeEventListener(CUSTOM_CSS_EVENT, sync);
+  }, []);
 
   useEffect(() => {
     if (tab === "import") setImportVisited(true);
@@ -356,11 +378,11 @@ export function SettingsPage({
                   <div className="grid gap-3">
                     <SettingToggle
                       label="Enable custom CSS"
-                      description="Applies after you save. Turns off instantly when disabled."
+                      description="Uses the last applied CSS. Edit the box and click Apply CSS to save changes."
                       checked={customCssEnabled}
                       onChange={(checked) => {
                         setCustomCssEnabled(checked);
-                        setStoredCustomCss({ enabled: checked, css: customCssDraft });
+                        setCustomCssEnabledFlag(checked);
                         setCustomCssSaved(false);
                       }}
                     />
@@ -398,9 +420,9 @@ export function SettingsPage({
                         type="button"
                         variant="ghost"
                         onClick={() => {
+                          clearCustomCss();
                           setCustomCssDraft("");
                           setCustomCssEnabled(false);
-                          setStoredCustomCss({ enabled: false, css: "" });
                           setCustomCssSaved(false);
                         }}
                       >
