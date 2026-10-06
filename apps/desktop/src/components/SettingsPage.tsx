@@ -199,52 +199,50 @@ export function SettingsPage({
 
   return (
     <div
-      className="flex h-full flex-col overflow-hidden"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
       style={{ background: "var(--bg-base)" }}
     >
       <div
         ref={contentScrollRef}
-        className="settings-shell min-h-0 flex-1 overflow-y-auto"
+        className="settings-shell min-h-0 flex-1 overflow-y-auto overscroll-contain"
       >
-        <div className="settings-sticky-nav sticky top-0 z-20">
-          <div className="mb-5">
-            <h2
-              className="text-2xl font-semibold tracking-tight sm:text-3xl"
-              style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
-            >
-              Settings
-            </h2>
-            <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
-              Manage appearance, sessions, sync, and backups
-            </p>
-          </div>
-
-          <div
-            className="settings-tabs flex gap-1 overflow-x-auto pb-1"
-            role="tablist"
-            aria-label="Settings sections"
+        <div className="mb-5">
+          <h2
+            className="text-2xl font-semibold tracking-tight sm:text-3xl"
+            style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
           >
-            {TABS.map((item) => {
-              const active = tab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => selectTab(item.id)}
-                  className="transition-ui shrink-0 rounded-lg px-3 py-2 text-sm font-medium"
-                  style={{
-                    background: active ? "var(--bg-panel)" : "transparent",
-                    color: active ? "var(--text)" : "var(--text-muted)",
-                    border: active ? "1px solid var(--border-subtle)" : "1px solid transparent",
-                  }}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
+            Settings
+          </h2>
+          <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
+            Manage appearance, sessions, sync, and backups
+          </p>
+        </div>
+
+        <div
+          className="settings-tabs mb-5 flex gap-1 overflow-x-auto pb-1"
+          role="tablist"
+          aria-label="Settings sections"
+        >
+          {TABS.map((item) => {
+            const active = tab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => selectTab(item.id)}
+                className="transition-ui shrink-0 rounded-lg px-3 py-2 text-sm font-medium"
+                style={{
+                  background: active ? "var(--bg-panel)" : "transparent",
+                  color: active ? "var(--text)" : "var(--text-muted)",
+                  border: active ? "1px solid var(--border-subtle)" : "1px solid transparent",
+                }}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </div>
 
         <div

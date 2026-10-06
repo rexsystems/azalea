@@ -2243,7 +2243,9 @@ function App() {
       )}
 
       {!viewingTerminal && (
-        <div className="flex min-h-0 flex-1 flex-col">{renderNavPage()}</div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {renderNavPage()}
+        </div>
       )}
     </div>
   );

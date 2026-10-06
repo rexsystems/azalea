@@ -54,13 +54,14 @@ import type { AppIconProps } from "./types";
 
 function makeHuge(icon: IconSvgElement, displayName: string) {
   function Icon({
-    size = 16,
+    size = 18,
     strokeWidth = 1.75,
     className,
     color = "currentColor",
     style,
   }: AppIconProps) {
-    const resolved = Math.max(size, 15);
+    // Match the pixel pack's ~24px chrome size without changing call sites.
+    const resolved = Math.max(size + 6, 22);
     return (
       <HugeiconsIcon
         icon={icon}
