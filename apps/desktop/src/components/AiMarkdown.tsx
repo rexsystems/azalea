@@ -17,7 +17,7 @@ export function AiMarkdown({
 }) {
   const parts = splitMarkdown(text);
   return (
-    <div className="space-y-2.5 text-[13px] leading-relaxed" style={{ color: "var(--text)" }}>
+    <div className="space-y-3 text-[14px] leading-[1.65]" style={{ color: "var(--text)" }}>
       {parts.map((part, i) => {
         if (part.type === "code") {
           const isShell = /^(bash|sh|shell|zsh)?$/.test(part.lang);
@@ -29,12 +29,12 @@ export function AiMarkdown({
               style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
             >
               <div
-                className="flex items-center justify-between border-b px-2.5 py-1.5 text-[10px] uppercase tracking-wider"
-                style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+                className="flex items-center justify-between border-b px-2.5 py-1.5 text-[11px] font-medium"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
               >
                 <span>{part.lang || "code"}</span>
                 {isShell && (onRunCommand || onInsertCommand || awaiting) && (
-                  <div className="flex gap-1 normal-case tracking-normal">
+                  <div className="flex gap-1">
                     {awaiting ? (
                       <Button size="sm" onClick={() => onApprove?.(part.code)}>
                         Approve
@@ -57,8 +57,8 @@ export function AiMarkdown({
                 )}
               </div>
               <pre
-                className="select-text overflow-x-auto px-3 py-2.5 font-mono text-[12px] whitespace-pre-wrap"
-                style={{ color: "var(--text-secondary)" }}
+                className="select-text overflow-x-auto px-3 py-2.5 font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap"
+                style={{ color: "var(--text)" }}
               >
                 {part.code}
               </pre>
@@ -66,7 +66,7 @@ export function AiMarkdown({
           );
         }
         return (
-          <p key={i} className="select-text whitespace-pre-wrap">
+          <p key={i} className="select-text whitespace-pre-wrap" style={{ color: "var(--text)" }}>
             {renderInline(part.text)}
           </p>
         );
@@ -115,7 +115,7 @@ function renderInline(text: string): ReactNode[] {
         <code
           key={key++}
           className="rounded px-1 py-0.5 font-mono text-[12px]"
-          style={{ background: "var(--bg-card)", color: "var(--text-secondary)" }}
+          style={{ background: "var(--bg-card)", color: "var(--text)" }}
         >
           {token.slice(1, -1)}
         </code>,

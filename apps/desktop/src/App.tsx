@@ -19,7 +19,7 @@ import {
   FileCode,
   FolderTree,
   SquareTerminal,
-  Zap,
+  Message,
 } from "./components/icons";
 import * as api from "./lib/api";
 import type { HostFormValues } from "./lib/utils";
@@ -174,6 +174,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerPage, setDrawerPage] = useState<NavPage | null>(null);
   const [editingHost, setEditingHost] = useState<Host | null>(null);
   const [drawerInitial, setDrawerInitial] = useState<Partial<HostFormValues>>();
   const [defaultGroupId, setDefaultGroupId] = useState<string | null>(null);
@@ -970,11 +971,13 @@ function App() {
     setEditingHost(null);
     setDrawerInitial(initial);
     setDefaultGroupId(groupId ?? null);
+    setDrawerPage(navPage);
     setDrawerOpen(true);
   };
 
   const closeDrawer = () => {
     setDrawerOpen(false);
+    setDrawerPage(null);
     setEditingHost(null);
     setDrawerInitial(undefined);
     setDefaultGroupId(null);
@@ -988,8 +991,16 @@ function App() {
     setEditingHost(host);
     setDrawerInitial(undefined);
     setDefaultGroupId(null);
+    setDrawerPage(navPage);
     setDrawerOpen(true);
   };
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    if (viewingTerminal || (drawerPage !== null && navPage !== drawerPage)) {
+      closeDrawer();
+    }
+  }, [navPage, viewingTerminal, drawerOpen, drawerPage]);
 
   const requestCloseTab = (tabId: string) => {
     const tab = tabs.find((t) => t.id === tabId);
@@ -1117,17 +1128,22 @@ function App() {
   };
 
   const handleNavigate = (page: NavPage) => {
+    if (drawerOpen && drawerPage !== null && page !== drawerPage) {
+      closeDrawer();
+    }
     setNavPage(page);
     setViewingTerminal(false);
   };
 
   const handleOpenAccount = useCallback(() => {
+    closeDrawer();
     setNavPage("settings");
     setViewingTerminal(false);
     setFocusSettingsSync(true);
   }, []);
 
   const handleOpenImportFromSsh = useCallback(() => {
+    closeDrawer();
     setNavPage("settings");
     setViewingTerminal(false);
     setFocusSettingsImport(true);
@@ -1898,7 +1914,7 @@ function App() {
     });
   };
 
-  const showHostDrawer = drawerOpen && (navPage === "hosts" || navPage === "home");
+  const showHostDrawer = drawerOpen && !viewingTerminal && navPage === drawerPage;
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeForwardCount = activeTab
@@ -2302,8 +2318,8 @@ function App() {
 
           {viewingTerminal && aiEnabled && aiOpen && activeTab && (
             <AiPanel
-              key={`ai-${activeTab.id}`}
               sessionId={activeTab.id}
+              hostLabel={activeTab.title}
               osId={hosts.find((h) => h.id === activeTab.hostId)?.os_id}
               onInsertCommand={(command) => insertTextToTerminal(activeTab.id, command)}
               onRunCommand={(command) => sendCommandToTerminal(activeTab.id, command)}
@@ -2440,7 +2456,7 @@ function App() {
                           ...(aiEnabled
                             ? [
                                 {
-                                  icon: Zap,
+                                  icon: Message,
                                   title: "AI",
                                   active: aiOpen,
                                   onClick: () => {

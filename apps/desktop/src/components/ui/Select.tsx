@@ -13,14 +13,30 @@ interface SelectProps {
   options: SelectOption[];
   placeholder?: string;
   icon?: ReactNode;
+  /** Where the menu opens. Default bottom. */
+  menuPlacement?: "bottom" | "top";
+  /** Compact trigger for dense toolbars / composers. */
+  size?: "md" | "sm";
+  className?: string;
   onChange: (value: string) => void;
 }
 
-export function Select({ label, value, options, placeholder, icon, onChange }: SelectProps) {
+export function Select({
+  label,
+  value,
+  options,
+  placeholder,
+  icon,
+  menuPlacement = "bottom",
+  size = "md",
+  className,
+  onChange,
+}: SelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const labelId = useId();
   const listId = useId();
+  const compact = size === "sm";
 
   const selected = options.find((o) => o.value === value);
   const selectedIndex = Math.max(
@@ -53,11 +69,11 @@ export function Select({ label, value, options, placeholder, icon, onChange }: S
   }, [open]);
 
   return (
-    <div ref={ref} className="relative flex flex-col gap-1.5">
+    <div ref={ref} className={`relative flex flex-col ${compact ? "gap-0" : "gap-1.5"} ${className ?? ""}`}>
       {label && (
         <span
           id={labelId}
-          className="text-sm font-medium"
+          className={compact ? "text-[11px] font-medium" : "text-sm font-medium"}
           style={{ color: "var(--text-secondary)" }}
         >
           {label}
@@ -67,7 +83,9 @@ export function Select({ label, value, options, placeholder, icon, onChange }: S
       <div className="relative">
         {leadingIcon && (
           <span
-            className="pointer-events-none absolute left-3.5 top-1/2 z-10 -translate-y-1/2"
+            className={`pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 ${
+              compact ? "left-2.5" : "left-3.5"
+            }`}
             style={{ color: "var(--text-muted)" }}
             aria-hidden
           >
@@ -101,9 +119,13 @@ export function Select({ label, value, options, placeholder, icon, onChange }: S
           aria-haspopup="listbox"
           aria-controls={open ? listId : undefined}
           aria-expanded={open}
-          className="transition-ui flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border py-3 pr-3.5 text-left text-sm outline-none focus:border-[var(--accent)]"
+          className={`transition-ui flex w-full cursor-pointer items-center justify-between gap-2 border text-left outline-none focus:border-[var(--accent)] ${
+            compact
+              ? "rounded-full py-1 pr-2 text-[12px] font-medium"
+              : "rounded-lg py-3 pr-3.5 text-sm"
+          }`}
           style={{
-            paddingLeft: leadingIcon ? "2.5rem" : "0.875rem",
+            paddingLeft: leadingIcon ? (compact ? "1.75rem" : "2.5rem") : compact ? "0.625rem" : "0.875rem",
             background: "var(--bg-input)",
             borderColor: open ? "var(--accent)" : "var(--border-subtle)",
             color: selected ? "var(--text)" : "var(--text-muted)",
@@ -111,7 +133,7 @@ export function Select({ label, value, options, placeholder, icon, onChange }: S
         >
           <span className="min-w-0 truncate">{display}</span>
           <ChevronDown
-            size={16}
+            size={compact ? 12 : 16}
             className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
             style={{ color: "var(--text-muted)" }}
           />
@@ -122,7 +144,11 @@ export function Select({ label, value, options, placeholder, icon, onChange }: S
         <div
           id={listId}
           role="listbox"
-          className="animate-menu-in absolute left-0 right-0 top-[calc(100%+4px)] z-[60] max-h-52 overflow-y-auto rounded-lg border py-1"
+          className={`animate-menu-in absolute z-[60] max-h-52 overflow-y-auto rounded-lg border py-1 ${
+            compact ? "left-0 min-w-full w-max max-w-[240px]" : "left-0 right-0"
+          } ${
+            menuPlacement === "top" ? "bottom-[calc(100%+4px)]" : "top-[calc(100%+4px)]"
+          }`}
           style={{
             background: "var(--bg-panel)",
             borderColor: "var(--border)",
@@ -141,7 +167,9 @@ export function Select({ label, value, options, placeholder, icon, onChange }: S
                   onChange(option.value);
                   setOpen(false);
                 }}
-                className="hover-subtle transition-ui flex w-full cursor-pointer items-center gap-2.5 px-3 py-2.5 text-left text-sm"
+                className={`hover-subtle transition-ui flex w-full cursor-pointer items-center gap-2.5 text-left ${
+                  compact ? "px-2.5 py-2 text-[12px]" : "px-3 py-2.5 text-sm"
+                }`}
                 style={{
                   color: active ? "var(--text)" : "var(--text-secondary)",
                   background: active ? "var(--accent-muted)" : "transparent",

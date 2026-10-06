@@ -337,7 +337,11 @@ export function resolveProviderBaseUrl(
 const ASKED_KEY = "azalea-ai-asked";
 const ENABLED_KEY = "azalea-ai-enabled";
 const PREFS_KEY = "azalea-ai-prefs";
-const CHATS_KEY = "azalea-ai-chats-v1";
+const CHATS_KEY_V1 = "azalea-ai-chats-v1";
+const CHATS_KEY = "azalea-ai-chats-v2";
+const MEMORY_KEY = "azalea-ai-memory-v1";
+const MAX_THREADS = 80;
+const MAX_MEMORY = 40;
 
 export interface AiPrefs {
   providerId: AiProviderId;
@@ -418,53 +422,293 @@ export interface AiChatMessageStored {
 
 export interface AiChatThread {
   id: string;
+  /** Terminal session that created / last updated this chat. */
   sessionId: string;
+  /** Human label e.g. host name or "Local". */
+  hostLabel?: string;
   title: string;
   messages: AiChatMessageStored[];
+  createdAt: number;
   updatedAt: number;
 }
 
-function loadAllChats(): Record<string, AiChatThread[]> {
+export interface AiMemoryNote {
+  id: string;
+  text: string;
+  source: "user" | "ai";
+  createdAt: number;
+  updatedAt: number;
+}
+
+function migrateChatsV1(): AiChatThread[] {
   try {
-    const raw = localStorage.getItem(CHATS_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, AiChatThread[]>;
+    const raw = localStorage.getItem(CHATS_KEY_V1);
+    if (!raw) return [];
+    const all = JSON.parse(raw) as Record<string, AiChatThread[]>;
+    const flat: AiChatThread[] = [];
+    for (const [sessionId, list] of Object.entries(all)) {
+      for (const t of list ?? []) {
+        flat.push({
+          ...t,
+          sessionId: t.sessionId || sessionId,
+          createdAt: t.createdAt ?? t.updatedAt ?? Date.now(),
+          updatedAt: t.updatedAt ?? Date.now(),
+        });
+      }
+    }
+    flat.sort((a, b) => b.updatedAt - a.updatedAt);
+    localStorage.setItem(CHATS_KEY, JSON.stringify(flat.slice(0, MAX_THREADS)));
+    localStorage.removeItem(CHATS_KEY_V1);
+    return flat.slice(0, MAX_THREADS);
   } catch {
-    return {};
+    return [];
   }
 }
 
-function saveAllChats(all: Record<string, AiChatThread[]>) {
-  localStorage.setItem(CHATS_KEY, JSON.stringify(all));
+function loadAllThreads(): AiChatThread[] {
+  try {
+    const raw = localStorage.getItem(CHATS_KEY);
+    if (raw) {
+      const list = JSON.parse(raw) as AiChatThread[];
+      return Array.isArray(list)
+        ? list
+            .map((t) => ({
+              ...t,
+              createdAt: t.createdAt ?? t.updatedAt ?? Date.now(),
+              updatedAt: t.updatedAt ?? Date.now(),
+            }))
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+        : [];
+    }
+    return migrateChatsV1();
+  } catch {
+    return [];
+  }
 }
 
-export function listAiThreads(sessionId: string): AiChatThread[] {
-  const all = loadAllChats();
-  return (all[sessionId] ?? []).sort((a, b) => b.updatedAt - a.updatedAt);
+function saveAllThreads(list: AiChatThread[]) {
+  const sorted = [...list].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_THREADS);
+  localStorage.setItem(CHATS_KEY, JSON.stringify(sorted));
 }
 
-export function getAiThread(sessionId: string, threadId: string): AiChatThread | null {
-  return listAiThreads(sessionId).find((t) => t.id === threadId) ?? null;
+/** All chats on this machine, newest first. */
+export function listAllAiThreads(): AiChatThread[] {
+  return loadAllThreads();
+}
+
+export function listAiThreads(sessionId?: string): AiChatThread[] {
+  const all = loadAllThreads();
+  if (!sessionId) return all;
+  return all.filter((t) => t.sessionId === sessionId);
+}
+
+export function getAiThread(threadId: string): AiChatThread | null;
+export function getAiThread(sessionId: string, threadId: string): AiChatThread | null;
+export function getAiThread(a: string, b?: string): AiChatThread | null {
+  const threadId = b ?? a;
+  return loadAllThreads().find((t) => t.id === threadId) ?? null;
 }
 
 export function saveAiThread(thread: AiChatThread) {
-  const all = loadAllChats();
-  const list = all[thread.sessionId] ?? [];
-  const idx = list.findIndex((t) => t.id === thread.id);
-  if (idx >= 0) list[idx] = thread;
-  else list.unshift(thread);
-  all[thread.sessionId] = list.slice(0, 40);
-  saveAllChats(all);
+  const all = loadAllThreads();
+  const next: AiChatThread = {
+    ...thread,
+    createdAt: thread.createdAt || Date.now(),
+    updatedAt: Date.now(),
+  };
+  const idx = all.findIndex((t) => t.id === thread.id);
+  if (idx >= 0) all[idx] = next;
+  else all.unshift(next);
+  saveAllThreads(all);
 }
 
-export function deleteAiThread(sessionId: string, threadId: string) {
-  const all = loadAllChats();
-  all[sessionId] = (all[sessionId] ?? []).filter((t) => t.id !== threadId);
-  saveAllChats(all);
+export function deleteAiThread(threadId: string): void;
+export function deleteAiThread(sessionId: string, threadId: string): void;
+export function deleteAiThread(a: string, b?: string): void {
+  const threadId = b ?? a;
+  saveAllThreads(loadAllThreads().filter((t) => t.id !== threadId));
 }
 
 export function newAiThreadId(): string {
   return `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function threadPreview(thread: AiChatThread, max = 96): string {
+  const firstUser = thread.messages.find((m) => m.role === "user" && !m.content.startsWith("Command output:"));
+  const text = (firstUser?.content || thread.title || "").replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
+}
+
+export function searchAiThreads(query: string, excludeId?: string): AiChatThread[] {
+  const q = query.trim().toLowerCase();
+  const all = loadAllThreads().filter((t) => t.id !== excludeId);
+  if (!q) return all;
+  const tokens = q.split(/\s+/).filter(Boolean);
+  return all.filter((t) => {
+    const hay = `${t.title}\n${t.hostLabel ?? ""}\n${t.messages.map((m) => m.content).join("\n")}`.toLowerCase();
+    return tokens.every((tok) => hay.includes(tok));
+  });
+}
+
+/** Short snippets from older chats that match the current question. */
+export function findRelatedAiThreads(
+  query: string,
+  excludeId?: string,
+  limit = 3,
+): { id: string; title: string; hostLabel?: string; snippet: string; updatedAt: number }[] {
+  const hits = searchAiThreads(query, excludeId).slice(0, limit);
+  return hits.map((t) => {
+    const userMsgs = t.messages.filter(
+      (m) => m.role === "user" && !m.content.startsWith("Command output:"),
+    );
+    const asst = t.messages.filter((m) => m.role === "assistant" && m.content.trim());
+    const snippet = [userMsgs[0]?.content, asst[0]?.content]
+      .filter(Boolean)
+      .join("\n---\n")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 500);
+    return {
+      id: t.id,
+      title: t.title || "Chat",
+      hostLabel: t.hostLabel,
+      snippet: snippet || threadPreview(t, 160),
+      updatedAt: t.updatedAt,
+    };
+  });
+}
+
+function loadMemory(): AiMemoryNote[] {
+  try {
+    const raw = localStorage.getItem(MEMORY_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw) as AiMemoryNote[];
+    return Array.isArray(list) ? list.sort((a, b) => b.updatedAt - a.updatedAt) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveMemory(notes: AiMemoryNote[]) {
+  localStorage.setItem(MEMORY_KEY, JSON.stringify(notes.slice(0, MAX_MEMORY)));
+}
+
+export function getAiMemory(): AiMemoryNote[] {
+  return loadMemory();
+}
+
+export function addAiMemory(text: string, source: "user" | "ai" = "user"): AiMemoryNote | null {
+  const cleaned = text.replace(/^[-*•]\s+/, "").trim();
+  if (!cleaned) return null;
+  const notes = loadMemory();
+  const norm = cleaned.toLowerCase();
+  const existing = notes.find((n) => n.text.toLowerCase() === norm);
+  if (existing) {
+    existing.updatedAt = Date.now();
+    existing.source = source;
+    saveMemory(notes);
+    return existing;
+  }
+  const note: AiMemoryNote = {
+    id: `mem-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    text: cleaned,
+    source,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  notes.unshift(note);
+  saveMemory(notes);
+  return note;
+}
+
+export function updateAiMemory(id: string, text: string): void {
+  const cleaned = text.trim();
+  if (!cleaned) {
+    deleteAiMemory(id);
+    return;
+  }
+  const notes = loadMemory();
+  const idx = notes.findIndex((n) => n.id === id);
+  if (idx < 0) return;
+  notes[idx] = { ...notes[idx], text: cleaned, updatedAt: Date.now() };
+  saveMemory(notes);
+}
+
+export function deleteAiMemory(id: string): void {
+  saveMemory(loadMemory().filter((n) => n.id !== id));
+}
+
+export function clearAiMemory(): void {
+  localStorage.removeItem(MEMORY_KEY);
+}
+
+/** Apply ```memory / ```forget-memory blocks from an assistant reply. */
+export function applyMemoryBlocksFromText(text: string): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  const memRe = /```memory\s*\n([\s\S]*?)```/gi;
+  let m: RegExpExecArray | null;
+  while ((m = memRe.exec(text))) {
+    for (const line of m[1].split("\n")) {
+      if (addAiMemory(line, "ai")) added += 1;
+    }
+  }
+  const forgetRe = /```forget-memory\s*\n([\s\S]*?)```/gi;
+  let notes = loadMemory();
+  while ((m = forgetRe.exec(text))) {
+    for (const line of m[1].split("\n")) {
+      const needle = line.replace(/^[-*•]\s+/, "").trim().toLowerCase();
+      if (!needle) continue;
+      const before = notes.length;
+      notes = notes.filter(
+        (n) => n.id !== needle && !n.text.toLowerCase().includes(needle),
+      );
+      removed += before - notes.length;
+    }
+  }
+  if (removed > 0) saveMemory(notes);
+  return { added, removed };
+}
+
+export function formatMemoryForPrompt(): string {
+  const notes = getAiMemory();
+  if (!notes.length) return "";
+  return [
+    "Local memory on this machine (durable notes; keep private facts out of replies unless useful):",
+    ...notes.map((n) => `- ${n.text}`),
+  ].join("\n");
+}
+
+export function formatHistoryCatalogForPrompt(excludeId?: string, limit = 8): string {
+  const threads = listAllAiThreads()
+    .filter((t) => t.id !== excludeId && t.messages.some((m) => m.role === "user"))
+    .slice(0, limit);
+  if (!threads.length) return "";
+  return [
+    "Older local chats on this PC (titles only; ask the user or search context if you need details):",
+    ...threads.map((t) => {
+      const when = new Date(t.updatedAt).toLocaleString();
+      const host = t.hostLabel ? ` @ ${t.hostLabel}` : "";
+      return `- [${t.id}] ${t.title || "Chat"}${host} (${when})`;
+    }),
+  ].join("\n");
+}
+
+export function formatRelatedChatsForPrompt(
+  query: string,
+  excludeId?: string,
+  limit = 3,
+): string {
+  const related = findRelatedAiThreads(query, excludeId, limit);
+  if (!related.length) return "";
+  return [
+    "Possibly relevant snippets from prior local chats:",
+    ...related.map((r, i) => {
+      const host = r.hostLabel ? ` @ ${r.hostLabel}` : "";
+      return `### Prior chat ${i + 1}: ${r.title}${host}\n${r.snippet}`;
+    }),
+  ].join("\n\n");
 }
 
 export interface AiSettingsExport {
@@ -507,6 +751,11 @@ export function parseSuggestedCommands(text: string): string[] {
 
 export function buildSystemPrompt(mode: AiMode, access: AiAccess, osHint?: string | null): string {
   const os = osHint?.trim() || "unknown Linux/Unix";
+  const memoryHints = [
+    "You may save durable facts with a fenced ```memory block (one fact per line).",
+    "To drop outdated memory, use a fenced ```forget-memory block with matching text.",
+    "Only store useful durable notes (host OS quirks, preferred tools, project paths). Never store passwords or API keys.",
+  ];
   if (mode === "ask") {
     return [
       "You are Azalea Ask, a capable assistant inside an SSH/local terminal client.",
@@ -514,15 +763,29 @@ export function buildSystemPrompt(mode: AiMode, access: AiAccess, osHint?: strin
       "Be concrete and helpful. Use markdown. Put runnable shell commands in fenced ```bash blocks.",
       "Do not claim you executed anything. The user Inserts or Runs commands.",
       "Never ask for passwords or API keys.",
+      "You can use local memory and prior chat snippets when provided.",
+      ...memoryHints,
     ].join("\n");
   }
   return [
     "You are Azalea Agent inside an SSH/local terminal client.",
     `Remote OS hint: ${os}.`,
     access === "full"
-      ? "Access mode is FULL: commands in ```bash blocks may run automatically. Prefer safe, reversible steps."
+      ? "Access mode is FULL: commands in ```bash blocks run automatically. Prefer safe, reversible steps."
       : "Access mode is CONFIRM: the user approves each command before it runs.",
     "Put each executable command in its own ```bash fence. Explain briefly before/after.",
+    "After a command runs you will receive its terminal output. Use that to decide the next step.",
+    "When the task is finished, reply with a short summary and no bash fences.",
     "Never ask for passwords or API keys in chat.",
+    "You can use local memory and prior chat snippets when provided.",
+    ...memoryHints,
   ].join("\n");
+}
+
+/** Strip CSI / OSC sequences so models see readable terminal output. */
+export function stripAnsi(text: string): string {
+  return text
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .replace(/\r/g, "");
 }
