@@ -819,6 +819,15 @@ textarea,
   padding: 1.5rem 1.5rem 3rem;
 }
 
+/* Sticky Settings chrome: bleed into shell padding so scrolled
+   panel content cannot show through gaps at the top/sides. */
+.settings-sticky-nav {
+  background: var(--bg-base);
+  margin: -1.5rem -1.5rem 1.25rem;
+  padding: 1.5rem 1.5rem 0.85rem;
+  isolation: isolate;
+}
+
 .keys-shell {
   width: 100%;
   max-width: none;

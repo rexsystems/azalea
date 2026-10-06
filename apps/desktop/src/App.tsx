@@ -212,7 +212,7 @@ function App() {
     void checkForUpdateSilent().then((result) => {
       if (result) {
         setStatusMessage(
-          `Update available: Azalea ${result.version} - open Settings → Updates to install`,
+          `Update available: Azalea ${result.version} - open Settings → About → Updates to install`,
         );
       }
     });
