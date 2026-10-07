@@ -7,7 +7,8 @@
   --color-lilac-500: #a855f7;
   --color-lilac-600: #9333ea;
   --color-lilac-700: #7c3aed;
-  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", "Fira Code", monospace;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "Cascadia Mono", "Fira Code", monospace;
   --font-sans: "Inter Variable", "Inter", "Segoe UI", system-ui, sans-serif;
   --text-xs: 0.8125rem;
   --text-sm: 0.9375rem;
@@ -302,7 +303,10 @@ body {
   font-family: var(--font-sans);
   font-optical-sizing: auto;
   font-synthesis: none;
-  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1,
+    "calt" 1;
   background: var(--bg-base);
   color: var(--text);
   overflow: hidden;
@@ -405,6 +409,61 @@ textarea,
   animation: menu-in 100ms ease-out both;
 }
 
+@keyframes ai-letter-wave {
+  0%,
+  8%,
+  52%,
+  100% {
+    opacity: 0.55;
+    transform: translateY(0);
+  }
+  22%,
+  34% {
+    opacity: 1;
+    transform: translateY(-1.5px);
+  }
+}
+
+.ai-activity-letter {
+  animation: ai-letter-wave 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation-delay: var(--ai-letter-delay, 0ms);
+}
+
+@keyframes ai-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.ai-activity-dot {
+  animation: ai-dot-pulse 2.8s ease-in-out infinite;
+}
+
+.ai-markdown > :first-child {
+  margin-top: 0;
+}
+.ai-markdown > :last-child {
+  margin-bottom: 0;
+}
+.ai-markdown li > p {
+  margin: 0.25rem 0;
+}
+.ai-markdown li > ul,
+.ai-markdown li > ol {
+  margin-top: 0.375rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-activity-letter,
+  .ai-activity-dot {
+    animation: none;
+  }
+}
+
 @keyframes drawer-in {
   from {
     opacity: 0;
@@ -421,6 +480,10 @@ textarea,
 }
 
 .hover-subtle:hover {
+  background: var(--bg-card-hover) !important;
+}
+
+.button-hover-subtle:enabled:hover {
   background: var(--bg-card-hover) !important;
 }
 
@@ -787,7 +850,9 @@ textarea,
 }
 
 .connect-session {
-  transition: border-color 280ms ease, opacity 280ms ease;
+  transition:
+    border-color 280ms ease,
+    opacity 280ms ease;
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
 }
 
@@ -890,7 +955,9 @@ html[data-mobile="true"] .file-browser-resize {
 .file-browser-resize-line {
   background: transparent;
   opacity: 0;
-  transition: opacity 120ms ease, background-color 120ms ease;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease;
 }
 
 .file-browser-resize:hover .file-browser-resize-line,
@@ -902,7 +969,9 @@ html[data-mobile="true"] .file-browser-resize {
 .split-resize-line {
   background: var(--border-subtle);
   opacity: 1;
-  transition: background-color 120ms ease, width 120ms ease;
+  transition:
+    background-color 120ms ease,
+    width 120ms ease;
 }
 
 .split-resize:hover .split-resize-line,
@@ -925,5 +994,3 @@ html[data-mobile="true"] .app-shell-mobile {
   height: 100%;
   min-height: 100dvh;
 }
-
-

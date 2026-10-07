@@ -17,6 +17,7 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 - **Import / export** - Azalea backups, OpenSSH `config`, and JSON host lists
 - **Cloud sync** (optional) - zero-knowledge encrypted vault; Free / Pro storage caps
 - **Themes & settings** - Midnight / Noir, font size, connect screen, auto-update
+- **Terminal AI** (opt-in) - Ask / Agent, command approval, live output, provider model catalogs and custom model IDs. See [AI setup and behavior](docs/ai.md).
 
 ## Development
 

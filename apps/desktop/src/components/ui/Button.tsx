@@ -4,7 +4,7 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
-  size?: "sm" | "md";
+  size?: "xs" | "sm" | "md";
   children: ReactNode;
 }
 
@@ -15,14 +15,21 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
-  const sizeClass = size === "sm" ? "px-3 py-2 text-sm rounded-lg" : "px-4 py-2.5 text-sm rounded-lg";
+  const sizeClass =
+    size === "xs"
+      ? "h-6 shrink-0 px-2 text-[11px] rounded-md"
+      : size === "sm"
+        ? "px-3 py-2 text-sm rounded-lg"
+        : "px-4 py-2.5 text-sm rounded-lg";
 
   const hoverClass =
-    variant === "primary" ? "hover:brightness-110" : variant === "danger" ? "hover-subtle" : "hover-subtle";
+    variant === "primary"
+      ? "enabled:hover:brightness-110"
+      : "button-hover-subtle";
 
   return (
     <button
-      className={`transition-ui inline-flex items-center justify-center gap-1.5 font-medium disabled:opacity-50 ${sizeClass} ${hoverClass} ${className}`}
+      className={`transition-ui inline-flex items-center justify-center gap-1.5 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:opacity-50 ${sizeClass} ${hoverClass} ${className}`}
       style={buttonStyle(variant)}
       {...props}
     >

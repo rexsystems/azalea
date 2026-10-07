@@ -622,6 +622,7 @@ export function aiChatStream(
   let settled = false;
   const onEvent = new Channel<AiStreamEvent>();
   onEvent.onmessage = (payload) => {
+    if (settled) return;
     if (payload.kind === "delta" && payload.text) {
       handlers.onDelta(payload.text);
       return;
@@ -659,6 +660,10 @@ export function aiChatStream(
 
 export function aiChatCancel(requestId: string): Promise<void> {
   return invoke("ai_chat_cancel", { requestId });
+}
+
+export function aiWebSearch(requestId: string, provider: string, query: string, baseUrl = ""): Promise<import("./ai").AiWebSource[]> {
+  return invoke("ai_web_search", { requestId, provider, query, baseUrl });
 }
 
 export interface AiModelInfo {

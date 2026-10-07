@@ -79,10 +79,6 @@ export const BEDROCK_MANTLE_REGIONS = [
   "us-gov-west-1",
 ] as const;
 
-function m(id: string, label: string): AiModelOption {
-  return { id, label };
-}
-
 export const AI_PROVIDERS: AiProviderDef[] = [
   {
     id: "openai",
@@ -95,21 +91,7 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     allowCustomUrl: false,
     defaultModel: "gpt-5-mini",
     supportsModelList: true,
-    models: [
-      m("gpt-5.5", "GPT-5.5"),
-      m("gpt-5", "GPT-5"),
-      m("gpt-5-mini", "GPT-5 Mini"),
-      m("gpt-5-nano", "GPT-5 Nano"),
-      m("gpt-5-chat-latest", "GPT-5 Chat"),
-      m("gpt-4.1", "GPT-4.1"),
-      m("gpt-4.1-mini", "GPT-4.1 Mini"),
-      m("gpt-4.1-nano", "GPT-4.1 Nano"),
-      m("gpt-4o", "GPT-4o"),
-      m("gpt-4o-mini", "GPT-4o Mini"),
-      m("o3", "o3"),
-      m("o4-mini", "o4-mini"),
-      m("o3-mini", "o3-mini"),
-    ],
+    models: [],
   },
   {
     id: "anthropic",
@@ -120,22 +102,9 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     needsRegion: false,
     regionKind: "none",
     allowCustomUrl: false,
-    defaultModel: "claude-sonnet-5-5",
-    supportsModelList: false,
-    models: [
-      m("claude-fable-5-1", "Claude Fable 5.1"),
-      m("claude-opus-5-5", "Claude Opus 5.5"),
-      m("claude-sonnet-5-5", "Claude Sonnet 5.5"),
-      m("claude-opus-5", "Claude Opus 5"),
-      m("claude-sonnet-5", "Claude Sonnet 5"),
-      m("claude-opus-4-8", "Claude Opus 4.8"),
-      m("claude-opus-4-7", "Claude Opus 4.7"),
-      m("claude-opus-4-6", "Claude Opus 4.6"),
-      m("claude-sonnet-4-6", "Claude Sonnet 4.6"),
-      m("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
-      m("claude-opus-4-5-20251101", "Claude Opus 4.5"),
-      m("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
-    ],
+    defaultModel: "claude-sonnet-4-6",
+    supportsModelList: true,
+    models: [],
   },
   {
     id: "deepseek",
@@ -148,10 +117,7 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     allowCustomUrl: false,
     defaultModel: "deepseek-chat",
     supportsModelList: true,
-    models: [
-      m("deepseek-chat", "DeepSeek Chat (V3)"),
-      m("deepseek-reasoner", "DeepSeek Reasoner (R1)"),
-    ],
+    models: [],
   },
   {
     id: "groq",
@@ -164,16 +130,7 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     allowCustomUrl: false,
     defaultModel: "llama-3.3-70b-versatile",
     supportsModelList: true,
-    models: [
-      m("llama-3.3-70b-versatile", "Llama 3.3 70B"),
-      m("llama-3.1-8b-instant", "Llama 3.1 8B Instant"),
-      m("meta-llama/llama-4-maverick-17b-128e-instruct", "Llama 4 Maverick"),
-      m("meta-llama/llama-4-scout-17b-16e-instruct", "Llama 4 Scout"),
-      m("qwen/qwen3-32b", "Qwen3 32B"),
-      m("moonshotai/kimi-k2-instruct", "Kimi K2"),
-      m("openai/gpt-oss-120b", "GPT-OSS 120B"),
-      m("openai/gpt-oss-20b", "GPT-OSS 20B"),
-    ],
+    models: [],
   },
   {
     id: "openrouter",
@@ -186,23 +143,7 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     allowCustomUrl: false,
     defaultModel: "anthropic/claude-sonnet-4.5",
     supportsModelList: true,
-    models: [
-      m("openai/gpt-5.5", "OpenAI GPT-5.5"),
-      m("openai/gpt-5", "OpenAI GPT-5"),
-      m("openai/gpt-5-mini", "OpenAI GPT-5 Mini"),
-      m("openai/gpt-4.1", "OpenAI GPT-4.1"),
-      m("anthropic/claude-opus-4.5", "Claude Opus 4.5"),
-      m("anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5"),
-      m("anthropic/claude-haiku-4.5", "Claude Haiku 4.5"),
-      m("google/gemini-2.5-pro", "Gemini 2.5 Pro"),
-      m("google/gemini-2.5-flash", "Gemini 2.5 Flash"),
-      m("deepseek/deepseek-chat-v3-0324", "DeepSeek V3"),
-      m("deepseek/deepseek-r1", "DeepSeek R1"),
-      m("meta-llama/llama-4-maverick", "Llama 4 Maverick"),
-      m("qwen/qwen3-235b-a22b", "Qwen3 235B"),
-      m("x-ai/grok-3", "Grok 3"),
-      m("x-ai/grok-3-mini", "Grok 3 Mini"),
-    ],
+    models: [],
   },
   {
     id: "ollama",
@@ -213,45 +154,25 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     needsRegion: false,
     regionKind: "none",
     allowCustomUrl: true,
-    defaultModel: "llama3.2",
+    defaultModel: "",
     supportsModelList: true,
-    models: [
-      m("llama3.2", "Llama 3.2"),
-      m("llama3.1", "Llama 3.1"),
-      m("llama3.3", "Llama 3.3"),
-      m("qwen2.5", "Qwen 2.5"),
-      m("qwen2.5-coder", "Qwen 2.5 Coder"),
-      m("deepseek-r1", "DeepSeek R1"),
-      m("mistral", "Mistral"),
-      m("codellama", "Code Llama"),
-      m("phi4", "Phi-4"),
-      m("gemma3", "Gemma 3"),
-    ],
+    models: [],
   },
   {
     id: "amazon_bedrock",
     name: "Amazon Bedrock",
-    description: "Bedrock Runtime OpenAI-compatible endpoint. Paste a Bedrock API key.",
+    description:
+      "Bedrock Runtime OpenAI-compatible endpoint. Paste a Bedrock API key.",
     dialect: "openai",
     baseUrl: null,
     needsRegion: true,
     regionKind: "bedrock_runtime",
     allowCustomUrl: false,
-    defaultModel: "anthropic.claude-sonnet-4-6",
-    supportsModelList: true,
+    defaultModel: "openai.gpt-oss-120b-1:0",
+    supportsModelList: false,
     models: [
-      m("anthropic.claude-sonnet-4-6", "Claude Sonnet 4.6"),
-      m("anthropic.claude-opus-4-6-v1", "Claude Opus 4.6"),
-      m("anthropic.claude-sonnet-4-5-20250929-v1:0", "Claude Sonnet 4.5"),
-      m("anthropic.claude-haiku-4-5-20251001-v1:0", "Claude Haiku 4.5"),
-      m("amazon.nova-premier-v1:0", "Amazon Nova Premier"),
-      m("amazon.nova-pro-v1:0", "Amazon Nova Pro"),
-      m("amazon.nova-lite-v1:0", "Amazon Nova Lite"),
-      m("amazon.nova-micro-v1:0", "Amazon Nova Micro"),
-      m("us.anthropic.claude-sonnet-4-6", "Claude Sonnet 4.6 (US CRIS)"),
-      m("us.anthropic.claude-opus-4-6-v1", "Claude Opus 4.6 (US CRIS)"),
-      m("meta.llama3-3-70b-instruct-v1:0", "Llama 3.3 70B"),
-      m("deepseek.r1-v1:0", "DeepSeek R1"),
+      { id: "openai.gpt-oss-120b-1:0", label: "GPT-OSS 120B" },
+      { id: "openai.gpt-oss-20b-1:0", label: "GPT-OSS 20B" },
     ],
   },
   {
@@ -264,17 +185,9 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     needsRegion: true,
     regionKind: "bedrock_mantle",
     allowCustomUrl: false,
-    defaultModel: "anthropic.claude-sonnet-4-6",
+    defaultModel: "openai.gpt-oss-120b",
     supportsModelList: true,
-    models: [
-      m("anthropic.claude-sonnet-4-6", "Claude Sonnet 4.6"),
-      m("anthropic.claude-opus-4-6", "Claude Opus 4.6"),
-      m("anthropic.claude-haiku-4-5", "Claude Haiku 4.5"),
-      m("amazon.nova-pro-v1:0", "Amazon Nova Pro"),
-      m("amazon.nova-lite-v1:0", "Amazon Nova Lite"),
-      m("openai.gpt-oss-120b", "GPT-OSS 120B"),
-      m("openai.gpt-oss-20b", "GPT-OSS 20B"),
-    ],
+    models: [],
   },
   {
     id: "custom_openai",
@@ -299,7 +212,7 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     regionKind: "none",
     allowCustomUrl: true,
     defaultModel: "",
-    supportsModelList: false,
+    supportsModelList: true,
     models: [],
   },
 ];
@@ -351,6 +264,16 @@ export interface AiPrefs {
   mode: AiMode;
   access: AiAccess;
   includeTerminalContext: boolean;
+  webSearchEnabled: boolean;
+  webSearchProvider: "tavily" | "brave" | "searxng";
+  webSearchUrl: string;
+  customModels: Partial<Record<AiProviderId, string[]>>;
+  providerSettings: Partial<
+    Record<
+      AiProviderId,
+      { model: string; customBaseUrl: string; region: string }
+    >
+  >;
 }
 
 const DEFAULT_PREFS: AiPrefs = {
@@ -361,6 +284,11 @@ const DEFAULT_PREFS: AiPrefs = {
   mode: "ask",
   access: "confirm",
   includeTerminalContext: true,
+  webSearchEnabled: false,
+  webSearchProvider: "tavily",
+  webSearchUrl: "",
+  customModels: {},
+  providerSettings: {},
 };
 
 export function getAiAsked(): boolean {
@@ -378,7 +306,9 @@ export function isAiEnabled(): boolean {
 export function setAiEnabled(enabled: boolean) {
   localStorage.setItem(ENABLED_KEY, enabled ? "1" : "0");
   setAiAsked();
-  window.dispatchEvent(new CustomEvent("azalea-ai-enabled", { detail: enabled }));
+  window.dispatchEvent(
+    new CustomEvent("azalea-ai-enabled", { detail: enabled }),
+  );
 }
 
 export function getAiPrefs(): AiPrefs {
@@ -389,18 +319,29 @@ export function getAiPrefs(): AiPrefs {
     const providerId = AI_PROVIDERS.some((p) => p.id === parsed.providerId)
       ? (parsed.providerId as AiProviderId)
       : DEFAULT_PREFS.providerId;
-    const provider = getProvider(providerId);
     return {
       providerId,
       model:
-        typeof parsed.model === "string" && parsed.model.trim()
+        typeof parsed.model === "string"
           ? parsed.model
-          : provider.defaultModel,
-      customBaseUrl: typeof parsed.customBaseUrl === "string" ? parsed.customBaseUrl : "",
-      region: typeof parsed.region === "string" && parsed.region ? parsed.region : "us-east-1",
+          : getProvider(providerId).defaultModel,
+      customBaseUrl:
+        typeof parsed.customBaseUrl === "string" ? parsed.customBaseUrl : "",
+      region:
+        typeof parsed.region === "string" && parsed.region
+          ? parsed.region
+          : "us-east-1",
       mode: parsed.mode === "agent" ? "agent" : "ask",
       access: parsed.access === "full" ? "full" : "confirm",
       includeTerminalContext: parsed.includeTerminalContext !== false,
+      webSearchEnabled: parsed.webSearchEnabled === true,
+      webSearchProvider: parsed.webSearchProvider === "brave" || parsed.webSearchProvider === "searxng" ? parsed.webSearchProvider : "tavily",
+      webSearchUrl: typeof parsed.webSearchUrl === "string" ? parsed.webSearchUrl : "",
+      customModels: sanitizeCustomModels(parsed.customModels),
+      providerSettings:
+        parsed.providerSettings && typeof parsed.providerSettings === "object"
+          ? parsed.providerSettings
+          : {},
     };
   } catch {
     return { ...DEFAULT_PREFS };
@@ -408,9 +349,58 @@ export function getAiPrefs(): AiPrefs {
 }
 
 export function setAiPrefs(patch: Partial<AiPrefs>) {
-  const next = { ...getAiPrefs(), ...patch };
+  const current = getAiPrefs();
+  const next = { ...current, ...patch };
+  if (patch.providerId && patch.providerId !== current.providerId) {
+    next.providerSettings = {
+      ...current.providerSettings,
+      [current.providerId]: {
+        model: current.model,
+        customBaseUrl: current.customBaseUrl,
+        region: current.region,
+      },
+    };
+    const saved = current.providerSettings[patch.providerId];
+    next.model = saved?.model ?? getProvider(patch.providerId).defaultModel;
+    next.customBaseUrl = saved?.customBaseUrl ?? "";
+    next.region = saved?.region ?? "us-east-1";
+  }
   localStorage.setItem(PREFS_KEY, JSON.stringify(next));
   window.dispatchEvent(new CustomEvent("azalea-ai-prefs", { detail: next }));
+}
+
+function sanitizeCustomModels(value: unknown): AiPrefs["customModels"] {
+  if (!value || typeof value !== "object") return {};
+  const result: AiPrefs["customModels"] = {};
+  for (const provider of AI_PROVIDERS) {
+    const ids = (value as Record<string, unknown>)[provider.id];
+    if (Array.isArray(ids))
+      result[provider.id] = [
+        ...new Set(
+          ids
+            .filter((id): id is string => typeof id === "string")
+            .map((id) => id.trim())
+            .filter(Boolean),
+        ),
+      ];
+  }
+  return result;
+}
+
+export function addCustomAiModels(providerId: AiProviderId, text: string) {
+  const prefs = getAiPrefs();
+  const added = text
+    .split(/[\n,]+/)
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (!added.length) return;
+  const ids = [
+    ...new Set([...(prefs.customModels[providerId] ?? []), ...added]),
+  ];
+  setAiPrefs({
+    customModels: { ...prefs.customModels, [providerId]: ids },
+    model: added[0],
+  });
 }
 
 export interface AiChatMessageStored {
@@ -418,6 +408,33 @@ export interface AiChatMessageStored {
   role: "user" | "assistant";
   content: string;
   createdAt: number;
+  internal?: boolean;
+  work?: AiWorkSummary;
+}
+
+export interface AiWebSource {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+export interface AiWorkEvent {
+  id: string;
+  kind: "thinking" | "search" | "command" | "write" | "approval";
+  label: string;
+  status: "running" | "done" | "error" | "rejected" | "stopped";
+  startedAt: number;
+  finishedAt?: number;
+  detail?: string;
+  sources?: AiWebSource[];
+}
+
+export interface AiWorkSummary {
+  userMessageId: string;
+  elapsedMs: number;
+  activeSince?: number;
+  status: "running" | "waiting" | "done" | "stopped" | "error";
+  events: AiWorkEvent[];
 }
 
 export interface AiChatThread {
@@ -487,7 +504,9 @@ function loadAllThreads(): AiChatThread[] {
 }
 
 function saveAllThreads(list: AiChatThread[]) {
-  const sorted = [...list].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_THREADS);
+  const sorted = [...list]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, MAX_THREADS);
   localStorage.setItem(CHATS_KEY, JSON.stringify(sorted));
 }
 
@@ -503,7 +522,10 @@ export function listAiThreads(sessionId?: string): AiChatThread[] {
 }
 
 export function getAiThread(threadId: string): AiChatThread | null;
-export function getAiThread(sessionId: string, threadId: string): AiChatThread | null;
+export function getAiThread(
+  sessionId: string,
+  threadId: string,
+): AiChatThread | null;
 export function getAiThread(a: string, b?: string): AiChatThread | null {
   const threadId = b ?? a;
   return loadAllThreads().find((t) => t.id === threadId) ?? null;
@@ -534,19 +556,27 @@ export function newAiThreadId(): string {
 }
 
 export function threadPreview(thread: AiChatThread, max = 96): string {
-  const firstUser = thread.messages.find((m) => m.role === "user" && !m.content.startsWith("Command output:"));
-  const text = (firstUser?.content || thread.title || "").replace(/\s+/g, " ").trim();
+  const firstUser = thread.messages.find(
+    (m) => m.role === "user" && !m.content.startsWith("Command output:"),
+  );
+  const text = (firstUser?.content || thread.title || "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (text.length <= max) return text;
   return `${text.slice(0, max - 1)}…`;
 }
 
-export function searchAiThreads(query: string, excludeId?: string): AiChatThread[] {
+export function searchAiThreads(
+  query: string,
+  excludeId?: string,
+): AiChatThread[] {
   const q = query.trim().toLowerCase();
   const all = loadAllThreads().filter((t) => t.id !== excludeId);
   if (!q) return all;
   const tokens = q.split(/\s+/).filter(Boolean);
   return all.filter((t) => {
-    const hay = `${t.title}\n${t.hostLabel ?? ""}\n${t.messages.map((m) => m.content).join("\n")}`.toLowerCase();
+    const hay =
+      `${t.title}\n${t.hostLabel ?? ""}\n${t.messages.map((m) => m.content).join("\n")}`.toLowerCase();
     return tokens.every((tok) => hay.includes(tok));
   });
 }
@@ -556,13 +586,21 @@ export function findRelatedAiThreads(
   query: string,
   excludeId?: string,
   limit = 3,
-): { id: string; title: string; hostLabel?: string; snippet: string; updatedAt: number }[] {
+): {
+  id: string;
+  title: string;
+  hostLabel?: string;
+  snippet: string;
+  updatedAt: number;
+}[] {
   const hits = searchAiThreads(query, excludeId).slice(0, limit);
   return hits.map((t) => {
     const userMsgs = t.messages.filter(
       (m) => m.role === "user" && !m.content.startsWith("Command output:"),
     );
-    const asst = t.messages.filter((m) => m.role === "assistant" && m.content.trim());
+    const asst = t.messages.filter(
+      (m) => m.role === "assistant" && m.content.trim(),
+    );
     const snippet = [userMsgs[0]?.content, asst[0]?.content]
       .filter(Boolean)
       .join("\n---\n")
@@ -584,7 +622,9 @@ function loadMemory(): AiMemoryNote[] {
     const raw = localStorage.getItem(MEMORY_KEY);
     if (!raw) return [];
     const list = JSON.parse(raw) as AiMemoryNote[];
-    return Array.isArray(list) ? list.sort((a, b) => b.updatedAt - a.updatedAt) : [];
+    return Array.isArray(list)
+      ? list.sort((a, b) => b.updatedAt - a.updatedAt)
+      : [];
   } catch {
     return [];
   }
@@ -598,7 +638,10 @@ export function getAiMemory(): AiMemoryNote[] {
   return loadMemory();
 }
 
-export function addAiMemory(text: string, source: "user" | "ai" = "user"): AiMemoryNote | null {
+export function addAiMemory(
+  text: string,
+  source: "user" | "ai" = "user",
+): AiMemoryNote | null {
   const cleaned = text.replace(/^[-*•]\s+/, "").trim();
   if (!cleaned) return null;
   const notes = loadMemory();
@@ -644,7 +687,10 @@ export function clearAiMemory(): void {
 }
 
 /** Apply ```memory / ```forget-memory blocks from an assistant reply. */
-export function applyMemoryBlocksFromText(text: string): { added: number; removed: number } {
+export function applyMemoryBlocksFromText(text: string): {
+  added: number;
+  removed: number;
+} {
   let added = 0;
   let removed = 0;
   const memRe = /```memory\s*\n([\s\S]*?)```/gi;
@@ -658,7 +704,10 @@ export function applyMemoryBlocksFromText(text: string): { added: number; remove
   let notes = loadMemory();
   while ((m = forgetRe.exec(text))) {
     for (const line of m[1].split("\n")) {
-      const needle = line.replace(/^[-*•]\s+/, "").trim().toLowerCase();
+      const needle = line
+        .replace(/^[-*•]\s+/, "")
+        .trim()
+        .toLowerCase();
       if (!needle) continue;
       const before = notes.length;
       notes = notes.filter(
@@ -680,9 +729,14 @@ export function formatMemoryForPrompt(): string {
   ].join("\n");
 }
 
-export function formatHistoryCatalogForPrompt(excludeId?: string, limit = 8): string {
+export function formatHistoryCatalogForPrompt(
+  excludeId?: string,
+  limit = 8,
+): string {
   const threads = listAllAiThreads()
-    .filter((t) => t.id !== excludeId && t.messages.some((m) => m.role === "user"))
+    .filter(
+      (t) => t.id !== excludeId && t.messages.some((m) => m.role === "user"),
+    )
     .slice(0, limit);
   if (!threads.length) return "";
   return [
@@ -723,7 +777,9 @@ export function collectAiSettings(): AiSettingsExport {
   };
 }
 
-export function applyAiSettings(settings: Partial<AiSettingsExport> | undefined) {
+export function applyAiSettings(
+  settings: Partial<AiSettingsExport> | undefined,
+) {
   if (!settings) return;
   if (typeof settings.enabled === "boolean") {
     setAiEnabled(settings.enabled);
@@ -735,7 +791,10 @@ export function applyAiSettings(settings: Partial<AiSettingsExport> | undefined)
 
 export function parseSuggestedCommands(text: string): string[] {
   return parseSuggestedActions(text)
-    .filter((a): a is Extract<AiPendingAction, { type: "shell" }> => a.type === "shell")
+    .filter(
+      (a): a is Extract<AiPendingAction, { type: "shell" }> =>
+        a.type === "shell",
+    )
     .map((a) => a.command);
 }
 
@@ -750,7 +809,10 @@ export type AiPendingAction =
 
 export function parseSuggestedFileWrites(text: string): AiFileWrite[] {
   return parseSuggestedActions(text)
-    .filter((a): a is Extract<AiPendingAction, { type: "write" }> => a.type === "write")
+    .filter(
+      (a): a is Extract<AiPendingAction, { type: "write" }> =>
+        a.type === "write",
+    )
     .map((a) => ({ path: a.path, content: a.content }));
 }
 
@@ -768,14 +830,16 @@ export function parseSuggestedActions(text: string): AiPendingAction[] {
       if (path) out.push({ type: "write", path, content: body });
       continue;
     }
-    if (/^(bash|sh|shell|zsh)?$/i.test(header)) {
-      const command = body
-        .split("\n")
-        .map((l) => l.trimEnd())
-        .filter((l) => l.trim() && !l.trim().startsWith("#"))
-        .join("\n")
-        .trim();
-      if (command) out.push({ type: "shell", command });
+    if (/^(bash|sh|shell|zsh|powershell|pwsh|ps1)?$/i.test(header)) {
+      const command = body.trim();
+      if (
+        command &&
+        command
+          .split("\n")
+          .some((line) => line.trim() && !line.trim().startsWith("#"))
+      ) {
+        out.push({ type: "shell", command });
+      }
     }
   }
   return out;
@@ -786,7 +850,10 @@ export function pendingActionKey(action: AiPendingAction): string {
   return `write:${action.path}\n${action.content}`;
 }
 
-export function pendingActionsEqual(a: AiPendingAction, b: AiPendingAction): boolean {
+export function pendingActionsEqual(
+  a: AiPendingAction,
+  b: AiPendingAction,
+): boolean {
   return pendingActionKey(a) === pendingActionKey(b);
 }
 
@@ -802,7 +869,11 @@ export function exportAiThreadsJson(threads: AiChatThread[]): string {
   )}\n`;
 }
 
-export function buildSystemPrompt(mode: AiMode, access: AiAccess, osHint?: string | null): string {
+export function buildSystemPrompt(
+  mode: AiMode,
+  access: AiAccess,
+  osHint?: string | null,
+): string {
   const os = osHint?.trim() || "unknown Linux/Unix";
   const memoryHints = [
     "You may save durable facts with a fenced ```memory block (one fact per line).",
@@ -810,7 +881,7 @@ export function buildSystemPrompt(mode: AiMode, access: AiAccess, osHint?: strin
     "Only store useful durable notes (host OS quirks, preferred tools, project paths). Never store passwords or API keys.",
   ];
   const writeHint =
-    'To write a remote file via SFTP, use a fenced block like ```write path=/absolute/or/relative/file\\n...contents...``` (never put secrets or keys in file contents).';
+    "To write a remote file via SFTP, use a fenced block like ```write path=/absolute/or/relative/file\\n...contents...``` (never put secrets or keys in file contents).";
   if (mode === "ask") {
     return [
       "You are Azalea Ask, a capable assistant inside an SSH/local terminal client.",

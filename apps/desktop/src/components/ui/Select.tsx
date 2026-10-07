@@ -18,6 +18,7 @@ interface SelectProps {
   /** Compact trigger for dense toolbars / composers. */
   size?: "md" | "sm";
   className?: string;
+  disabled?: boolean;
   onChange: (value: string) => void;
 }
 
@@ -30,6 +31,7 @@ export function Select({
   menuPlacement = "bottom",
   size = "md",
   className,
+  disabled = false,
   onChange,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
@@ -49,6 +51,10 @@ export function Select({
     placeholder ??
     options.find((o) => o.value === "")?.label ??
     "Select...";
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
 
   useEffect(() => {
     if (!open) return;
@@ -94,6 +100,7 @@ export function Select({
         )}
         <button
           type="button"
+          disabled={disabled}
           onClick={() => setOpen((v) => !v)}
           onKeyDown={(event) => {
             if ((event.key === "ArrowDown" || event.key === "ArrowUp") && options.length > 0) {

@@ -9,11 +9,13 @@ import {
   resolveProviderBaseUrl,
   setAiEnabled,
   setAiPrefs,
+  addCustomAiModels,
   type AiAccess,
   type AiMode,
   type AiProviderId,
 } from "../lib/ai";
 import * as api from "../lib/api";
+import { useAiModels } from "../hooks/useAiModels";
 import { Button } from "./ui/Button";
 import { Select } from "./ui/Select";
 import { SettingToggle } from "./ui/SettingToggle";
@@ -34,11 +36,20 @@ export function AiSettingsSection() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [modelDraft, setModelDraft] = useState("");
+  const {
+    models,
+    loading: loadingModels,
+    error: modelsError,
+    refresh: refreshModels,
+  } = useAiModels(prefs);
 
   const provider = getProvider(prefs.providerId);
   const regions = useMemo(() => {
-    if (provider.regionKind === "bedrock_mantle") return [...BEDROCK_MANTLE_REGIONS];
-    if (provider.regionKind === "bedrock_runtime") return [...BEDROCK_RUNTIME_REGIONS];
+    if (provider.regionKind === "bedrock_mantle")
+      return [...BEDROCK_MANTLE_REGIONS];
+    if (provider.regionKind === "bedrock_runtime")
+      return [...BEDROCK_RUNTIME_REGIONS];
     return [];
   }, [provider.regionKind]);
 
@@ -48,19 +59,31 @@ export function AiSettingsSection() {
     prefs.customBaseUrl,
   );
 
-  const refreshKey = () => {
+  useEffect(() => {
+    let cancelled = false;
+    setKeyPresent(false);
     void api
       .aiApiKeyPresent(prefs.providerId)
-      .then(setKeyPresent)
-      .catch(() => setKeyPresent(false));
-  };
-
-  useEffect(() => {
-    refreshKey();
+      .then((present) => {
+        if (!cancelled) setKeyPresent(present);
+      })
+      .catch(() => {
+        if (!cancelled) setKeyPresent(false);
+      });
     setApiKeyDraft("");
+    setModelDraft("");
     setStatus(null);
     setError(null);
+    return () => {
+      cancelled = true;
+    };
   }, [prefs.providerId]);
+
+  useEffect(() => {
+    const sync = () => setPrefsState(getAiPrefs());
+    window.addEventListener("azalea-ai-prefs", sync);
+    return () => window.removeEventListener("azalea-ai-prefs", sync);
+  }, []);
 
   const patchPrefs = (patch: Partial<typeof prefs>) => {
     setAiPrefs(patch);
@@ -75,6 +98,7 @@ export function AiSettingsSection() {
       await api.aiSetApiKey(prefs.providerId, apiKeyDraft.trim());
       setApiKeyDraft("");
       setKeyPresent(true);
+      refreshModels();
       setStatus("API key saved to the OS keychain.");
     } catch (err) {
       setError(String(err));
@@ -137,193 +161,309 @@ export function AiSettingsSection() {
 
       {!enabled ? (
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          AI is off. Turn it on above to configure providers and use Ask / Agent in the terminal.
+          AI is off. Turn it on above to configure providers and use Ask / Agent
+          in the terminal.
         </p>
       ) : (
         <div className="space-y-5">
-          <div>
-            <div className="mb-2 text-sm font-medium" style={{ color: "var(--text)" }}>
-              Provider
+          <div
+            className="space-y-4 rounded-xl border p-4"
+            style={{
+              borderColor: "var(--border-subtle)",
+              background: "var(--bg-card)",
+            }}
+          >
+            <div
+              className="mb-2 text-sm font-medium"
+              style={{ color: "var(--text)" }}
+            >
+              Connection
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {AI_PROVIDERS.map((p) => {
-                const selected = prefs.providerId === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      const nextModel =
-                        prefs.providerId === p.id
-                          ? prefs.model
-                          : p.defaultModel || prefs.model;
-                      patchPrefs({
-                        providerId: p.id as AiProviderId,
-                        model: nextModel,
-                        region:
-                          p.regionKind === "none"
-                            ? prefs.region
-                            : prefs.region || "us-east-1",
-                      });
-                    }}
-                    className="hover-subtle rounded-xl border px-3 py-3 text-left"
-                    style={{
-                      background: selected ? "var(--accent-muted)" : "var(--bg-card)",
-                      borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
-                    }}
+            <Select
+              label="Provider"
+              value={prefs.providerId}
+              options={AI_PROVIDERS.map((p) => ({
+                value: p.id,
+                label: p.name,
+              }))}
+              onChange={(id) => {
+                if (!busy) patchPrefs({ providerId: id as AiProviderId });
+              }}
+            />
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {provider.description}
+            </p>
+
+            {provider.needsRegion && (
+              <Select
+                label="AWS region"
+                value={prefs.region}
+                options={regions.map((r) => ({ value: r, label: r }))}
+                onChange={(region) => patchPrefs({ region })}
+              />
+            )}
+
+            {(provider.allowCustomUrl || !provider.baseUrl) &&
+              !provider.needsRegion && (
+                <label className="flex flex-col gap-1.5">
+                  <span
+                    className="text-sm font-medium"
+                    style={{ color: "var(--text)" }}
                   >
-                    <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                      {p.name}
-                    </div>
-                    <div className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                      {p.description}
-                    </div>
-                  </button>
-                );
-              })}
+                    Base URL
+                  </span>
+                  <input
+                    value={prefs.customBaseUrl}
+                    onChange={(e) =>
+                      patchPrefs({ customBaseUrl: e.target.value })
+                    }
+                    placeholder={
+                      provider.id === "ollama"
+                        ? "http://127.0.0.1:11434/v1"
+                        : "https://example.com/v1"
+                    }
+                    className="rounded-lg border px-3 py-2 text-sm outline-none"
+                    style={fieldStyle()}
+                  />
+                </label>
+              )}
+
+            {provider.needsRegion && (
+              <div
+                className="rounded-lg border px-3 py-2 text-xs"
+                style={{
+                  borderColor: "var(--border-subtle)",
+                  background: "var(--bg-card)",
+                  color: "var(--text-muted)",
+                }}
+              >
+                Endpoint:{" "}
+                <span
+                  className="font-mono"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  {derivedUrl}
+                </span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <div
+                className="text-sm font-medium"
+                style={{ color: "var(--text)" }}
+              >
+                API key
+              </div>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {keyPresent
+                  ? "A key is saved in the OS keychain for this provider. Paste a new one to replace it."
+                  : provider.id === "ollama"
+                    ? "Local Ollama works without an API key."
+                    : "Paste your key. It is stored in the OS keychain, not in backups."}
+              </p>
+              <input
+                type="password"
+                value={apiKeyDraft}
+                onChange={(e) => setApiKeyDraft(e.target.value)}
+                placeholder={
+                  keyPresent ? "Replace saved key" : `${provider.name} API key`
+                }
+                className="w-full rounded-lg border px-3 py-2 font-mono text-sm outline-none"
+                style={fieldStyle()}
+                autoComplete="off"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  disabled={busy || !apiKeyDraft.trim()}
+                  onClick={() => void saveKey()}
+                >
+                  Save key
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busy || !keyPresent}
+                  onClick={() => void clearKey()}
+                >
+                  Clear key
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={
+                    busy ||
+                    (!keyPresent && provider.id !== "ollama") ||
+                    !prefs.model.trim() ||
+                    !derivedUrl
+                  }
+                  onClick={() => void testConnection()}
+                >
+                  Test connection
+                </Button>
+              </div>
             </div>
           </div>
 
-          {provider.needsRegion && (
-            <Select
-              label="AWS region"
-              value={prefs.region}
-              options={regions.map((r) => ({ value: r, label: r }))}
-              onChange={(region) => patchPrefs({ region })}
-            />
-          )}
-
-          {(provider.allowCustomUrl || !provider.baseUrl) && !provider.needsRegion && (
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                Base URL
+          <div
+            className="space-y-4 rounded-xl border p-4"
+            style={{
+              borderColor: "var(--border-subtle)",
+              background: "var(--bg-card)",
+            }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span
+                className="text-sm font-medium"
+                style={{ color: "var(--text)" }}
+              >
+                Models
               </span>
-              <input
-                value={prefs.customBaseUrl}
-                onChange={(e) => patchPrefs({ customBaseUrl: e.target.value })}
-                placeholder={
-                  provider.id === "ollama"
-                    ? "http://127.0.0.1:11434/v1"
-                    : "https://example.com/v1"
-                }
-                className="rounded-lg border px-3 py-2 text-sm outline-none"
+              {provider.supportsModelList && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={loadingModels || busy || !derivedUrl}
+                  onClick={refreshModels}
+                >
+                  {loadingModels ? "Loading…" : "Refresh models"}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              {provider.supportsModelList
+                ? "Models come directly from your provider. Custom IDs are saved for this provider and appear in chat immediately."
+                : "This endpoint has no model-list API. Select a supported model or add its exact ID from your provider."}
+            </p>
+            <Select
+              label="Active model"
+              value={prefs.model}
+              placeholder={loadingModels ? "Loading models…" : "Select model"}
+              options={models.map((m) => ({ value: m.id, label: m.label }))}
+              onChange={(model) => patchPrefs({ model })}
+            />
+            {modelsError && (
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {modelsError}
+              </p>
+            )}
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Add custom model IDs (one per line, or separated by commas)
+              </span>
+              <textarea
+                value={modelDraft}
+                onChange={(e) => setModelDraft(e.target.value)}
+                rows={2}
+                placeholder="Exact model ID"
+                className="rounded-lg border px-3 py-2 font-mono text-sm outline-none"
                 style={fieldStyle()}
               />
             </label>
-          )}
-
-          {provider.needsRegion && (
-            <div
-              className="rounded-lg border px-3 py-2 text-xs"
-              style={{
-                borderColor: "var(--border-subtle)",
-                background: "var(--bg-card)",
-                color: "var(--text-muted)",
+            <Button
+              size="sm"
+              disabled={!modelDraft.trim()}
+              onClick={() => {
+                addCustomAiModels(prefs.providerId, modelDraft);
+                setModelDraft("");
               }}
             >
-              Endpoint: <span className="font-mono" style={{ color: "var(--text-secondary)" }}>{derivedUrl}</span>
-            </div>
-          )}
-
-          <Select
-            label="Model"
-            value={prefs.model}
-            options={[
-              ...provider.models.map((m) => ({ value: m.id, label: m.label })),
-              ...(prefs.model && !provider.models.some((m) => m.id === prefs.model)
-                ? [{ value: prefs.model, label: prefs.model }]
-                : []),
-            ]}
-            onChange={(model) => patchPrefs({ model })}
-          />
-          <label className="flex flex-col gap-1.5">
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Or paste a custom model id
-            </span>
-            <input
-              value={prefs.model}
-              onChange={(e) => patchPrefs({ model: e.target.value })}
-              placeholder="model id"
-              className="rounded-lg border px-3 py-2 font-mono text-sm outline-none"
-              style={fieldStyle()}
-            />
-          </label>
-
-          <div className="space-y-2">
-            <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
-              API key
-            </div>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              {keyPresent
-                ? "A key is saved in the OS keychain for this provider. Paste a new one to replace it."
-                : "Paste your key. It is stored in the OS keychain, not in backups."}
-            </p>
-            <input
-              type="password"
-              value={apiKeyDraft}
-              onChange={(e) => setApiKeyDraft(e.target.value)}
-              placeholder={keyPresent ? "•••••••• (replace)" : "sk-… or Bedrock API key"}
-              className="w-full rounded-lg border px-3 py-2 font-mono text-sm outline-none"
-              style={fieldStyle()}
-              autoComplete="off"
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" disabled={busy || !apiKeyDraft.trim()} onClick={() => void saveKey()}>
-                Save key
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={busy || !keyPresent}
-                onClick={() => void clearKey()}
+              Add models
+            </Button>
+            {(prefs.customModels[prefs.providerId] ?? []).map((id) => (
+              <div
+                key={id}
+                className="flex items-center justify-between gap-2 text-xs"
               >
-                Clear key
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={busy || !keyPresent || !prefs.model.trim()}
-                onClick={() => void testConnection()}
-              >
-                Test connection
-              </Button>
-            </div>
+                <span
+                  className="min-w-0 truncate font-mono"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  {id}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    const remaining = (
+                      prefs.customModels[prefs.providerId] ?? []
+                    ).filter((model) => model !== id);
+                    patchPrefs({
+                      customModels: {
+                        ...prefs.customModels,
+                        [prefs.providerId]: remaining,
+                      },
+                      ...(prefs.model === id
+                        ? { model: models.find((m) => m.id !== id)?.id ?? "" }
+                        : {}),
+                    });
+                  }}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Select
-              label="Default mode"
-              value={prefs.mode}
-              options={[
-                { value: "ask", label: "Ask" },
-                { value: "agent", label: "Agent" },
-              ]}
-              onChange={(mode) => patchPrefs({ mode: mode as AiMode })}
-            />
-            <Select
-              label="Default access"
-              value={prefs.access}
-              options={[
-                { value: "confirm", label: "Confirm each command" },
-                { value: "full", label: "Full access (no approval)" },
-              ]}
-              onChange={(access) => patchPrefs({ access: access as AiAccess })}
-            />
-          </div>
-
-          {prefs.access === "full" && (
+          <div
+            className="space-y-4 rounded-xl border p-4"
+            style={{
+              borderColor: "var(--border-subtle)",
+              background: "var(--bg-card)",
+            }}
+          >
             <div
-              className="rounded-xl border px-3.5 py-3 text-xs leading-relaxed"
-              style={{
-                borderColor: "rgba(248,113,113,0.35)",
-                background: "rgba(248,113,113,0.08)",
-                color: "#fca5a5",
-              }}
+              className="text-sm font-medium"
+              style={{ color: "var(--text)" }}
             >
-              Full access lets Agent run suggested shell commands on the active session without asking.
-              Destructive commands can wipe data. Prefer Confirm unless you trust the model and host.
+              Agent behavior
             </div>
-          )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Select
+                label="Default mode"
+                value={prefs.mode}
+                options={[
+                  { value: "ask", label: "Ask" },
+                  { value: "agent", label: "Agent" },
+                ]}
+                onChange={(mode) => patchPrefs({ mode: mode as AiMode })}
+              />
+              <Select
+                label="Default access"
+                value={prefs.access}
+                options={[
+                  { value: "confirm", label: "Confirm each command" },
+                  { value: "full", label: "Full access (no approval)" },
+                ]}
+                onChange={(access) =>
+                  patchPrefs({ access: access as AiAccess })
+                }
+              />
+            </div>
+            <SettingToggle
+              label="Include terminal context"
+              description="Send recent terminal output with your request."
+              checked={prefs.includeTerminalContext}
+              onChange={(includeTerminalContext) =>
+                patchPrefs({ includeTerminalContext })
+              }
+            />
+
+            {prefs.access === "full" && (
+              <div
+                className="rounded-xl border px-3.5 py-3 text-xs leading-relaxed"
+                style={{
+                  borderColor: "rgba(248,113,113,0.35)",
+                  background: "rgba(248,113,113,0.08)",
+                  color: "#fca5a5",
+                }}
+              >
+                Full access lets Agent run suggested shell commands on the
+                active session without asking. Destructive commands can wipe
+                data. Prefer Confirm unless you trust the model and host.
+              </div>
+            )}
+          </div>
 
           {status && (
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>

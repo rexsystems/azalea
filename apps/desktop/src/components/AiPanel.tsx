@@ -51,12 +51,14 @@ import {
   type AiChatThread,
   type AiMemoryNote,
   type AiMode,
-  type AiModelOption,
   type AiPendingAction,
   type AiProviderId,
 } from "../lib/ai";
 import * as api from "../lib/api";
+import { runAiCommand } from "../lib/aiCommand";
+import { useAiModels } from "../hooks/useAiModels";
 import { AiMarkdown } from "./AiMarkdown";
+import { AiActivity } from "./AiActivity";
 import { Button } from "./ui/Button";
 import { Checkbox } from "./ui/Checkbox";
 import { Select } from "./ui/Select";
@@ -92,38 +94,6 @@ const MAX_WIDTH = 560;
 const DEFAULT_WIDTH = 400;
 const MAX_AGENT_STEPS = 8;
 
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitForTerminalQuiet(
-  getContext: (() => string) | undefined,
-  beforeLen: number,
-  shouldAbort: () => boolean,
-  { quietMs = 900, maxMs = 18000, minWait = 450 }: { quietMs?: number; maxMs?: number; minWait?: number } = {},
-): Promise<string> {
-  if (!getContext) {
-    await sleep(minWait);
-    return "";
-  }
-  const start = Date.now();
-  let lastLen = beforeLen;
-  let lastChange = Date.now();
-  await sleep(minWait);
-  while (Date.now() - start < maxMs) {
-    if (shouldAbort()) return getContext();
-    const ctx = getContext();
-    if (ctx.length !== lastLen) {
-      lastLen = ctx.length;
-      lastChange = Date.now();
-    } else if (ctx.length > beforeLen && Date.now() - lastChange >= quietMs) {
-      return ctx;
-    }
-    await sleep(180);
-  }
-  return getContext();
-}
-
 export function AiPanel({
   sessionId,
   hostLabel,
@@ -137,18 +107,22 @@ export function AiPanel({
   const [prefs, setPrefsState] = useState(() => getAiPrefs());
   const [width, setWidth] = useState(() => {
     const stored = Number(localStorage.getItem(WIDTH_KEY));
-    return Number.isFinite(stored) ? Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, stored)) : DEFAULT_WIDTH;
+    return Number.isFinite(stored)
+      ? Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, stored))
+      : DEFAULT_WIDTH;
   });
-  const [threads, setThreads] = useState<AiChatThread[]>(() => listAllAiThreads());
+  const [threads, setThreads] = useState<AiChatThread[]>(() =>
+    listAllAiThreads(),
+  );
   const [threadId, setThreadId] = useState<string>(() => {
     const all = listAllAiThreads();
     const forSession = all.find((t) => t.sessionId === sessionId);
-    return forSession?.id ?? all[0]?.id ?? newAiThreadId();
+    return forSession?.id ?? newAiThreadId();
   });
   const [messages, setMessages] = useState<AiChatMessageStored[]>(() => {
     const all = listAllAiThreads();
     const forSession = all.find((t) => t.sessionId === sessionId);
-    return forSession?.messages ?? all[0]?.messages ?? [];
+    return forSession?.messages ?? [];
   });
   const [createdAt, setCreatedAt] = useState(() => {
     const all = listAllAiThreads();
@@ -157,7 +131,9 @@ export function AiPanel({
   });
   const [panelView, setPanelView] = useState<PanelView>("chat");
   const [historyQuery, setHistoryQuery] = useState("");
-  const [memoryNotes, setMemoryNotes] = useState<AiMemoryNote[]>(() => getAiMemory());
+  const [memoryNotes, setMemoryNotes] = useState<AiMemoryNote[]>(() =>
+    getAiMemory(),
+  );
   const [memoryDraft, setMemoryDraft] = useState("");
   const [pendingApprove, setPendingApprove] = useState<AiPendingAction[]>([]);
   const [snippetStatus, setSnippetStatus] = useState<string | null>(null);
@@ -166,8 +142,6 @@ export function AiPanel({
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [streamingId, setStreamingId] = useState<string | null>(null);
-  const [liveModels, setLiveModels] = useState<AiModelOption[] | null>(null);
-  const [loadingModels, setLoadingModels] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const requestIdRef = useRef<string | null>(null);
   const messagesRef = useRef(messages);
@@ -178,6 +152,9 @@ export function AiPanel({
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   const abortAgentRef = useRef(false);
+  const commandAbortRef = useRef<AbortController | null>(null);
+  const operationRef = useRef(false);
+  const [commandOutput, setCommandOutput] = useState<string | null>(null);
   const approvedObsRef = useRef<string[]>([]);
   const hostLabelRef = useRef(hostLabel);
   const sessionIdRef = useRef(sessionId);
@@ -190,20 +167,12 @@ export function AiPanel({
   sessionIdRef.current = sessionId;
 
   const provider = getProvider(prefs.providerId);
-  const derivedUrl = resolveProviderBaseUrl(
-    prefs.providerId,
-    prefs.region,
-    prefs.customBaseUrl,
-  );
-
-  const modelOptions = useMemo(() => {
-    const base = liveModels ?? provider.models;
-    const ids = new Set(base.map((m) => m.id));
-    if (prefs.model && !ids.has(prefs.model)) {
-      return [{ id: prefs.model, label: prefs.model }, ...base];
-    }
-    return base;
-  }, [liveModels, provider.models, prefs.model]);
+  const {
+    models: modelOptions,
+    loading: loadingModels,
+    error: modelsError,
+    refresh: refreshModels,
+  } = useAiModels(prefs);
 
   const modelLabel =
     modelOptions.find((m) => m.id === prefs.model)?.label ?? prefs.model;
@@ -231,7 +200,10 @@ export function AiPanel({
   const refreshThreads = () => setThreads(listAllAiThreads());
   const refreshMemory = () => setMemoryNotes(getAiMemory());
 
-  const persist = (nextMessages: AiChatMessageStored[], id = threadIdRef.current) => {
+  const persist = (
+    nextMessages: AiChatMessageStored[],
+    id = threadIdRef.current,
+  ) => {
     const firstUser = nextMessages.find(
       (m) =>
         m.role === "user" &&
@@ -261,36 +233,27 @@ export function AiPanel({
   }, [sessionId]);
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages, busy, agentStatus, panelView]);
+    const syncPrefs = () => setPrefsState(getAiPrefs());
+    window.addEventListener("azalea-ai-prefs", syncPrefs);
+    return () => {
+      window.removeEventListener("azalea-ai-prefs", syncPrefs);
+      abortAgentRef.current = true;
+      commandAbortRef.current?.abort();
+      if (requestIdRef.current) void api.aiChatCancel(requestIdRef.current);
+    };
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    setLiveModels(null);
-    if (!provider.supportsModelList) return;
-    setLoadingModels(true);
-    void api
-      .aiApiKeyPresent(prefs.providerId)
-      .then(async (present) => {
-        if (!present || cancelled) return;
-        const models = await api.aiListModels(prefs.providerId, derivedUrl);
-        if (!cancelled && models.length) {
-          setLiveModels(models.map((m) => ({ id: m.id, label: m.label || m.id })));
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setLoadingModels(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [prefs.providerId, prefs.region, prefs.customBaseUrl, derivedUrl, provider.supportsModelList]);
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+  }, [messages, busy, agentStatus, commandOutput, panelView]);
 
   useEffect(() => {
     if (!settingsOpen) return;
     const close = (e: MouseEvent) => {
-      if (composerRef.current && !composerRef.current.contains(e.target as Node)) {
+      if (
+        composerRef.current &&
+        !composerRef.current.contains(e.target as Node)
+      ) {
         setSettingsOpen(false);
       }
     };
@@ -299,11 +262,13 @@ export function AiPanel({
   }, [settingsOpen]);
 
   const startNewChat = () => {
+    if (operationRef.current) return;
     const id = newAiThreadId();
     const now = Date.now();
     setThreadId(id);
     setCreatedAt(now);
     setMessages([]);
+    setCommandOutput(null);
     setPendingApprove([]);
     setError(null);
     setAgentStatus(null);
@@ -311,11 +276,13 @@ export function AiPanel({
   };
 
   const loadThread = (id: string) => {
+    if (operationRef.current) return;
     const thread = getAiThread(id);
     if (!thread) return;
     setThreadId(id);
     setCreatedAt(thread.createdAt || thread.updatedAt);
     setMessages(thread.messages);
+    setCommandOutput(null);
     setPendingApprove([]);
     setError(null);
     setAgentStatus(null);
@@ -324,6 +291,7 @@ export function AiPanel({
   };
 
   const removeThread = (id: string) => {
+    if (operationRef.current && id === threadIdRef.current) return;
     deleteAiThread(id);
     refreshThreads();
     if (id === threadIdRef.current) startNewChat();
@@ -331,13 +299,12 @@ export function AiPanel({
 
   const stop = () => {
     abortAgentRef.current = true;
+    commandAbortRef.current?.abort();
     if (requestIdRef.current) {
       void api.aiChatCancel(requestIdRef.current);
     }
-    setBusy(false);
-    setStreamingId(null);
-    setAgentStatus(null);
-    requestIdRef.current = null;
+    setPendingApprove([]);
+    setAgentStatus(operationRef.current ? "Stopping…" : null);
   };
 
   const streamTurn = async (
@@ -346,47 +313,64 @@ export function AiPanel({
   ): Promise<string> => {
     const p = prefsRef.current;
     const prov = getProvider(p.providerId);
-    const baseUrl = resolveProviderBaseUrl(p.providerId, p.region, p.customBaseUrl);
+    const baseUrl = resolveProviderBaseUrl(
+      p.providerId,
+      p.region,
+      p.customBaseUrl,
+    );
     const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     requestIdRef.current = requestId;
     setStreamingId(assistantId);
 
     let content = "";
-    await new Promise<void>((resolve, reject) => {
-      void api
-        .aiChatStream(
-          requestId,
-          {
-            providerId: p.providerId,
-            dialect: prov.dialect,
-            baseUrl,
-            model: p.model,
-            messages: chatMessages,
-          },
-          {
-            onDelta: (text) => {
-              content += text;
-              const snapshot = content;
-              setMessages((prev) => {
-                const next = [...prev];
-                const last = next[next.length - 1];
-                if (last?.role === "assistant" && last.id === assistantId) {
-                  next[next.length - 1] = { ...last, content: snapshot };
-                }
-                return next;
-              });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        void api
+          .aiChatStream(
+            requestId,
+            {
+              providerId: p.providerId,
+              dialect: prov.dialect,
+              baseUrl,
+              model: p.model,
+              messages: chatMessages,
             },
-            onDone: () => resolve(),
-            onError: (text) => reject(new Error(text)),
-          },
-        )
-        .catch((err) => reject(err instanceof Error ? err : new Error(String(err))));
-    });
-
+            {
+              onDelta: (text) => {
+                if (!content) setAgentStatus("Working…");
+                content += text;
+                const snapshot = content;
+                setMessages((prev) => {
+                  const next = [...prev];
+                  const last = next[next.length - 1];
+                  if (last?.role === "assistant" && last.id === assistantId) {
+                    next[next.length - 1] = { ...last, content: snapshot };
+                  }
+                  return next;
+                });
+              },
+              onDone: () => resolve(),
+              onError: (text) => reject(new Error(text)),
+            },
+          )
+          .catch((err) =>
+            reject(err instanceof Error ? err : new Error(String(err))),
+          );
+      });
+    } finally {
+      const next = messagesRef.current.map((message) =>
+        message.id === assistantId ? { ...message, content } : message,
+      );
+      messagesRef.current = next;
+      setMessages(next);
+      persist(next);
+    }
     return content;
   };
 
-  const runActionsObserving = async (actions: AiPendingAction[]): Promise<string> => {
+  const runActionsObserving = async (
+    actions: AiPendingAction[],
+  ): Promise<string> => {
     const chunks: string[] = [];
     for (let i = 0; i < actions.length; i++) {
       if (abortAgentRef.current) break;
@@ -400,23 +384,37 @@ export function AiPanel({
       );
 
       if (action.type === "shell") {
-        const before = getTerminalContext?.() ?? "";
-        const beforeLen = before.length;
-        onRunCommand(action.command);
-        const after = await waitForTerminalQuiet(
-          getTerminalContext,
-          beforeLen,
-          () => abortAgentRef.current,
-        );
-        const raw = after.slice(Math.max(0, beforeLen - 120));
-        const cleaned = stripAnsi(raw).trim().slice(-4000);
-        chunks.push(`$ ${action.command}\n${cleaned || "(no new output)"}`);
+        const controller = new AbortController();
+        commandAbortRef.current = controller;
+        setCommandOutput(`$ ${action.command}\n`);
+        try {
+          const powershell =
+            /windows/i.test(osId ?? "") ||
+            (api.isLocalSession(sessionId) && /Win/i.test(navigator.platform));
+          const result = await runAiCommand(
+            sessionId,
+            action.command,
+            controller.signal,
+            (output) => {
+              setCommandOutput(`$ ${action.command}\n${stripAnsi(output)}`);
+            },
+            powershell,
+          );
+          const cleaned = stripAnsi(result.output).trim();
+          const observation = `$ ${action.command}\n${cleaned || "(no output)"}\nExit code: ${result.exitCode}`;
+          setCommandOutput(observation);
+          chunks.push(observation);
+        } finally {
+          commandAbortRef.current = null;
+        }
         continue;
       }
 
       try {
         if (!onWriteFile) {
-          chunks.push(`write ${action.path}\nError: File write needs an SSH session.`);
+          chunks.push(
+            `write ${action.path}\nError: File write needs an SSH session.`,
+          );
           continue;
         }
         await onWriteFile(action.path, action.content);
@@ -435,8 +433,9 @@ export function AiPanel({
     extraSystem?: string,
   ) => {
     const p = prefsRef.current;
-    const context =
-      p.includeTerminalContext ? (getTerminalContext?.().trim() ?? "") : "";
+    const context = p.includeTerminalContext
+      ? (getTerminalContext?.().trim() ?? "")
+      : "";
     const mapped = history
       .filter((m) => m.role === "user" || (m.role === "assistant" && m.content))
       .slice(-24)
@@ -444,7 +443,10 @@ export function AiPanel({
 
     const memoryBlock = formatMemoryForPrompt();
     const catalogBlock = formatHistoryCatalogForPrompt(threadIdRef.current);
-    const relatedBlock = formatRelatedChatsForPrompt(latestUser, threadIdRef.current);
+    const relatedBlock = formatRelatedChatsForPrompt(
+      latestUser,
+      threadIdRef.current,
+    );
 
     return [
       { role: "system", content: buildSystemPrompt(p.mode, p.access, osId) },
@@ -482,7 +484,6 @@ export function AiPanel({
     working: AiChatMessageStored[],
     observation: string,
   ): Promise<"done" | "waiting"> => {
-    const p = prefsRef.current;
     let history = [...working];
     let nextObservation = observation;
 
@@ -505,7 +506,7 @@ export function AiPanel({
       history = [...history, obsMsg, assistantMsg];
       setMessages(history);
       persist(history);
-      setAgentStatus(step === 0 ? "Reading output…" : `Agent step ${step + 1}…`);
+      setAgentStatus(step === 0 ? "Reading output…" : "Planning next moves…");
 
       const payload = buildPayload(
         history,
@@ -517,10 +518,11 @@ export function AiPanel({
       try {
         content = await streamTurn(assistantId, payload);
       } catch (err) {
-        setError(String(err));
+        if (!abortAgentRef.current) setError(String(err));
         return "done";
       }
 
+      if (abortAgentRef.current) return "done";
       harvestMemory(content);
 
       history = history.map((m) =>
@@ -530,12 +532,13 @@ export function AiPanel({
       persist(history);
 
       const actions = parseSuggestedActions(content);
+      if (abortAgentRef.current) return "done";
       if (!actions.length) {
         setPendingApprove([]);
         return "done";
       }
 
-      if (p.access === "confirm") {
+      if (prefsRef.current.access === "confirm") {
         setPendingApprove(actions);
         setAgentStatus("Waiting for approval…");
         return "waiting";
@@ -544,15 +547,20 @@ export function AiPanel({
       nextObservation = await runActionsObserving(actions);
       setPendingApprove([]);
     }
+    setError(
+      `Agent paused after ${MAX_AGENT_STEPS} steps. Review the results before continuing.`,
+    );
     return "done";
   };
 
   const send = async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || operationRef.current) return;
+    operationRef.current = true;
     setInput("");
     setError(null);
     setPendingApprove([]);
+    setCommandOutput(null);
     abortAgentRef.current = false;
     approvedObsRef.current = [];
 
@@ -572,13 +580,14 @@ export function AiPanel({
     let working = [...messagesRef.current, userMsg, assistantMsg];
     setMessages(working);
     setBusy(true);
-    setAgentStatus(prefs.mode === "agent" ? "Thinking…" : null);
+    setAgentStatus("Thinking…");
     persist(working);
     let keepAgentStatus = false;
 
     try {
       const payload = buildPayload(working, text);
       const content = await streamTurn(assistantId, payload);
+      if (abortAgentRef.current) return;
       harvestMemory(content);
       working = working.map((m) =>
         m.id === assistantId ? { ...m, content } : m,
@@ -614,6 +623,7 @@ export function AiPanel({
     } catch (err) {
       if (!abortAgentRef.current) setError(String(err));
     } finally {
+      operationRef.current = false;
       setBusy(false);
       setStreamingId(null);
       requestIdRef.current = null;
@@ -622,9 +632,21 @@ export function AiPanel({
   };
 
   const approveAction = async (action: AiPendingAction) => {
-    const remaining = pendingApprove.filter((a) => !pendingActionsEqual(a, action));
+    if (
+      operationRef.current ||
+      !pendingApprove.some((a) => pendingActionsEqual(a, action))
+    )
+      return;
+    operationRef.current = true;
+    const index = pendingApprove.findIndex((a) =>
+      pendingActionsEqual(a, action),
+    );
+    if (index !== 0) {
+      operationRef.current = false;
+      return;
+    }
+    const remaining = pendingApprove.filter((_, i) => i !== index);
     setPendingApprove(remaining);
-    if (busy) return;
 
     abortAgentRef.current = false;
     setBusy(true);
@@ -639,19 +661,27 @@ export function AiPanel({
         const result = await continueAgentAfterOutput(messagesRef.current, all);
         if (result === "done") setAgentStatus(null);
       } else {
-        setAgentStatus(`Approved · ${remaining.length} left`);
+        setAgentStatus(`Waiting for approval · ${remaining.length} remaining`);
       }
     } catch (err) {
       if (!abortAgentRef.current) setError(String(err));
+      setAgentStatus(
+        remaining.length
+          ? `Waiting for approval · ${remaining.length} remaining`
+          : null,
+      );
     } finally {
+      operationRef.current = false;
       setBusy(false);
       setStreamingId(null);
       requestIdRef.current = null;
+      if (abortAgentRef.current) setAgentStatus(null);
     }
   };
 
   const approveAll = async () => {
-    if (!pendingApprove.length || busy) return;
+    if (!pendingApprove.length || operationRef.current) return;
+    operationRef.current = true;
     const actions = [...pendingApprove];
     setPendingApprove([]);
     abortAgentRef.current = false;
@@ -662,19 +692,25 @@ export function AiPanel({
       approvedObsRef.current = [];
       const observation = await runActionsObserving(actions);
       const combined = [prior, observation].filter(Boolean).join("\n\n");
-      const result = await continueAgentAfterOutput(messagesRef.current, combined);
+      const result = await continueAgentAfterOutput(
+        messagesRef.current,
+        combined,
+      );
       if (result === "done") setAgentStatus(null);
     } catch (err) {
       if (!abortAgentRef.current) setError(String(err));
     } finally {
+      operationRef.current = false;
       setBusy(false);
       setStreamingId(null);
       requestIdRef.current = null;
+      if (abortAgentRef.current) setAgentStatus(null);
     }
   };
 
   const rejectAll = async () => {
-    if (!pendingApprove.length || busy) return;
+    if (!pendingApprove.length || operationRef.current) return;
+    operationRef.current = true;
     setPendingApprove([]);
     approvedObsRef.current = [];
     abortAgentRef.current = false;
@@ -689,9 +725,11 @@ export function AiPanel({
     } catch (err) {
       if (!abortAgentRef.current) setError(String(err));
     } finally {
+      operationRef.current = false;
       setBusy(false);
       setStreamingId(null);
       requestIdRef.current = null;
+      if (abortAgentRef.current) setAgentStatus(null);
     }
   };
 
@@ -703,16 +741,26 @@ export function AiPanel({
       .replace(/[^\w.-]+/g, "-")
       .replace(/-+/g, "-")
       .slice(0, 40);
-    const name = all ? `azalea-chats-${stamp}.json` : `azalea-chat-${safe || "chat"}-${stamp}.json`;
+    const name = all
+      ? `azalea-chats-${stamp}.json`
+      : `azalea-chat-${safe || "chat"}-${stamp}.json`;
     try {
-      await api.saveTextFile(name, [{ name: "JSON", extensions: ["json"] }], exportAiThreadsJson(list));
+      await api.saveTextFile(
+        name,
+        [{ name: "JSON", extensions: ["json"] }],
+        exportAiThreadsJson(list),
+      );
     } catch (err) {
       setError(String(err));
     }
   };
 
   const saveSnippetFromChat = async (command: string) => {
-    const first = command.split("\n").find((l) => l.trim())?.trim() ?? "Snippet";
+    const first =
+      command
+        .split("\n")
+        .find((l) => l.trim())
+        ?.trim() ?? "Snippet";
     const name = first.slice(0, 48) || "Snippet from chat";
     try {
       await api.createSnippet({ name, command });
@@ -732,7 +780,10 @@ export function AiPanel({
   const onResizePointerMove = (e: ReactPointerEvent) => {
     if (!dragRef.current) return;
     const delta = dragRef.current.startX - e.clientX;
-    const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragRef.current.startW + delta));
+    const next = Math.min(
+      MAX_WIDTH,
+      Math.max(MIN_WIDTH, dragRef.current.startW + delta),
+    );
     setWidth(next);
   };
 
@@ -766,10 +817,20 @@ export function AiPanel({
         <div className="flex min-w-0 items-center gap-2">
           <Message size={16} style={{ color: "var(--text)" }} />
           <div className="min-w-0">
-            <div className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-              {panelView === "history" ? "Old chats" : panelView === "memory" ? "Memory" : "Chat"}
+            <div
+              className="text-sm font-semibold"
+              style={{ color: "var(--text)" }}
+            >
+              {panelView === "history"
+                ? "Old chats"
+                : panelView === "memory"
+                  ? "Memory"
+                  : "Chat"}
             </div>
-            <div className="truncate text-[11px]" style={{ color: "var(--text-secondary)" }}>
+            <div
+              className="truncate text-[11px]"
+              style={{ color: "var(--text-secondary)" }}
+            >
               {panelView === "history"
                 ? "Saved on this PC only"
                 : panelView === "memory"
@@ -783,8 +844,10 @@ export function AiPanel({
             type="button"
             className="hover-subtle rounded-lg p-1.5"
             style={{
-              color: panelView === "history" ? "var(--text)" : "var(--text-muted)",
-              background: panelView === "history" ? "var(--bg-card)" : "transparent",
+              color:
+                panelView === "history" ? "var(--text)" : "var(--text-muted)",
+              background:
+                panelView === "history" ? "var(--bg-card)" : "transparent",
             }}
             title="Old chats"
             onClick={() => {
@@ -799,8 +862,10 @@ export function AiPanel({
             type="button"
             className="hover-subtle rounded-lg p-1.5"
             style={{
-              color: panelView === "memory" ? "var(--text)" : "var(--text-muted)",
-              background: panelView === "memory" ? "var(--bg-card)" : "transparent",
+              color:
+                panelView === "memory" ? "var(--text)" : "var(--text-muted)",
+              background:
+                panelView === "memory" ? "var(--bg-card)" : "transparent",
             }}
             title="Memory"
             onClick={() => {
@@ -834,7 +899,10 @@ export function AiPanel({
 
       {panelView === "history" ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="border-b px-3 py-2.5" style={{ borderColor: "var(--border-subtle)" }}>
+          <div
+            className="border-b px-3 py-2.5"
+            style={{ borderColor: "var(--border-subtle)" }}
+          >
             <input
               value={historyQuery}
               onChange={(e) => setHistoryQuery(e.target.value)}
@@ -859,8 +927,13 @@ export function AiPanel({
           </div>
           <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-2">
             {historyThreads.length === 0 ? (
-              <p className="px-2 pt-6 text-center text-[13px]" style={{ color: "var(--text-secondary)" }}>
-                {historyQuery.trim() ? "No chats match." : "No saved chats yet. They stay on this PC only."}
+              <p
+                className="px-2 pt-6 text-center text-[13px]"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                {historyQuery.trim()
+                  ? "No chats match."
+                  : "No saved chats yet. They stay on this PC only."}
               </p>
             ) : (
               historyThreads.map((t) => {
@@ -878,14 +951,23 @@ export function AiPanel({
                       className="min-w-0 flex-1 text-left"
                       onClick={() => loadThread(t.id)}
                     >
-                      <div className="truncate text-[13px] font-medium" style={{ color: "var(--text)" }}>
+                      <div
+                        className="truncate text-[13px] font-medium"
+                        style={{ color: "var(--text)" }}
+                      >
                         {t.title || "Chat"}
                       </div>
-                      <div className="mt-0.5 truncate text-[11px]" style={{ color: "var(--text-muted)" }}>
+                      <div
+                        className="mt-0.5 truncate text-[11px]"
+                        style={{ color: "var(--text-muted)" }}
+                      >
                         {formatRelativeTime(t.updatedAt)}
                         {t.hostLabel ? ` · ${t.hostLabel}` : ""}
                       </div>
-                      <div className="mt-1 line-clamp-2 text-[12px]" style={{ color: "var(--text-secondary)" }}>
+                      <div
+                        className="mt-1 line-clamp-2 text-[12px]"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
                         {threadPreview(t, 120)}
                       </div>
                     </button>
@@ -915,10 +997,17 @@ export function AiPanel({
         </div>
       ) : panelView === "memory" ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="space-y-2 border-b px-3 py-2.5" style={{ borderColor: "var(--border-subtle)" }}>
-            <p className="text-[12px] leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              Local notes the AI can reuse across chats. Also saved when the model writes a{" "}
-              <code className="text-[11px]">```memory</code> block.
+          <div
+            className="space-y-2 border-b px-3 py-2.5"
+            style={{ borderColor: "var(--border-subtle)" }}
+          >
+            <p
+              className="text-[12px] leading-relaxed"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              Local notes the AI can reuse across chats. Also saved when the
+              model writes a <code className="text-[11px]">```memory</code>{" "}
+              block.
             </p>
             <div className="flex gap-2">
               <input
@@ -962,7 +1051,10 @@ export function AiPanel({
           </div>
           <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 py-2">
             {memoryNotes.length === 0 ? (
-              <p className="px-2 pt-6 text-center text-[13px]" style={{ color: "var(--text-secondary)" }}>
+              <p
+                className="px-2 pt-6 text-center text-[13px]"
+                style={{ color: "var(--text-secondary)" }}
+              >
                 Empty. Add notes here or let Agent save useful facts.
               </p>
             ) : (
@@ -970,14 +1062,24 @@ export function AiPanel({
                 <div
                   key={note.id}
                   className="flex items-start gap-2 rounded-xl border px-3 py-2.5"
-                  style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
+                  style={{
+                    borderColor: "var(--border-subtle)",
+                    background: "var(--bg-card)",
+                  }}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="select-text text-[13px] leading-relaxed" style={{ color: "var(--text)" }}>
+                    <div
+                      className="select-text text-[13px] leading-relaxed"
+                      style={{ color: "var(--text)" }}
+                    >
                       {note.text}
                     </div>
-                    <div className="mt-1 text-[10px]" style={{ color: "var(--text-muted)" }}>
-                      {note.source === "ai" ? "AI" : "You"} · {formatRelativeTime(note.updatedAt)}
+                    <div
+                      className="mt-1 text-[10px]"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {note.source === "ai" ? "AI" : "You"} ·{" "}
+                      {formatRelativeTime(note.updatedAt)}
                     </div>
                   </div>
                   <button
@@ -998,320 +1100,410 @@ export function AiPanel({
           </div>
         </div>
       ) : (
-      <div ref={listRef} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3.5 py-4">
-        {messages.length === 0 && (
-          <div className="space-y-2 pt-8 text-center">
-            <div className="text-[15px] font-semibold" style={{ color: "var(--text)" }}>
-              Terminal chat
-            </div>
-            <p className="mx-auto max-w-[260px] text-[13px] leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              Ask about errors, draft commands, or switch to Agent to run them and read the output.
-            </p>
-          </div>
-        )}
-        {messages.map((item) => {
-          const isObs =
-            item.role === "user" &&
-            (item.content.startsWith("Command output:") ||
-              item.content.startsWith("Action results:"));
-          return (
-            <div key={item.id} className="space-y-1.5">
+        <div
+          ref={listRef}
+          className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3.5 py-4"
+        >
+          {messages.length === 0 && (
+            <div className="space-y-2 pt-8 text-center">
               <div
-                className="text-[11px] font-semibold"
+                className="text-[15px] font-semibold"
+                style={{ color: "var(--text)" }}
+              >
+                Terminal chat
+              </div>
+              <p
+                className="mx-auto max-w-[260px] text-[13px] leading-relaxed"
                 style={{ color: "var(--text-secondary)" }}
               >
-                {item.role === "user" ? (isObs ? "Terminal" : "You") : "Azalea"}
-              </div>
-              {item.role === "user" ? (
-                <div
-                  className="select-text rounded-2xl px-3.5 py-2.5 text-[14px] leading-[1.6] whitespace-pre-wrap"
-                  style={{
-                    background: isObs ? "var(--bg-card)" : "var(--bg-card-hover)",
-                    color: "var(--text)",
-                    border: isObs ? "1px solid var(--border-subtle)" : undefined,
-                  }}
-                >
-                  {isObs ? (
-                    <AiMarkdown text={item.content} />
-                  ) : (
-                    item.content
-                  )}
-                </div>
-              ) : (
-                <AiMarkdown
-                  text={item.content || (busy && item.id === streamingId ? "…" : "")}
-                  onInsertCommand={prefs.mode === "ask" ? onInsertCommand : undefined}
-                  onRunCommand={prefs.mode === "ask" ? onRunCommand : undefined}
-                  onWriteFile={
-                    prefs.mode === "ask" && onWriteFile
-                      ? (path, content) => {
-                          void onWriteFile(path, content).catch((err) => setError(String(err)));
-                        }
-                      : undefined
-                  }
-                  onSaveSnippet={(command) => void saveSnippetFromChat(command)}
-                  pendingApprove={
-                    item.id === messages[messages.length - 1]?.id ? pendingApprove : []
-                  }
-                  onApprove={(action) => void approveAction(action)}
-                />
-              )}
+                Ask about errors, draft commands, or switch to Agent to run them
+                and read the output.
+              </p>
             </div>
-          );
-        })}
-        {pendingApprove.length > 0 && (
-          <div
-            className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2"
-            style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
-          >
-            <span className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
-              {pendingApprove.length} pending
-            </span>
-            <Button size="sm" disabled={busy} onClick={() => void approveAll()}>
-              Approve all
-            </Button>
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void rejectAll()}>
-              Reject all
-            </Button>
-          </div>
-        )}
-        {agentStatus && (
-          <p className="text-[12px] font-medium" style={{ color: "var(--text-secondary)" }}>
-            {agentStatus}
-          </p>
-        )}
-        {snippetStatus && (
-          <p className="text-[12px]" style={{ color: "var(--text-secondary)" }}>
-            {snippetStatus}
-          </p>
-        )}
-        {error && (
-          <p className="text-[13px]" style={{ color: "#f87171" }}>
-            {error}
-          </p>
-        )}
-      </div>
+          )}
+          {messages.map((item) => {
+            const isObs =
+              item.role === "user" &&
+              (item.content.startsWith("Command output:") ||
+                item.content.startsWith("Action results:"));
+            return (
+              <div
+                key={item.id}
+                className="space-y-2.5"
+                aria-busy={busy && item.id === streamingId}
+              >
+                <div
+                  className="text-[11px] font-semibold"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  {item.role === "user"
+                    ? isObs
+                      ? "Terminal"
+                      : "You"
+                    : "Azalea"}
+                </div>
+                {item.role === "user" ? (
+                  <div
+                    className="select-text rounded-2xl px-3.5 py-2.5 text-[14px] leading-[1.6] whitespace-pre-wrap"
+                    style={{
+                      background: isObs
+                        ? "var(--bg-card)"
+                        : "var(--bg-card-hover)",
+                      color: "var(--text)",
+                      border: isObs
+                        ? "1px solid var(--border-subtle)"
+                        : undefined,
+                    }}
+                  >
+                    {isObs ? <AiMarkdown text={item.content} /> : item.content}
+                  </div>
+                ) : !item.content && busy && item.id === streamingId ? (
+                  <AiActivity text={agentStatus ?? "Thinking…"} active />
+                ) : (
+                  <AiMarkdown
+                    text={item.content}
+                    onInsertCommand={
+                      prefs.mode === "ask" ? onInsertCommand : undefined
+                    }
+                    onRunCommand={
+                      prefs.mode === "ask" ? onRunCommand : undefined
+                    }
+                    onWriteFile={
+                      prefs.mode === "ask" && onWriteFile
+                        ? (path, content) => {
+                            void onWriteFile(path, content).catch((err) =>
+                              setError(String(err)),
+                            );
+                          }
+                        : undefined
+                    }
+                    onSaveSnippet={(command) =>
+                      void saveSnippetFromChat(command)
+                    }
+                    pendingApprove={
+                      item.id === messages[messages.length - 1]?.id
+                        ? pendingApprove
+                        : []
+                    }
+                    onApprove={(action) => void approveAction(action)}
+                    disabled={busy}
+                  />
+                )}
+              </div>
+            );
+          })}
+          {pendingApprove.length > 0 && (
+            <div
+              className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2"
+              style={{
+                borderColor: "var(--border-subtle)",
+                background: "var(--bg-card)",
+              }}
+            >
+              <span
+                className="text-[12px]"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Waiting for approval · {pendingApprove.length} pending
+              </span>
+              <Button
+                size="xs"
+                disabled={busy}
+                onClick={() => void approveAll()}
+              >
+                Approve all
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void rejectAll()}
+              >
+                Reject all
+              </Button>
+            </div>
+          )}
+          {agentStatus &&
+            (busy || pendingApprove.length === 0) &&
+            !messages.some(
+              (m) => busy && m.id === streamingId && !m.content,
+            ) && (
+              <AiActivity
+                text={agentStatus}
+                active={busy && agentStatus !== "Stopping…"}
+              />
+            )}
+          {commandOutput !== null && (
+            <pre
+              className="select-text max-h-64 overflow-auto rounded-xl border px-3 py-2 font-mono text-[12px] whitespace-pre-wrap"
+              style={{
+                borderColor: "var(--border-subtle)",
+                background: "var(--bg-card)",
+                color: "var(--text-secondary)",
+              }}
+            >
+              {commandOutput}
+            </pre>
+          )}
+          {snippetStatus && (
+            <p
+              className="text-[12px]"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              {snippetStatus}
+            </p>
+          )}
+          {error && (
+            <p className="text-[13px]" style={{ color: "#f87171" }}>
+              {error}
+            </p>
+          )}
+        </div>
       )}
 
       {panelView === "chat" && (
-      <div
-        ref={composerRef}
-        className="border-t p-3"
-        style={{ borderColor: "var(--border-subtle)" }}
-      >
         <div
-          className="rounded-2xl border"
-          style={{
-            background: "var(--bg-input)",
-            borderColor: "var(--border-subtle)",
-          }}
+          ref={composerRef}
+          className="border-t p-3"
+          style={{ borderColor: "var(--border-subtle)" }}
         >
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void send();
-              }
+          <div
+            className="rounded-2xl border"
+            style={{
+              background: "var(--bg-input)",
+              borderColor: "var(--border-subtle)",
             }}
-            rows={3}
-            placeholder={
-              prefs.mode === "agent"
-                ? "Tell Agent what to do…"
-                : "Ask about this session…"
-            }
-            className="select-text w-full resize-none bg-transparent px-3.5 pt-3 pb-2 text-[14px] leading-relaxed outline-none"
-            style={{ color: "var(--text)" }}
-          />
-
-          <div className="flex items-center gap-1.5 px-2 pb-2">
-            <Select
-              size="sm"
-              menuPlacement="top"
-              className="w-[104px] shrink-0"
-              value={prefs.mode}
-              options={[
-                { value: "ask", label: "Ask" },
-                { value: "agent", label: "Agent" },
-              ]}
-              onChange={(mode) => {
-                setSettingsOpen(false);
-                patchPrefs({ mode: mode as AiMode });
+          >
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void send();
+                }
               }}
-            />
-            <Select
-              size="sm"
-              menuPlacement="top"
-              className="min-w-0 max-w-[160px] flex-1"
-              value={prefs.model}
-              options={modelOptions.map((m) => ({ value: m.id, label: m.label }))}
-              onChange={(model) => {
-                setSettingsOpen(false);
-                patchPrefs({ model });
-              }}
+              rows={3}
+              placeholder={
+                prefs.mode === "agent"
+                  ? "Tell Agent what to do…"
+                  : "Ask about this session…"
+              }
+              className="select-text w-full resize-none bg-transparent px-3.5 pt-3 pb-2 text-[14px] leading-relaxed outline-none"
+              style={{ color: "var(--text)" }}
             />
 
-            <div className="relative ml-auto flex items-center gap-1">
-              <button
-                type="button"
-                className="hover-subtle rounded-lg p-1.5"
-                style={{ color: "var(--text-muted)" }}
-                title="Chat settings"
-                onClick={() => setSettingsOpen((v) => !v)}
-              >
-                <Settings size={15} />
-              </button>
-              {settingsOpen && (
-                <div
-                  className="absolute bottom-full right-0 z-20 mb-1 w-[280px] space-y-3 rounded-xl border p-3 shadow-lg"
-                  style={{ background: "var(--bg-panel)", borderColor: "var(--border-subtle)" }}
-                  onMouseDown={(e) => e.stopPropagation()}
+            <div className="flex items-center gap-1.5 px-2 pb-2">
+              <Select
+                size="sm"
+                menuPlacement="top"
+                className="w-[104px] shrink-0"
+                value={prefs.mode}
+                disabled={busy}
+                options={[
+                  { value: "ask", label: "Ask" },
+                  { value: "agent", label: "Agent" },
+                ]}
+                onChange={(mode) => {
+                  setSettingsOpen(false);
+                  patchPrefs({ mode: mode as AiMode });
+                }}
+              />
+              <Select
+                size="sm"
+                menuPlacement="top"
+                className="min-w-0 max-w-[160px] flex-1"
+                value={prefs.model}
+                disabled={busy}
+                placeholder="Select model"
+                options={modelOptions.map((m) => ({
+                  value: m.id,
+                  label: m.label,
+                }))}
+                onChange={(model) => {
+                  setSettingsOpen(false);
+                  patchPrefs({ model });
+                }}
+              />
+
+              <div className="relative ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  className="hover-subtle rounded-lg p-1.5"
+                  style={{ color: "var(--text-muted)" }}
+                  title="Chat settings"
+                  onClick={() => setSettingsOpen((v) => !v)}
                 >
-                  <Select
-                    label="Provider"
-                    value={prefs.providerId}
-                    menuPlacement="top"
-                    options={AI_PROVIDERS.map((p) => ({ value: p.id, label: p.name }))}
-                    onChange={(id) => {
-                      const next = getProvider(id as AiProviderId);
-                      setLiveModels(null);
-                      patchPrefs({
-                        providerId: id as AiProviderId,
-                        model: next.defaultModel || prefs.model,
-                      });
+                  <Settings size={15} />
+                </button>
+                {settingsOpen && (
+                  <div
+                    className="absolute bottom-full right-0 z-20 mb-1 w-[280px] space-y-3 rounded-xl border p-3 shadow-lg"
+                    style={{
+                      background: "var(--bg-panel)",
+                      borderColor: "var(--border-subtle)",
                     }}
-                  />
-                  {regionOptions.length > 0 && (
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
                     <Select
-                      label="Region"
-                      value={prefs.region}
+                      label="Provider"
+                      disabled={busy}
+                      value={prefs.providerId}
                       menuPlacement="top"
-                      options={regionOptions}
-                      onChange={(region) => patchPrefs({ region })}
+                      options={AI_PROVIDERS.map((p) => ({
+                        value: p.id,
+                        label: p.name,
+                      }))}
+                      onChange={(id) => {
+                        patchPrefs({
+                          providerId: id as AiProviderId,
+                        });
+                      }}
                     />
-                  )}
-                  {prefs.mode === "agent" && (
-                    <div className="space-y-1.5">
+                    {regionOptions.length > 0 && (
                       <Select
-                        label="Access"
-                        value={prefs.access}
+                        label="Region"
+                        disabled={busy}
+                        value={prefs.region}
                         menuPlacement="top"
-                        options={[
-                          { value: "confirm", label: "Confirm each command" },
-                          { value: "full", label: "Full access" },
-                        ]}
-                        onChange={(access) => patchPrefs({ access: access as AiAccess })}
+                        options={regionOptions}
+                        onChange={(region) => patchPrefs({ region })}
                       />
-                      {prefs.access === "full" && (
-                        <p className="text-[11px] leading-relaxed" style={{ color: "#fca5a5" }}>
-                          Full access runs commands and file writes without asking.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  <Checkbox
-                    label="Include terminal context"
-                    checked={prefs.includeTerminalContext}
-                    onChange={(checked) => patchPrefs({ includeTerminalContext: checked })}
-                  />
-                  <button
-                    type="button"
-                    className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px]"
-                    style={{ color: "var(--text-secondary)" }}
-                    onClick={() => {
-                      const current = getAiThread(threadId);
-                      void exportThread(current);
-                      setSettingsOpen(false);
-                    }}
-                  >
-                    <Download size={13} />
-                    Export this chat
-                  </button>
-                  <button
-                    type="button"
-                    className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px]"
-                    style={{ color: "var(--text-secondary)" }}
-                    onClick={() => {
-                      void exportThread(null, true);
-                      setSettingsOpen(false);
-                    }}
-                  >
-                    <Download size={13} />
-                    Export all chats
-                  </button>
-                  {provider.supportsModelList && (
+                    )}
+                    {prefs.mode === "agent" && (
+                      <div className="space-y-1.5">
+                        <Select
+                          label="Access"
+                          disabled={busy}
+                          value={prefs.access}
+                          menuPlacement="top"
+                          options={[
+                            { value: "confirm", label: "Confirm each command" },
+                            { value: "full", label: "Full access" },
+                          ]}
+                          onChange={(access) =>
+                            patchPrefs({ access: access as AiAccess })
+                          }
+                        />
+                        {prefs.access === "full" && (
+                          <p
+                            className="text-[11px] leading-relaxed"
+                            style={{ color: "#fca5a5" }}
+                          >
+                            Full access runs commands and file writes without
+                            asking.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    <Checkbox
+                      label="Include terminal context"
+                      checked={prefs.includeTerminalContext}
+                      onChange={(checked) =>
+                        patchPrefs({ includeTerminalContext: checked })
+                      }
+                    />
                     <button
                       type="button"
                       className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px]"
                       style={{ color: "var(--text-secondary)" }}
-                      disabled={loadingModels}
                       onClick={() => {
-                        setLoadingModels(true);
-                        void api
-                          .aiListModels(prefs.providerId, derivedUrl)
-                          .then((models) =>
-                            setLiveModels(
-                              models.map((m) => ({ id: m.id, label: m.label || m.id })),
-                            ),
-                          )
-                          .catch(() => undefined)
-                          .finally(() => setLoadingModels(false));
-                      }}
-                    >
-                      {loadingModels ? (
-                        <Loader2 size={13} className="animate-spin" />
-                      ) : (
-                        <RefreshCw size={13} />
-                      )}
-                      Refresh models
-                    </button>
-                  )}
-                  {threads.some((t) => t.id === threadId) && (
-                    <button
-                      type="button"
-                      className="text-[11px]"
-                      style={{ color: "var(--text-muted)" }}
-                      onClick={() => {
-                        removeThread(threadId);
+                        const current = getAiThread(threadId);
+                        void exportThread(current);
                         setSettingsOpen(false);
                       }}
                     >
-                      Delete this chat
+                      <Download size={13} />
+                      Export this chat
                     </button>
-                  )}
-                </div>
-              )}
+                    <button
+                      type="button"
+                      className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px]"
+                      style={{ color: "var(--text-secondary)" }}
+                      onClick={() => {
+                        void exportThread(null, true);
+                        setSettingsOpen(false);
+                      }}
+                    >
+                      <Download size={13} />
+                      Export all chats
+                    </button>
+                    {provider.supportsModelList && (
+                      <button
+                        type="button"
+                        className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px]"
+                        style={{ color: "var(--text-secondary)" }}
+                        disabled={loadingModels}
+                        onClick={refreshModels}
+                      >
+                        {loadingModels ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <RefreshCw size={13} />
+                        )}
+                        Refresh models
+                      </button>
+                    )}
+                    {modelsError && (
+                      <p
+                        className="text-[11px]"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        {modelsError}
+                      </p>
+                    )}
+                    {threads.some((t) => t.id === threadId) && (
+                      <button
+                        type="button"
+                        className="text-[11px]"
+                        style={{ color: "var(--text-muted)" }}
+                        onClick={() => {
+                          removeThread(threadId);
+                          setSettingsOpen(false);
+                        }}
+                      >
+                        Delete this chat
+                      </button>
+                    )}
+                  </div>
+                )}
 
-              {busy ? (
-                <button
-                  type="button"
-                  className="flex h-8 w-8 items-center justify-center rounded-full"
-                  style={{ background: "var(--bg-card)", color: "var(--text)" }}
-                  title="Stop"
-                  onClick={stop}
-                >
-                  <Square size={12} />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="flex h-8 w-8 items-center justify-center rounded-full disabled:opacity-40"
-                  style={{
-                    background: input.trim() ? "var(--text)" : "var(--bg-card)",
-                    color: input.trim() ? "var(--bg-panel)" : "var(--text-muted)",
-                  }}
-                  disabled={!input.trim()}
-                  title="Send"
-                  onClick={() => void send()}
-                >
-                  <ArrowUp size={14} />
-                </button>
-              )}
+                {busy ? (
+                  <button
+                    type="button"
+                    className="flex h-8 w-8 items-center justify-center rounded-full"
+                    style={{
+                      background: "var(--bg-card)",
+                      color: "var(--text)",
+                    }}
+                    title="Stop"
+                    onClick={stop}
+                  >
+                    <Square size={12} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="flex h-8 w-8 items-center justify-center rounded-full disabled:opacity-40"
+                    style={{
+                      background: input.trim()
+                        ? "var(--text)"
+                        : "var(--bg-card)",
+                      color: input.trim()
+                        ? "var(--bg-panel)"
+                        : "var(--text-muted)",
+                    }}
+                    disabled={!input.trim()}
+                    title="Send"
+                    onClick={() => void send()}
+                  >
+                    <ArrowUp size={14} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
       )}
     </aside>
   );

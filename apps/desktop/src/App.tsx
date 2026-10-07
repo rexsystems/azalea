@@ -2318,6 +2318,7 @@ function App() {
 
           {viewingTerminal && aiEnabled && aiOpen && activeTab && (
             <AiPanel
+              key={activeTab.id}
               sessionId={activeTab.id}
               hostLabel={activeTab.title}
               osId={hosts.find((h) => h.id === activeTab.hostId)?.os_id}
