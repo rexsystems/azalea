@@ -39,6 +39,7 @@ const command = await load("../src/lib/aiCommand.ts", [
   },
 ]);
 const ai = await load("../src/lib/ai.ts");
+const web = await load("../src/lib/aiWeb.ts");
 const token = "azalea_test";
 const start = `\x1b]9999;${token}:start\x07`;
 const end = (code = 0) => `\x1b]9999;${token}:done:${code}\x07`;
@@ -275,4 +276,259 @@ test("Markdown renders headings, tables, lists, safe links, and write approval",
   assert.match(rendered, /write \/tmp\/test.conf/);
   assert.match(rendered, />Approve<\/button>/);
   assert.doesNotMatch(rendered, /href="javascript:|<script>/);
+});
+
+test("search requests must be complete, bounded, and deduplicated", () => {
+  assert.deepEqual(
+    web.parseWebSearches(
+      "```search\nTauri docs\n```\n```search\nTauri docs\n```",
+    ),
+    ["Tauri docs"],
+  );
+  assert.deepEqual(web.parseWebSearches("```search\nnot finished"), []);
+  assert.deepEqual(
+    web.parseWebSearches(`\`\`\`search\n${"x".repeat(601)}\n\`\`\``),
+    [],
+  );
+  assert.equal(
+    web.visibleAiText("Looking it up.\n```search\nprivate tool syntax"),
+    "Looking it up.",
+  );
+  assert.match(web.visibleAiText("```bash\necho yes\n```"), /echo yes/);
+});
+
+test("the next AI turn waits for actual search results", async () => {
+  let release;
+  let streams = 0;
+  const trace = [];
+  const source = {
+    title: "Official docs",
+    url: "https://example.com/docs",
+    snippet: "Verified excerpt",
+  };
+  const run = web.runWebSearchTurns(
+    [{ role: "user", content: "Find documentation" }],
+    {
+      stream: async (messages) => {
+        streams++;
+        if (streams === 1)
+          return "```search\nTauri docs\n```\n```bash\necho provisional\n```";
+        assert.match(messages.at(-1).content, /https:\/\/example.com\/docs/);
+        assert.match(messages.at(-1).content, /untrusted/);
+        trace.push("response");
+        return "Read [the docs](https://example.com/docs).";
+      },
+      search: async () => {
+        trace.push("search");
+        return new Promise((resolve) => {
+          release = () => resolve([source]);
+        });
+      },
+      enabled: () => true,
+      stopped: () => false,
+      readingSources: () => trace.push("results"),
+    },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(streams, 1);
+  assert.deepEqual(trace, ["search"]);
+  release();
+  const final = await run;
+  assert.deepEqual(trace, ["search", "results", "response"]);
+  assert.doesNotMatch(final, /echo provisional/);
+});
+
+test("disabled searches never call a provider", async () => {
+  let searched = false;
+  await assert.rejects(
+    web.runWebSearchTurns([], {
+      stream: async () => "```search\nTauri docs\n```",
+      search: async () => {
+        searched = true;
+        return [];
+      },
+      enabled: () => false,
+      stopped: () => false,
+      readingSources: () => {},
+    }),
+    /disabled/,
+  );
+  assert.equal(searched, false);
+});
+
+test("Stop during search prevents the follow-up AI request", async () => {
+  let stopped = false;
+  let streams = 0;
+  const final = await web.runWebSearchTurns([], {
+    stream: async () => {
+      streams++;
+      return "```search\nTauri docs\n```";
+    },
+    search: async () => {
+      stopped = true;
+      throw new Error("Stopped");
+    },
+    enabled: () => true,
+    stopped: () => stopped,
+    readingSources: () => assert.fail("Should not continue"),
+  });
+  assert.equal(streams, 1);
+  assert.equal(final, "");
+});
+
+test("search failures are reported as failures, and retries are bounded", async () => {
+  let streams = 0;
+  let searches = 0;
+  await assert.rejects(
+    web.runWebSearchTurns([], {
+      stream: async (messages) => {
+        if (streams++ > 0)
+          assert.match(
+            messages.at(-1).content,
+            /Search failed.*Do not invent sources/,
+          );
+        return "```search\nTauri docs\n```";
+      },
+      search: async () => {
+        searches++;
+        throw new Error("Quota exceeded");
+      },
+      enabled: () => true,
+      stopped: () => false,
+      readingSources: () => {},
+    }),
+    /three rounds/,
+  );
+  assert.equal(searches, 3);
+});
+
+test("Worked for excludes approval time and remains frozen when done", () => {
+  const start = {
+    userMessageId: "u",
+    elapsedMs: 0,
+    activeSince: 1000,
+    status: "running",
+    events: [],
+  };
+  const paused = web.transitionWork(start, "waiting", 4000);
+  assert.equal(paused.elapsedMs, 3000);
+  assert.equal(paused.activeSince, undefined);
+  const resumed = web.transitionWork(paused, "running", 64000);
+  const done = web.transitionWork(resumed, "done", 66000);
+  assert.equal(done.elapsedMs, 5000);
+  assert.equal(web.transitionWork(done, "done", 100000).elapsedMs, 5000);
+  assert.equal(web.formatWorkDuration(196000), "3m 16s");
+});
+
+test("work history persists and interrupted runs recover as stopped", () => {
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (key) => store.get(key) ?? null,
+    setItem: (key, value) => store.set(key, value),
+  };
+  const now = Date.now();
+  ai.saveAiThread({
+    id: "work-chat",
+    sessionId: "local-test",
+    title: "Find docs",
+    createdAt: now,
+    updatedAt: now,
+    messages: [
+      {
+        id: "u",
+        role: "user",
+        content: "Find docs",
+        createdAt: now,
+        work: {
+          userMessageId: "u",
+          status: "running",
+          elapsedMs: 1000,
+          activeSince: now,
+          events: [
+            {
+              id: "search",
+              kind: "search",
+              status: "done",
+              label: "Search: Tauri docs",
+              startedAt: now - 1000,
+              finishedAt: now,
+              sources: [
+                {
+                  title: "Docs",
+                  url: "https://example.com",
+                  snippet: "excerpt",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  });
+  const recovered = ai.getAiThread("work-chat");
+  assert.equal(recovered.messages[0].work.status, "stopped");
+  assert.equal(recovered.messages[0].work.activeSince, undefined);
+  assert.equal(
+    recovered.messages[0].work.events[0].sources[0].url,
+    "https://example.com",
+  );
+  assert.match(ai.exportAiThreadsJson([recovered]), /Search: Tauri docs/);
+});
+
+test("a completed agent run presents one final reply without losing intermediate messages", () => {
+  const work = {
+    userMessageId: "u",
+    status: "done",
+    elapsedMs: 1000,
+    events: [],
+  };
+  const messages = [
+    { id: "u", role: "user", content: "Fix it", work },
+    {
+      id: "plan",
+      role: "assistant",
+      content: "First inspect it.\n```bash\npwd\n```",
+    },
+    {
+      id: "output",
+      role: "user",
+      internal: true,
+      content: "Action results: /tmp",
+    },
+    { id: "next", role: "assistant", content: "Now check the files." },
+    { id: "final", role: "assistant", content: "Done, verified." },
+    { id: "next-user", role: "user", content: "Thanks" },
+    { id: "legacy", role: "assistant", content: "You're welcome" },
+  ];
+  const snapshot = JSON.stringify(messages);
+  const feed = web.projectAiConversation(messages);
+  assert.deepEqual(
+    feed.map((entry) =>
+      entry.type === "run" ? entry.finalMessage?.id : entry.message.id,
+    ),
+    ["u", "final", "next-user", "legacy"],
+  );
+  assert.deepEqual(
+    feed[1].messages.map((m) => m.id),
+    ["plan", "next", "final"],
+  );
+  assert.equal(JSON.stringify(messages), snapshot);
+});
+
+test("running, waiting, stopped and failed runs keep all replies inside work history", () => {
+  for (const status of ["running", "waiting", "stopped", "error"]) {
+    const feed = web.projectAiConversation([
+      {
+        id: "u",
+        role: "user",
+        content: "Run it",
+        work: { userMessageId: "u", status, elapsedMs: 0, events: [] },
+      },
+      { id: "a", role: "assistant", content: "```bash\necho pending\n```" },
+    ]);
+    assert.equal(feed.length, 2);
+    assert.equal(feed[1].type, "run");
+    assert.equal(feed[1].finalMessage, undefined);
+    assert.equal(feed[1].messages[0].content.includes("echo pending"), true);
+  }
 });

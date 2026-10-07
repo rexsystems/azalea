@@ -26,7 +26,10 @@ export function createGroup(input: CreateGroupInput): Promise<HostGroup> {
   return invoke("create_group", { input });
 }
 
-export function updateGroup(id: string, input: UpdateGroupInput): Promise<HostGroup> {
+export function updateGroup(
+  id: string,
+  input: UpdateGroupInput,
+): Promise<HostGroup> {
   return invoke("update_group", { id, input });
 }
 
@@ -34,7 +37,10 @@ export function deleteGroup(id: string): Promise<void> {
   return invoke("delete_group", { id });
 }
 
-export function moveHostToGroup(hostId: string, groupId: string | null): Promise<void> {
+export function moveHostToGroup(
+  hostId: string,
+  groupId: string | null,
+): Promise<void> {
   return invoke("move_host_to_group", {
     input: { host_id: hostId, group_id: groupId },
   });
@@ -84,7 +90,9 @@ export function installPublicKey(
   keyId: string,
   hostId: string,
 ): Promise<InstallPublicKeyResult> {
-  return invoke("install_public_key", { input: { key_id: keyId, host_id: hostId } });
+  return invoke("install_public_key", {
+    input: { key_id: keyId, host_id: hostId },
+  });
 }
 
 export function prepareSsh(hostId: string): Promise<string> {
@@ -176,7 +184,9 @@ export interface PickedTextFile {
 
 /// The native picker runs in the backend, so no filesystem path is ever
 /// accepted from the UI.
-export function pickTextFile(filters: DialogFilter[]): Promise<PickedTextFile | null> {
+export function pickTextFile(
+  filters: DialogFilter[],
+): Promise<PickedTextFile | null> {
   return invoke("pick_text_file", { filters });
 }
 
@@ -192,7 +202,10 @@ export function hostHasPassword(id: string): Promise<boolean> {
   return invoke("host_has_password", { id });
 }
 
-export function wakeOnLan(macAddress: string, broadcast?: string | null): Promise<void> {
+export function wakeOnLan(
+  macAddress: string,
+  broadcast?: string | null,
+): Promise<void> {
   return invoke("wake_on_lan", {
     input: { mac_address: macAddress, broadcast: broadcast ?? null },
   });
@@ -206,7 +219,10 @@ export function disconnectAllSsh(): Promise<void> {
   return invoke("disconnect_all_ssh");
 }
 
-export function sftpList(sessionId: string, path?: string): Promise<SftpListResult> {
+export function sftpList(
+  sessionId: string,
+  path?: string,
+): Promise<SftpListResult> {
   return invoke("sftp_list", {
     input: { session_id: sessionId, path: path ?? null },
   });
@@ -226,14 +242,22 @@ export function sftpUpload(
   remotePath: string,
   transferId: string,
 ): Promise<number> {
-  return invoke("sftp_upload", { sessionId, localPath, remotePath, transferId });
+  return invoke("sftp_upload", {
+    sessionId,
+    localPath,
+    remotePath,
+    transferId,
+  });
 }
 
 export function sftpCancelTransfer(transferId: string): Promise<void> {
   return invoke("sftp_cancel_transfer", { transferId });
 }
 
-export function sftpReadText(sessionId: string, remotePath: string): Promise<string> {
+export function sftpReadText(
+  sessionId: string,
+  remotePath: string,
+): Promise<string> {
   return invoke("sftp_read_text", { sessionId, remotePath });
 }
 
@@ -253,7 +277,10 @@ export function createSnippet(input: CreateSnippetInput): Promise<Snippet> {
   return invoke("create_snippet", { input });
 }
 
-export function updateSnippet(id: string, input: CreateSnippetInput): Promise<void> {
+export function updateSnippet(
+  id: string,
+  input: CreateSnippetInput,
+): Promise<void> {
   return invoke("update_snippet", { id, input });
 }
 
@@ -265,7 +292,9 @@ export function listPortForwards(hostId?: string): Promise<PortForward[]> {
   return invoke("list_port_forwards", { hostId: hostId ?? null });
 }
 
-export function createPortForward(input: CreatePortForwardInput): Promise<PortForward> {
+export function createPortForward(
+  input: CreatePortForwardInput,
+): Promise<PortForward> {
   return invoke("create_port_forward", { input });
 }
 
@@ -273,15 +302,23 @@ export function deletePortForward(id: string): Promise<void> {
   return invoke("delete_port_forward", { id });
 }
 
-export function startForward(sessionId: string, forwardId: string): Promise<PortForwardStatus> {
+export function startForward(
+  sessionId: string,
+  forwardId: string,
+): Promise<PortForwardStatus> {
   return invoke("start_forward", { sessionId, forwardId });
 }
 
-export function stopForward(sessionId: string, forwardId: string): Promise<void> {
+export function stopForward(
+  sessionId: string,
+  forwardId: string,
+): Promise<void> {
   return invoke("stop_forward", { sessionId, forwardId });
 }
 
-export function listActiveForwards(sessionId: string): Promise<PortForwardStatus[]> {
+export function listActiveForwards(
+  sessionId: string,
+): Promise<PortForwardStatus[]> {
   return invoke("list_active_forwards", { sessionId });
 }
 
@@ -289,7 +326,10 @@ export function trustHostKey(sessionId: string): Promise<void> {
   return invoke("trust_host_key", { input: { session_id: sessionId } });
 }
 
-export function respondHostKey(sessionId: string, accept: boolean): Promise<void> {
+export function respondHostKey(
+  sessionId: string,
+  accept: boolean,
+): Promise<void> {
   return invoke("respond_host_key", { sessionId, accept });
 }
 
@@ -357,7 +397,10 @@ export function syncBrowserLogin(): Promise<void> {
   return invoke("sync_browser_login");
 }
 
-export function syncPasswordLogin(email: string, password: string): Promise<void> {
+export function syncPasswordLogin(
+  email: string,
+  password: string,
+): Promise<void> {
   return invoke("sync_password_login", {
     input: { email, password },
   });
@@ -485,7 +528,10 @@ export function connectSelfhost(input: {
   });
 }
 
-export function renameAccount(id: string, label: string): Promise<AccountRecord> {
+export function renameAccount(
+  id: string,
+  label: string,
+): Promise<AccountRecord> {
   return invoke("rename_account", { id, label });
 }
 
@@ -662,7 +708,12 @@ export function aiChatCancel(requestId: string): Promise<void> {
   return invoke("ai_chat_cancel", { requestId });
 }
 
-export function aiWebSearch(requestId: string, provider: string, query: string, baseUrl = ""): Promise<import("./ai").AiWebSource[]> {
+export function aiWebSearch(
+  requestId: string,
+  provider: string,
+  query: string,
+  baseUrl = "",
+): Promise<import("./ai").AiWebSource[]> {
   return invoke("ai_web_search", { requestId, provider, query, baseUrl });
 }
 
@@ -671,7 +722,10 @@ export interface AiModelInfo {
   label: string;
 }
 
-export function aiListModels(providerId: string, baseUrl: string): Promise<AiModelInfo[]> {
+export function aiListModels(
+  providerId: string,
+  baseUrl: string,
+): Promise<AiModelInfo[]> {
   return invoke("ai_list_models", { providerId, baseUrl });
 }
 

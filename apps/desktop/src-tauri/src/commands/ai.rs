@@ -75,75 +75,214 @@ pub async fn ai_web_search(
     if query.is_empty() || query.chars().count() > 600 {
         return Err("Search query must contain 1–600 characters.".into());
     }
-    if !["tavily", "brave", "searxng"].contains(&provider.as_str()) {
+    if !["mwmbl", "duckduckgo", "tavily", "brave", "searxng"].contains(&provider.as_str()) {
         return Err("Unknown web search provider.".into());
     }
-    let key = if provider == "searxng" { String::new() } else {
+    let key = if ["mwmbl", "searxng", "duckduckgo"].contains(&provider.as_str()) {
+        String::new()
+    } else {
         get_ai_api_key(&format!("web-search-{provider}"))
             .map_err(|err| err.to_string())?
-            .ok_or_else(|| format!("Add a {provider} search API key in Settings → AI → Web search."))?
+            .ok_or_else(|| {
+                format!("Add a {provider} search API key in Settings → AI → Web search.")
+            })?
     };
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(25))
-        .build().map_err(|err| err.to_string())?;
+        .build()
+        .map_err(|err| err.to_string())?;
     let request = match provider.as_str() {
-        "tavily" => client.post("https://api.tavily.com/search")
+        "mwmbl" => client
+            .get("https://mwmbl.org/api/v2/search/")
+            .query(&[("q", query)]),
+        "duckduckgo" => client
+            .get("https://html.duckduckgo.com/html/")
+            .header("User-Agent", "Azalea/0.1 (terminal assistant web search)")
+            .query(&[("q", query)]),
+        "tavily" => client
+            .post("https://api.tavily.com/search")
             .bearer_auth(&key)
-            .json(&json!({ "query": query, "search_depth": "basic", "max_results": 6,
-                "include_answer": false, "include_raw_content": false, "auto_parameters": false })),
-        "brave" => client.get("https://api.search.brave.com/res/v1/web/search")
+            .json(
+                &json!({ "query": query, "search_depth": "basic", "max_results": 6,
+                "include_answer": false, "include_raw_content": false, "auto_parameters": false }),
+            ),
+        "brave" => client
+            .get("https://api.search.brave.com/res/v1/web/search")
             .header("X-Subscription-Token", &key)
             .query(&[("q", query), ("count", "6")]),
         _ => {
-            let base = reqwest::Url::parse(base_url.trim()).map_err(|_| "Enter a valid SearXNG URL in Settings → AI → Web search.".to_string())?;
-            if !["https", "http"].contains(&base.scheme()) || !base.username().is_empty() || base.password().is_some() {
-                return Err("SearXNG URL must use HTTP or HTTPS without embedded credentials.".into());
+            let base = reqwest::Url::parse(base_url.trim()).map_err(|_| {
+                "Enter a valid SearXNG URL in Settings → AI → Web search.".to_string()
+            })?;
+            if !["https", "http"].contains(&base.scheme())
+                || !base.username().is_empty()
+                || base.password().is_some()
+            {
+                return Err(
+                    "SearXNG URL must use HTTP or HTTPS without embedded credentials.".into(),
+                );
             }
-            client.get(format!("{}/search", base.as_str().trim_end_matches('/')))
+            client
+                .get(format!("{}/search", base.as_str().trim_end_matches('/')))
                 .query(&[("q", query), ("format", "json")])
         }
     };
     let signal = Arc::new(tokio::sync::Notify::new());
-    cancels.inner.lock().map_err(|_| "Search cancellation is unavailable".to_string())?
+    cancels
+        .inner
+        .lock()
+        .map_err(|_| "Search cancellation is unavailable".to_string())?
         .insert(request_id.clone(), signal.clone());
     let work = async {
-        let response = request.send().await.map_err(|err| format!("Web search failed: {err}"))?;
+        let response = request
+            .send()
+            .await
+            .map_err(|err| format!("Web search failed: {err}"))?;
         let status = response.status();
+        if provider == "duckduckgo" && status.as_u16() == 202 {
+            return Err("DuckDuckGo requires browser verification. Automated search was stopped; try again later or choose another provider.".into());
+        }
         if !status.is_success() {
             // Do not expose request headers or provider error bodies containing secrets.
-            return Err(format!("Web search returned HTTP {}. Check your search key, provider settings, or quota.", status.as_u16()));
+            return Err(format!(
+                "Web search returned HTTP {}. The provider may be unavailable or rate-limited; check Settings → AI → Web search.",
+                status.as_u16()
+            ));
         }
-        let parsed: Value = response.json().await.map_err(|_| "Invalid web search response. SearXNG must allow JSON output.".to_string())?;
+        if provider == "duckduckgo" {
+            let html = response
+                .text()
+                .await
+                .map_err(|err| format!("Could not read search results: {err}"))?;
+            return parse_duckduckgo_sources(&html);
+        }
+        let parsed: Value = response.json().await.map_err(|_| {
+            "Invalid web search response. SearXNG must allow JSON output.".to_string()
+        })?;
         parse_web_sources(&provider, &parsed)
     };
-    let result = cancellable(&signal, work).await.unwrap_or_else(|| Err("Web search stopped.".into()));
-    if let Ok(mut map) = cancels.inner.lock() { map.remove(&request_id); }
+    let result = cancellable(&signal, work)
+        .await
+        .unwrap_or_else(|| Err("Web search stopped.".into()));
+    if let Ok(mut map) = cancels.inner.lock() {
+        map.remove(&request_id);
+    }
     result
 }
 
 fn parse_web_sources(provider: &str, parsed: &Value) -> Result<Vec<AiWebSource>, String> {
-    let rows = if provider == "brave" { parsed.pointer("/web/results") } else { parsed.get("results") };
+    let rows = if provider == "brave" {
+        parsed.pointer("/web/results")
+    } else {
+        parsed.get("results")
+    };
     let Some(rows) = rows.and_then(Value::as_array) else {
-        if provider == "brave" && parsed.get("query").is_some() { return Ok(Vec::new()); }
+        if provider == "brave" && parsed.get("query").is_some() {
+            return Ok(Vec::new());
+        }
         return Err("Search provider returned an invalid result list.".into());
     };
     let mut sources = Vec::<AiWebSource>::new();
     for row in rows {
-        let Some(url) = row.get("url").and_then(Value::as_str) else { continue; };
-        let Ok(parsed_url) = reqwest::Url::parse(url) else { continue; };
-        if !["https", "http"].contains(&parsed_url.scheme()) || !parsed_url.username().is_empty() || parsed_url.password().is_some() {
+        let Some(url) = row.get("url").and_then(Value::as_str) else {
+            continue;
+        };
+        let Ok(parsed_url) = reqwest::Url::parse(url) else {
+            continue;
+        };
+        if !["https", "http"].contains(&parsed_url.scheme())
+            || !parsed_url.username().is_empty()
+            || parsed_url.password().is_some()
+        {
             continue;
         }
-        if sources.iter().any(|source| source.url == url) { continue; }
+        if sources.iter().any(|source| source.url == url) {
+            continue;
+        }
         sources.push(AiWebSource {
-            title: row.get("title").and_then(Value::as_str).unwrap_or(url).chars().take(300).collect(),
+            title: row
+                .get("title")
+                .and_then(Value::as_str)
+                .unwrap_or(url)
+                .chars()
+                .take(300)
+                .collect(),
             url: url.to_string(),
-            snippet: row.get("content").or_else(|| row.get("description"))
-                .and_then(Value::as_str).unwrap_or("").chars().take(2400).collect(),
+            snippet: row
+                .get("content")
+                .or_else(|| row.get("description"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .chars()
+                .take(2400)
+                .collect(),
         });
-        if sources.len() == 6 { break; }
+        if sources.len() == 6 {
+            break;
+        }
     }
     Ok(sources)
+}
+
+fn parse_duckduckgo_sources(html: &str) -> Result<Vec<AiWebSource>, String> {
+    use scraper::{Html, Selector};
+    let document = Html::parse_document(html);
+    let challenge =
+        Selector::parse("#challenge-form, .anomaly-modal, form[action*='anomaly.js']").unwrap();
+    if document.select(&challenge).next().is_some() {
+        return Err("DuckDuckGo requires browser verification. Automated search was stopped; try again later or choose another provider.".into());
+    }
+    let results = Selector::parse(".result").unwrap();
+    let link = Selector::parse(".result__a").unwrap();
+    let snippet = Selector::parse(".result__snippet").unwrap();
+    let base = reqwest::Url::parse("https://duckduckgo.com").unwrap();
+    let mut rows = Vec::new();
+    for result in document.select(&results) {
+        if result.value().classes().any(|class| class == "result--ad") {
+            continue;
+        }
+        let Some(anchor) = result.select(&link).next() else {
+            continue;
+        };
+        let Some(href) = anchor.value().attr("href") else {
+            continue;
+        };
+        let Ok(mut url) = base.join(href) else {
+            continue;
+        };
+        if url
+            .host_str()
+            .is_some_and(|host| host == "duckduckgo.com" || host.ends_with(".duckduckgo.com"))
+        {
+            let Some(target) = url
+                .query_pairs()
+                .find(|(key, _)| key == "uddg")
+                .map(|(_, value)| value.into_owned())
+            else {
+                continue;
+            };
+            let Ok(target) = reqwest::Url::parse(&target) else {
+                continue;
+            };
+            url = target;
+        }
+        let title = anchor.text().collect::<Vec<_>>().join(" ");
+        let content = result
+            .select(&snippet)
+            .next()
+            .map(|node| node.text().collect::<Vec<_>>().join(" "))
+            .unwrap_or_default();
+        rows.push(json!({ "title": title.split_whitespace().collect::<Vec<_>>().join(" "), "url":url.as_str(), "content":content.split_whitespace().collect::<Vec<_>>().join(" ") }));
+    }
+    if rows.is_empty()
+        && document
+            .select(&Selector::parse(".no-results, .no-results__message").unwrap())
+            .next()
+            .is_none()
+    {
+        return Err("DuckDuckGo did not return readable results. The service may be unavailable or may have changed its response.".into());
+    }
+    parse_web_sources("duckduckgo", &json!({ "results": rows }))
 }
 
 fn normalize_base_url(url: &str) -> String {
@@ -716,6 +855,63 @@ fn format_http_error(status: u16, body: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn search_results_normalize_providers_and_reject_unsafe_urls() {
+        for provider in ["mwmbl", "tavily", "searxng", "brave"] {
+            let rows = json!([
+                {"title":"Docs", "url":"https://example.com/docs", "content":"Excerpt", "description":"Brave excerpt"},
+                {"title":"Duplicate", "url":"https://example.com/docs"},
+                {"url":"javascript:alert(1)"}, {"url":"file:///etc/passwd"},
+                {"url":"https://user:password@example.com"}
+            ]);
+            let response = if provider == "brave" {
+                json!({"web":{"results": rows}})
+            } else {
+                json!({"results":rows})
+            };
+            let sources = parse_web_sources(provider, &response).unwrap();
+            assert_eq!(sources.len(), 1);
+            assert_eq!(sources[0].title, "Docs");
+            assert_eq!(sources[0].url, "https://example.com/docs");
+            assert_eq!(sources[0].snippet, "Excerpt");
+        }
+    }
+
+    #[test]
+    fn search_result_count_and_excerpts_are_bounded() {
+        let rows: Vec<Value> = (0..30)
+            .map(|i| json!({"url":format!("https://example.com/{i}"), "content":"x".repeat(10000)}))
+            .collect();
+        let sources = parse_web_sources("tavily", &json!({"results":rows})).unwrap();
+        assert_eq!(sources.len(), 6);
+        assert_eq!(sources[0].snippet.len(), 2400);
+        assert!(parse_web_sources("tavily", &json!({"error":"bad"})).is_err());
+        assert!(
+            parse_web_sources("brave", &json!({"query":{"original":"no matches"}}))
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn keyless_html_search_decodes_sources_and_rejects_challenges() {
+        let html = r#"<div class="result"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Ftauri.app%2F">Tauri &amp; Docs</a><a class="result__snippet">Build <b>apps</b> safely.</a></div>
+            <div class="result result--ad"><a class="result__a" href="https://ad.example.com">Ad</a></div>
+            <div class="result"><a class="result__a" href="javascript:alert(1)">Unsafe</a></div>"#;
+        let sources = parse_duckduckgo_sources(html).unwrap();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].url, "https://tauri.app/");
+        assert_eq!(sources[0].title, "Tauri & Docs");
+        assert_eq!(sources[0].snippet, "Build apps safely.");
+        assert!(parse_duckduckgo_sources("<form id='challenge-form'></form>").is_err());
+        assert!(parse_duckduckgo_sources("<p>Unavailable</p>").is_err());
+        assert!(
+            parse_duckduckgo_sources("<div class='no-results'>No matches</div>")
+                .unwrap()
+                .is_empty()
+        );
+    }
 
     #[test]
     fn openai_catalog_omits_models_for_other_api_types() {

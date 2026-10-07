@@ -19,6 +19,7 @@ import { useAiModels } from "../hooks/useAiModels";
 import { Button } from "./ui/Button";
 import { Select } from "./ui/Select";
 import { SettingToggle } from "./ui/SettingToggle";
+import { AiWebSearchSettings } from "./AiWebSearchSettings";
 
 function fieldStyle(): CSSProperties {
   return {
@@ -464,6 +465,8 @@ export function AiSettingsSection() {
               </div>
             )}
           </div>
+
+          <AiWebSearchSettings prefs={prefs} onChange={patchPrefs} />
 
           {status && (
             <p className="text-xs" style={{ color: "var(--text-secondary)" }}>

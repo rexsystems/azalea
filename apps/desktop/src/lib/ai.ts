@@ -265,7 +265,7 @@ export interface AiPrefs {
   access: AiAccess;
   includeTerminalContext: boolean;
   webSearchEnabled: boolean;
-  webSearchProvider: "tavily" | "brave" | "searxng";
+  webSearchProvider: "mwmbl" | "duckduckgo" | "tavily" | "brave" | "searxng";
   webSearchUrl: string;
   customModels: Partial<Record<AiProviderId, string[]>>;
   providerSettings: Partial<
@@ -284,8 +284,8 @@ const DEFAULT_PREFS: AiPrefs = {
   mode: "ask",
   access: "confirm",
   includeTerminalContext: true,
-  webSearchEnabled: false,
-  webSearchProvider: "tavily",
+  webSearchEnabled: true,
+  webSearchProvider: "mwmbl",
   webSearchUrl: "",
   customModels: {},
   providerSettings: {},
@@ -334,9 +334,16 @@ export function getAiPrefs(): AiPrefs {
       mode: parsed.mode === "agent" ? "agent" : "ask",
       access: parsed.access === "full" ? "full" : "confirm",
       includeTerminalContext: parsed.includeTerminalContext !== false,
-      webSearchEnabled: parsed.webSearchEnabled === true,
-      webSearchProvider: parsed.webSearchProvider === "brave" || parsed.webSearchProvider === "searxng" ? parsed.webSearchProvider : "tavily",
-      webSearchUrl: typeof parsed.webSearchUrl === "string" ? parsed.webSearchUrl : "",
+      webSearchEnabled: parsed.webSearchEnabled !== false,
+      webSearchProvider:
+        parsed.webSearchProvider === "duckduckgo" ||
+        parsed.webSearchProvider === "tavily" ||
+        parsed.webSearchProvider === "brave" ||
+        parsed.webSearchProvider === "searxng"
+          ? parsed.webSearchProvider
+          : "mwmbl",
+      webSearchUrl:
+        typeof parsed.webSearchUrl === "string" ? parsed.webSearchUrl : "",
       customModels: sanitizeCustomModels(parsed.customModels),
       providerSettings:
         parsed.providerSettings && typeof parsed.providerSettings === "object"
@@ -427,6 +434,7 @@ export interface AiWorkEvent {
   finishedAt?: number;
   detail?: string;
   sources?: AiWebSource[];
+  content?: string;
 }
 
 export interface AiWorkSummary {
@@ -435,6 +443,7 @@ export interface AiWorkSummary {
   activeSince?: number;
   status: "running" | "waiting" | "done" | "stopped" | "error";
   events: AiWorkEvent[];
+  finalEventId?: string;
 }
 
 export interface AiChatThread {
@@ -491,6 +500,37 @@ function loadAllThreads(): AiChatThread[] {
         ? list
             .map((t) => ({
               ...t,
+              messages: t.messages.map((message) => {
+                const work = message.work;
+                if (
+                  !work ||
+                  (work.status !== "running" && work.status !== "waiting")
+                )
+                  return message;
+                const stoppedAt = t.updatedAt ?? Date.now();
+                return {
+                  ...message,
+                  work: {
+                    ...work,
+                    elapsedMs:
+                      work.elapsedMs +
+                      (work.activeSince === undefined
+                        ? 0
+                        : Math.max(0, stoppedAt - work.activeSince)),
+                    activeSince: undefined,
+                    status: "stopped" as const,
+                    events: work.events.map((event) =>
+                      event.status === "running"
+                        ? {
+                            ...event,
+                            status: "stopped" as const,
+                            finishedAt: stoppedAt,
+                          }
+                        : event,
+                    ),
+                  },
+                };
+              }),
               createdAt: t.createdAt ?? t.updatedAt ?? Date.now(),
               updatedAt: t.updatedAt ?? Date.now(),
             }))
