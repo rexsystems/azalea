@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Copy, Loader2, Lock, X } from "./icons";
 import { Button } from "./ui/Button";
 import { copyText } from "../lib/clipboard";
+import { RecoveryKeyDisplay } from "./RecoveryKeyDisplay";
 
 export type PostConnectMode = "setup" | "unlock";
 
@@ -98,16 +99,7 @@ export function PostConnectSyncDialog({
 
         {mode === "setup" && recoveryKey ? (
           <>
-            <div
-              className="mb-3 break-all rounded-lg border p-3 font-mono text-xs"
-              style={{
-                background: "var(--bg-base)",
-                borderColor: "var(--border-subtle)",
-                color: "var(--text)",
-              }}
-            >
-              {recoveryKey}
-            </div>
+            <RecoveryKeyDisplay value={recoveryKey} />
             <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={() => void copyRecovery()}>
                 {recoveryCopied ? <Check size={14} /> : <Copy size={14} />}

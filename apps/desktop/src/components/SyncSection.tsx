@@ -18,6 +18,7 @@ import { getStoredAutoSync, setStoredAutoSync } from "../lib/settings";
 import { Button } from "./ui/Button";
 import { PlanBadge } from "./PlanBadge";
 import { SettingToggle } from "./ui/SettingToggle";
+import { RecoveryKeyDisplay } from "./RecoveryKeyDisplay";
 import { SyncResolutionDialog } from "./SyncResolutionDialog";
 
 interface SyncSectionProps {
@@ -638,16 +639,7 @@ export function SyncSection({
               This is the only way to recover your vault if you forget the master passphrase. It is
               shown once - store it somewhere safe.
             </p>
-            <div
-              className="mb-3 break-all rounded-lg border p-3 font-mono text-xs"
-              style={{
-                background: "var(--bg-base)",
-                borderColor: "var(--border-subtle)",
-                color: "var(--text)",
-              }}
-            >
-              {recoveryKey}
-            </div>
+            <RecoveryKeyDisplay value={recoveryKey} />
             <div className="grid grid-cols-2 gap-2">
               <Button variant="secondary" onClick={copyRecovery}>
                 {recoveryCopied ? <Check size={14} /> : <Copy size={14} />}

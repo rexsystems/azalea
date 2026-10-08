@@ -31,6 +31,7 @@ import { SyncSection } from "./SyncSection";
 import { ImportSection } from "./ImportSection";
 import { UpdateSection } from "./UpdateSection";
 import { AiSettingsSection } from "./AiSettingsSection";
+import { VoiceSettingsSection } from "./VoiceSettingsSection";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { isTelemetryEnabled, setTelemetryEnabled } from "../lib/telemetry";
 
@@ -39,6 +40,7 @@ type SettingsTab =
   | "connect"
   | "terminal"
   | "ai"
+  | "voice"
   | "account"
   | "import"
   | "backup"
@@ -75,6 +77,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "connect", label: "Connect" },
   { id: "terminal", label: "Terminal" },
   { id: "ai", label: "AI" },
+  { id: "voice", label: "Voice" },
   { id: "account", label: "Account" },
   { id: "import", label: "Import" },
   { id: "backup", label: "Backup" },
@@ -97,10 +100,16 @@ function PanelHeader({
       style={{ borderColor: "var(--border-subtle)" }}
     >
       <div className="min-w-0">
-        <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>
+        <h3
+          className="text-base font-semibold"
+          style={{ color: "var(--text)" }}
+        >
           {title}
         </h3>
-        <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
+        <p
+          className="mt-1 text-sm leading-relaxed"
+          style={{ color: "var(--text-muted)" }}
+        >
           {description}
         </p>
       </div>
@@ -128,7 +137,10 @@ function SettingRow({
           {label}
         </div>
         {description && (
-          <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+          <p
+            className="mt-1 text-xs leading-relaxed"
+            style={{ color: "var(--text-muted)" }}
+          >
             {description}
           </p>
         )}
@@ -167,16 +179,22 @@ export function SettingsPage({
   const [importVisited, setImportVisited] = useState(false);
   const [appVersion, setAppVersion] = useState("…");
   const [telemetryOn, setTelemetryOn] = useState(() => isTelemetryEnabled());
-  const [hideHostAddresses, setHideHostAddresses] = useState(() => getStoredHideHostAddresses());
+  const [hideHostAddresses, setHideHostAddresses] = useState(() =>
+    getStoredHideHostAddresses(),
+  );
   const [customCssEnabled, setCustomCssEnabled] = useState(
     () => getStoredCustomCss().enabled,
   );
-  const [customCssDraft, setCustomCssDraft] = useState(() => getStoredCustomCss().css);
+  const [customCssDraft, setCustomCssDraft] = useState(
+    () => getStoredCustomCss().css,
+  );
   const [customCssSaved, setCustomCssSaved] = useState(false);
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void getVersion().then(setAppVersion).catch(() => setAppVersion("-"));
+    void getVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion("-"));
   }, []);
 
   useEffect(() => {
@@ -193,7 +211,8 @@ export function SettingsPage({
 
   useEffect(() => {
     const sync = (event: Event) => {
-      const detail = (event as CustomEvent<{ enabled: boolean; css: string }>).detail;
+      const detail = (event as CustomEvent<{ enabled: boolean; css: string }>)
+        .detail;
       if (!detail) return;
       setCustomCssEnabled(detail.enabled);
       setCustomCssDraft(detail.css);
@@ -234,7 +253,10 @@ export function SettingsPage({
         <div className="mb-5">
           <h2
             className="text-2xl font-semibold tracking-tight sm:text-3xl"
-            style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
+            style={{
+              color: "var(--text)",
+              fontFamily: "var(--font-display, inherit)",
+            }}
           >
             Settings
           </h2>
@@ -261,7 +283,9 @@ export function SettingsPage({
                 style={{
                   background: active ? "var(--bg-panel)" : "transparent",
                   color: active ? "var(--text)" : "var(--text-muted)",
-                  border: active ? "1px solid var(--border-subtle)" : "1px solid transparent",
+                  border: active
+                    ? "1px solid var(--border-subtle)"
+                    : "1px solid transparent",
                 }}
               >
                 {item.label}
@@ -272,7 +296,10 @@ export function SettingsPage({
 
         <div
           className="rounded-2xl border"
-          style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+          style={{
+            borderColor: "var(--border-subtle)",
+            background: "var(--bg-panel)",
+          }}
         >
           <div className="p-5 sm:p-6">
             {tab === "appearance" && (
@@ -281,7 +308,10 @@ export function SettingsPage({
                   title="Appearance"
                   description="Choose how Azalea looks across the app."
                 />
-                <SettingRow label="Theme" description="Pick a color scheme for the whole UI.">
+                <SettingRow
+                  label="Theme"
+                  description="Pick a color scheme for the whole UI."
+                >
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                     {themes.map((t) => {
                       const selected = theme === t.id;
@@ -292,8 +322,12 @@ export function SettingsPage({
                           onClick={() => onThemeChange(t.id)}
                           className="hover-subtle transition-ui overflow-hidden rounded-2xl border text-left"
                           style={{
-                            background: selected ? "var(--accent-muted)" : "var(--bg-card)",
-                            borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
+                            background: selected
+                              ? "var(--accent-muted)"
+                              : "var(--bg-card)",
+                            borderColor: selected
+                              ? "var(--accent)"
+                              : "var(--border-subtle)",
                           }}
                         >
                           <div
@@ -306,7 +340,8 @@ export function SettingsPage({
                               <span
                                 className="absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
                                 style={{
-                                  background: "color-mix(in srgb, var(--bg-base) 75%, transparent)",
+                                  background:
+                                    "color-mix(in srgb, var(--bg-base) 75%, transparent)",
                                   color: "var(--text)",
                                 }}
                               >
@@ -317,7 +352,8 @@ export function SettingsPage({
                               <span
                                 className="absolute right-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
                                 style={{
-                                  background: "color-mix(in srgb, var(--bg-base) 75%, transparent)",
+                                  background:
+                                    "color-mix(in srgb, var(--bg-base) 75%, transparent)",
                                   color: "var(--text)",
                                 }}
                               >
@@ -325,7 +361,10 @@ export function SettingsPage({
                               </span>
                             )}
                           </div>
-                          <div className="px-3 py-2.5 text-sm font-medium" style={{ color: "var(--text)" }}>
+                          <div
+                            className="px-3 py-2.5 text-sm font-medium"
+                            style={{ color: "var(--text)" }}
+                          >
                             {t.name}
                           </div>
                         </button>
@@ -341,7 +380,8 @@ export function SettingsPage({
                   <div className="grid gap-3 sm:grid-cols-2">
                     {iconPacks.map((pack) => {
                       const selected = iconPack === pack.id;
-                      const Preview = pack.id === "pixelart" ? pixelartPack : hugeiconsPack;
+                      const Preview =
+                        pack.id === "pixelart" ? pixelartPack : hugeiconsPack;
                       return (
                         <button
                           key={pack.id}
@@ -349,20 +389,33 @@ export function SettingsPage({
                           onClick={() => changeIconPack(pack.id as IconPackId)}
                           className="hover-subtle transition-ui rounded-xl border px-3.5 py-3.5 text-left"
                           style={{
-                            background: selected ? "var(--accent-muted)" : "var(--bg-card)",
-                            borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
+                            background: selected
+                              ? "var(--accent-muted)"
+                              : "var(--bg-card)",
+                            borderColor: selected
+                              ? "var(--accent)"
+                              : "var(--border-subtle)",
                           }}
                         >
-                          <div className="mb-2.5 flex items-center gap-2.5" style={{ color: "var(--text)" }}>
+                          <div
+                            className="mb-2.5 flex items-center gap-2.5"
+                            style={{ color: "var(--text)" }}
+                          >
                             <Preview.Home size={18} />
                             <Preview.Server size={18} />
                             <Preview.KeyRound size={18} />
                             <Preview.Settings size={18} />
                           </div>
-                          <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                          <div
+                            className="text-sm font-medium"
+                            style={{ color: "var(--text)" }}
+                          >
                             {pack.name}
                           </div>
-                          <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                          <div
+                            className="mt-1 text-xs"
+                            style={{ color: "var(--text-muted)" }}
+                          >
                             {pack.description}
                           </div>
                         </button>
@@ -429,7 +482,10 @@ export function SettingsPage({
                         Clear
                       </Button>
                       {customCssSaved ? (
-                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        <span
+                          className="text-xs"
+                          style={{ color: "var(--text-muted)" }}
+                        >
                           Applied
                         </span>
                       ) : null}
@@ -459,11 +515,18 @@ export function SettingsPage({
                           onClick={() => onConnectScreenChange(opt.id)}
                           className="hover-subtle transition-ui rounded-xl border px-3.5 py-3.5 text-left"
                           style={{
-                            background: selected ? "var(--accent-muted)" : "var(--bg-card)",
-                            borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
+                            background: selected
+                              ? "var(--accent-muted)"
+                              : "var(--bg-card)",
+                            borderColor: selected
+                              ? "var(--accent)"
+                              : "var(--border-subtle)",
                           }}
                         >
-                          <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                          <div
+                            className="text-sm font-medium"
+                            style={{ color: "var(--text)" }}
+                          >
                             {opt.label}
                           </div>
                           <div
@@ -492,17 +555,24 @@ export function SettingsPage({
                       label="Select to copy"
                       description="Copy selected text to clipboard automatically"
                       checked={terminalSettings.selectToCopy}
-                      onChange={(v) => onTerminalSettingsChange({ selectToCopy: v })}
+                      onChange={(v) =>
+                        onTerminalSettingsChange({ selectToCopy: v })
+                      }
                     />
                     <SettingToggle
                       label="Right-click to paste"
                       description="Paste from clipboard on right click"
                       checked={terminalSettings.rightClickToPaste}
-                      onChange={(v) => onTerminalSettingsChange({ rightClickToPaste: v })}
+                      onChange={(v) =>
+                        onTerminalSettingsChange({ rightClickToPaste: v })
+                      }
                     />
                   </div>
                 </SettingRow>
-                <SettingRow label="Font size" description="Terminal text size in pixels.">
+                <SettingRow
+                  label="Font size"
+                  description="Terminal text size in pixels."
+                >
                   <Slider
                     min={12}
                     max={26}
@@ -510,7 +580,9 @@ export function SettingsPage({
                     value={terminalSettings.fontSize}
                     formatValue={(v) => `${v}px`}
                     onChange={(fontSize) =>
-                      onTerminalSettingsChange({ fontSize: clampFontSize(fontSize) })
+                      onTerminalSettingsChange({
+                        fontSize: clampFontSize(fontSize),
+                      })
                     }
                   />
                 </SettingRow>
@@ -543,7 +615,10 @@ export function SettingsPage({
             )}
 
             {(tab === "import" || importVisited) && (
-              <div className={tab === "import" ? undefined : "hidden"} aria-hidden={tab !== "import"}>
+              <div
+                className={tab === "import" ? undefined : "hidden"}
+                aria-hidden={tab !== "import"}
+              >
                 <PanelHeader
                   title="Import"
                   description="Bring in keys and hosts from ~/.ssh, or restore from an Azalea backup / config file."
@@ -565,11 +640,18 @@ export function SettingsPage({
                 />
                 <SettingRow label="Local backup">
                   <div className="space-y-2">
-                    <Button className="w-full" disabled={backupBusy} onClick={onExportBackup}>
+                    <Button
+                      className="w-full"
+                      disabled={backupBusy}
+                      onClick={onExportBackup}
+                    >
                       <Download size={16} />
                       Export Azalea backup
                     </Button>
-                    <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    <p
+                      className="text-xs"
+                      style={{ color: "var(--text-muted)" }}
+                    >
                       To import a backup or OpenSSH files, use the Import tab.
                     </p>
                   </div>
@@ -588,6 +670,18 @@ export function SettingsPage({
                   description="Ask and Agent modes in the active terminal session."
                 >
                   <AiSettingsSection />
+                </SettingRow>
+              </>
+            )}
+
+            {tab === "voice" && (
+              <>
+                <PanelHeader
+                  title="Voice assistant"
+                  description="Local speech recognition and spoken replies. Disabled by default."
+                />
+                <SettingRow label="Hey Azalea">
+                  <VoiceSettingsSection />
                 </SettingRow>
               </>
             )}
@@ -620,7 +714,9 @@ export function SettingsPage({
                       onChange={(on) => {
                         setStoredHideHostAddresses(on);
                         setHideHostAddresses(on);
-                        window.dispatchEvent(new Event("azalea-hide-host-addresses"));
+                        window.dispatchEvent(
+                          new Event("azalea-hide-host-addresses"),
+                        );
                       }}
                     />
                   </div>
@@ -642,7 +738,10 @@ export function SettingsPage({
                       borderColor: "var(--border-subtle)",
                     }}
                   >
-                    <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                    <div
+                      className="text-sm font-medium"
+                      style={{ color: "var(--text)" }}
+                    >
                       Azalea
                     </div>
                     <div
@@ -653,12 +752,18 @@ export function SettingsPage({
                       <span style={{ color: "var(--text-muted)" }}> · </span>
                       Build {__AZALEA_BUILD__}
                     </div>
-                    <div className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
+                    <div
+                      className="mt-0.5 text-xs"
+                      style={{ color: "var(--text-muted)" }}
+                    >
                       RexSystems
                     </div>
                   </div>
                 </SettingRow>
-                <SettingRow label="Updates" description="Download and install the latest desktop release.">
+                <SettingRow
+                  label="Updates"
+                  description="Download and install the latest desktop release."
+                >
                   <UpdateSection embedded />
                 </SettingRow>
               </>

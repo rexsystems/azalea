@@ -42,6 +42,14 @@
         "language": "en-US"
       }
     },
+    "macOS": {
+      "infoPlist": "Info.plist",
+      "entitlements": "Entitlements.plist"
+    },
+    "linux": {
+      "deb": { "depends": ["espeak-ng"] },
+      "rpm": { "depends": ["espeak-ng"] }
+    },
     "createUpdaterArtifacts": true
   },
   "plugins": {

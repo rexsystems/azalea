@@ -124,7 +124,19 @@ jobs:
 
   build-linux:
     needs: [version]
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: blacksmith-4vcpu-ubuntu-2404
+            rust_target: x86_64-unknown-linux-gnu
+            platform_key: linux-x86_64
+            artifact_name: linux-x64
+          - runner: blacksmith-4vcpu-ubuntu-2204-arm
+            rust_target: aarch64-unknown-linux-gnu
+            platform_key: linux-aarch64
+            artifact_name: linux-arm64
+    runs-on: ${{ matrix.runner }}
     env:
       VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
       UPDATER_ARTIFACT_PREFIX: builds/${{ needs.version.outputs.tag }}
@@ -145,8 +157,14 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/desktop/src-tauri -> target
-          shared-key: desktop-linux
+          shared-key: desktop-${{ matrix.platform_key }}-${{ matrix.runner }}
           cache-on-failure: true
+
+      - name: Verify native build architecture
+        env:
+          EXPECTED_TARGET: ${{ matrix.rust_target }}
+        run: |
+          test "$(rustc -vV | sed -n 's/^host: //p')" = "$EXPECTED_TARGET"
 
       - name: Install Linux dependencies
         run: |
@@ -158,6 +176,11 @@ jobs:
             wget \
             file \
             libssl-dev \
+            libasound2-dev \
+            cmake \
+            clang \
+            libclang-dev \
+            espeak-ng \
             libdbus-1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
@@ -212,13 +235,13 @@ jobs:
           node .github/write-latest-json.mjs \
             "${{ steps.meta.outputs.version }}" \
             apps/desktop/src-tauri/target/release/bundle \
-            linux-x86_64 \
+            "${{ matrix.platform_key }}" \
             apps/desktop/src-tauri/target/release/bundle/latest-fragment.json
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: linux
+          name: ${{ matrix.artifact_name }}
           path: |
             apps/desktop/src-tauri/target/release/bundle/deb/*.deb
             apps/desktop/src-tauri/target/release/bundle/deb/*.sig

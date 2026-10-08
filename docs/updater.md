@@ -37,8 +37,18 @@ Download URLs inside the manifest point at `updates.azalea.rexsystems.me/builds/
 | `linux-x86_64` | `.AppImage` / `.AppImage.tar.gz` |
 | `linux-x86_64-rpm` | `.rpm` (Fedora / Nobara / RHEL installs) |
 | `linux-x86_64-deb` | `.deb` (Debian / Ubuntu installs) |
+| `linux-aarch64` | ARM64 `.AppImage` / `.AppImage.tar.gz` |
+| `linux-aarch64-rpm` | ARM64 `.rpm` |
+| `linux-aarch64-deb` | ARM64 `.deb` |
 | `darwin-aarch64` | `.app.tar.gz` (Apple Silicon) |
 | `darwin-x86_64` | `.app.tar.gz` (Intel) |
+
+Linux x64 and ARM64 use separate native Blacksmith runners, architecture-specific
+Rust caches and release artifacts. Both publish signed AppImage, DEB and RPM
+updater entries in the same release manifest. macOS includes Apple Silicon and
+Intel builds; Windows currently builds x64.
+ARM64 desktop packages use an Ubuntu 22.04 build baseline for compatibility
+with Debian 12 / Raspberry Pi OS 64-bit. Existing x64 builds remain on Ubuntu 24.04.
 
 ## GitHub Actions secrets
 

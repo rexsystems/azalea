@@ -35,6 +35,10 @@ The script asks for:
 - optional host update manager on Linux/systemd
 
 Default install dir: `~/azalea` (or `/root/azalea` when run as root).
+Published server and dashboard images support **Linux AMD64 and ARM64** under
+the same tags. Docker selects the host architecture automatically, including
+ARM64 VPS hosts and Raspberry Pi with a 64-bit OS. The source-build fallback
+also builds natively for the host. ARMv7/32-bit ARM images are not provided.
 Administrator creation is mandatory: the installer verifies the configured email
 is an active admin in the running server's `/data/azalea.db` and stops on failure.
 Rerunning the installer on a running installation without an active administrator

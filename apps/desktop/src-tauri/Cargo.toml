@@ -66,6 +66,12 @@ sha1 = "0.10"
 futures-util = "0.3.34"
 scraper = "0.24"
 
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
+cpal = "0.18.2"
+whisper-rs = { version = "0.16", default-features = false }
+
 # Local russh patch: RSA publickey auth must advertise rsa-sha2-512 (RFC 8332).
 # Upstream 0.48 probes as ssh-rsa while signing with rsa-sha2-512, so modern
 # OpenSSH rejects imported/generated RSA keys.

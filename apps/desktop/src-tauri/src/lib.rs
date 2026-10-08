@@ -5,6 +5,8 @@ mod models;
 mod sessions;
 mod store;
 mod sync;
+#[cfg(desktop)]
+mod voice;
 
 use crate::commands::{
     accounts, ai, backup, files, forwards, groups, hosts, keys as key_commands, known_hosts,
@@ -79,7 +81,16 @@ pub fn run() {
 
     let _ = dotenvy::dotenv();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    }));
+    builder
         .plugin(
             tauri_plugin_prevent_default::Builder::new()
                 .with_flags(Flags::CONTEXT_MENU)
@@ -119,10 +130,44 @@ pub fn run() {
             app.manage(sync_state);
             app.manage(ai::AiCancelMap::default());
             app.manage(sync_commands::BrowserLoginState::default());
+            #[cfg(desktop)]
+            {
+                let voice = voice::VoiceAssistant::new(&app.handle())?;
+                app.manage(voice.clone());
+                if let Err(error) = voice::setup_tray(&app.handle(), &voice) {
+                    eprintln!("Could not initialize the system tray: {error}");
+                }
+                let app = app.handle().clone();
+                tauri::async_runtime::spawn_blocking(move || voice.restart(app));
+            }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            #[cfg(desktop)]
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main"
+                    && window
+                        .app_handle()
+                        .try_state::<voice::VoiceAssistant>()
+                        .is_some_and(|voice| voice.keep_in_tray())
+                {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             hosts::list_hosts,
+            #[cfg(desktop)]
+            voice::voice_status,
+            #[cfg(desktop)]
+            voice::voice_set_preferences,
+            #[cfg(desktop)]
+            voice::voice_download_model,
+            #[cfg(desktop)]
+            voice::voice_restart,
+            #[cfg(desktop)]
+            voice::voice_test_reply,
             hosts::create_host,
             hosts::update_host,
             hosts::host_has_password,

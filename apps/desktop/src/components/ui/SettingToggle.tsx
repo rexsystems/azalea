@@ -3,17 +3,25 @@ interface SettingToggleProps {
   description?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
 }
 
 /** Single clickable control - do not wrap a button in a <label> (double-fires). */
-export function SettingToggle({ label, description, checked, onChange }: SettingToggleProps) {
+export function SettingToggle({
+  label,
+  description,
+  checked,
+  onChange,
+  disabled = false,
+}: SettingToggleProps) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="hover-subtle flex w-full cursor-pointer items-start justify-between gap-4 rounded-xl border px-4 py-3.5 text-left"
+      className="hover-subtle flex w-full cursor-pointer items-start justify-between gap-4 rounded-xl border px-4 py-3.5 text-left disabled:cursor-not-allowed disabled:opacity-60"
       style={{
         borderColor: "var(--border-subtle)",
         background: "var(--bg-card)",

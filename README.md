@@ -18,22 +18,24 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 - **Cloud sync** (optional) - zero-knowledge encrypted vault; Free / Pro storage caps
 - **Themes & settings** - Midnight / Noir, font size, connect screen, auto-update
 - **Terminal AI** (opt-in) - Ask / Agent, command approval, live output, provider model catalogs and custom model IDs. See [AI setup and behavior](docs/ai.md).
+- **Voice assistant** (opt-in) - local “Hey Azalea” recognition, voice replies, Wake-on-LAN and background tray support. See [voice setup](docs/voice.md).
 
 ## Development
 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) 20+
-- [Rust](https://rustup.rs/) 1.77+
+- [Rust](https://rustup.rs/) 1.88+
 - **Linux (Fedora / Nobara / RHEL):**
   ```bash
-  sudo dnf install webkit2gtk4.1-devel openssl-devel dbus-devel curl wget squashfs-tools librsvg2-devel rpm-build
+  sudo dnf install webkit2gtk4.1-devel openssl-devel dbus-devel curl wget squashfs-tools librsvg2-devel rpm-build alsa-lib-devel cmake clang-devel espeak-ng
   ```
 - **Linux (Debian / Ubuntu):**
   ```bash
-  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libdbus-1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libdbus-1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev cmake clang libclang-dev espeak-ng
   ```
-- **Windows:** [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with C++ workload and WebView2
+- **Windows:** [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with C++ workload, CMake and WebView2
+- **macOS:** Xcode command-line tools and CMake (`brew install cmake`)
 
 ### Setup
 

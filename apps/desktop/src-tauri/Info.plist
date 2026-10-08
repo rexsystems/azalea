@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>When you enable the voice assistant, Azalea listens locally for Hey Azalea and your voice commands.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Azalea connects to your saved servers and sends Wake-on-LAN requests on your local network.</string>
+</dict></plist>

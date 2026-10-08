@@ -13,18 +13,32 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: azalea-server-images-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/azalea-server
   WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/azalea-server-web
 
 jobs:
   docker-server:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: blacksmith-4vcpu-ubuntu-2404
+          - arch: arm64
+            runner: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: useblacksmith/checkout@v1 # v5.0.0
 
       - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@v1
+        uses: useblacksmith/setup-docker-builder@v2
+        with:
+          cache-key: services/azalea-server/Dockerfile-${{ matrix.arch }}
 
       - name: Log in to GHCR
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
@@ -39,13 +53,13 @@ jobs:
         with:
           images: ${{ env.SERVER_IMAGE }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=
+            type=sha,format=long,prefix=,suffix=-${{ matrix.arch }}
 
       - name: Build and push
         uses: useblacksmith/build-push-action@v2 # v6.19.0
         with:
           context: services/azalea-server
+          platforms: linux/${{ matrix.arch }}
           build-args: |
             AZALEA_BUILD_REVISION=${{ github.sha }}
           push: true
@@ -85,12 +99,22 @@ jobs:
           fi
 
   docker-web:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: blacksmith-4vcpu-ubuntu-2404
+          - arch: arm64
+            runner: blacksmith-4vcpu-ubuntu-2404-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: useblacksmith/checkout@v1 # v5.0.0
 
       - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@v1
+        uses: useblacksmith/setup-docker-builder@v2
+        with:
+          cache-key: apps/azalea-server-web/Dockerfile-${{ matrix.arch }}
 
       - name: Log in to GHCR
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
@@ -105,13 +129,13 @@ jobs:
         with:
           images: ${{ env.WEB_IMAGE }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=
+            type=sha,format=long,prefix=,suffix=-${{ matrix.arch }}
 
       - name: Build and push
         uses: useblacksmith/build-push-action@v2 # v6.19.0
         with:
           context: apps/azalea-server-web
+          platforms: linux/${{ matrix.arch }}
           push: true
           build-args: |
             NEXT_PUBLIC_AZALEA_API_URL=/api
@@ -147,3 +171,40 @@ jobs:
             echo "  https://github.com/orgs/${OWNER}/packages/container/package/${NAME}"
             echo "  Package settings -> Danger Zone -> Change visibility -> Public"
           fi
+
+  publish-manifests:
+    needs: [docker-server, docker-web]
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    strategy:
+      matrix:
+        image: [azalea-server, azalea-server-web]
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=
+
+      - name: Publish AMD64 and ARM64 manifest
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          image="${IMAGE,,}"
+          tags=()
+          while IFS= read -r tag; do
+            if [[ -n "$tag" ]]; then tags+=(--tag "$tag"); fi
+          done <<< "$IMAGE_TAGS"
+          docker buildx imagetools create "${tags[@]}" \
+            "${image}:${GITHUB_SHA}-amd64" \
+            "${image}:${GITHUB_SHA}-arm64"
