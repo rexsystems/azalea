@@ -37,7 +37,13 @@ pub enum Command {
     /// Toggle signup / show settings
     #[command(subcommand)]
     Settings(SettingsCommand),
+    /// Check, apply or roll back a managed Docker installation
+    #[command(subcommand)]
+    Update(UpdateCommand),
 }
+
+#[derive(Subcommand, Debug)]
+pub enum UpdateCommand { Status, Check, Apply, Rollback }
 
 #[derive(Subcommand, Debug)]
 pub enum UserCommand {
@@ -121,6 +127,17 @@ pub fn run_cli(command: Command) -> anyhow::Result<()> {
         } => bootstrap(&dir, &email, &password, &instance),
         Command::User(cmd) => run_user(&dir, cmd),
         Command::Settings(cmd) => run_settings(&dir, cmd),
+        Command::Update(cmd) => {
+            let status = crate::updates::current_status()?;
+            let result = match cmd {
+                UpdateCommand::Status => status,
+                UpdateCommand::Check => crate::updates::request_action("check", None, "cli")?,
+                UpdateCommand::Apply => crate::updates::request_action("apply", status["check_id"].as_str(), "cli")?,
+                UpdateCommand::Rollback => crate::updates::request_action("rollback", status["backup_id"].as_str(), "cli")?,
+            };
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            Ok(())
+        },
     }
 }
 

@@ -22,6 +22,7 @@ mod mail;
 mod ratelimit;
 mod routes;
 mod state;
+mod updates;
 
 use crate::mail::MailConfig;
 use cli::{Cli, Command};

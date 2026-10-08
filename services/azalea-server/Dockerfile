@@ -11,6 +11,8 @@ RUN mkdir src && echo 'fn main(){}' > src/main.rs \
 
 COPY src ./src
 COPY migrations ./migrations
+ARG AZALEA_BUILD_REVISION=local
+ENV AZALEA_BUILD_REVISION=${AZALEA_BUILD_REVISION}
 RUN touch src/main.rs && cargo build --release
 
 FROM debian:bookworm-slim

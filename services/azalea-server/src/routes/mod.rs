@@ -18,6 +18,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .merge(vault::router())
         .merge(admin::router())
         .merge(crate::ai::router())
+        .merge(crate::updates::router())
 }
 
 async fn health(State(state): State<Arc<AppState>>) -> Json<Value> {
@@ -37,6 +38,7 @@ async fn health(State(state): State<Arc<AppState>>) -> Json<Value> {
     Json(json!({
         "ok": true,
         "version": env!("CARGO_PKG_VERSION"),
+        "revision": option_env!("AZALEA_BUILD_REVISION").unwrap_or("local"),
         "mail_configured": state.mail.is_some(),
         "instance_name": instance_name,
     }))

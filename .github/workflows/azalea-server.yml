@@ -46,6 +46,8 @@ jobs:
         uses: useblacksmith/build-push-action@v2 # v6.19.0
         with:
           context: services/azalea-server
+          build-args: |
+            AZALEA_BUILD_REVISION=${{ github.sha }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
