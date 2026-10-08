@@ -146,6 +146,15 @@ class UpdateTests(unittest.TestCase):
         self.assertIn("already contains an installation", result.stderr)
         self.assertEqual((self.install / ".env").read_text(), "AZALEA_JWT_SECRET=original\n")
 
+    def test_installer_never_reports_success_when_admin_creation_or_verification_fails(self):
+        source = (Path(__file__).parents[1] / "install.sh").read_text()
+        helper = source[source.index("bootstrap_admin() {"):source.index("write_compose() {")]
+        for mode, expected in (("fail", False), ("missing", False), ("disabled", False), ("admin", True)):
+            script = "set -eu\nadmin_email=Admin@example.com\nadmin_pass=\"-password with spaces\"\ninstance=Test\ndie() { echo \"$1\" >&2; exit 1; }\nok() { echo VERIFIED; }\n" + helper + '\ndocker() {\n case "$*" in *bootstrap*) ' + ("return 1" if mode == "fail" else "return 0") + '\n ;; *) printf "id admin@example.com ' + ("admin pro active" if mode == "admin" else "admin pro disabled" if mode == "disabled" else "user free active") + '\\n" ;; esac\n}\nbootstrap_admin\n'
+            result = subprocess.run(["bash"], input=script, text=True, capture_output=True)
+            self.assertEqual(result.returncode == 0, expected, result.stderr)
+            self.assertEqual("VERIFIED" in result.stdout, expected)
+
     def test_cloudflare_and_proxy_examples_target_optional_dashboard_or_api(self):
         source = (Path(__file__).parents[1] / "install.sh").read_text()
         block = source[source.index('if [[ "$access_mode" != "1" ]]; then\n  proxy_host_port='):source.index('progress "Pulling Docker images"')]

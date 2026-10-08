@@ -1314,6 +1314,7 @@ function App() {
       } catch (err) {
         try {
           await api.removeAccount(created.id);
+          setActiveAccount(await api.activeAccount());
           await refreshAccounts();
           await Promise.all([
             refreshHosts(),

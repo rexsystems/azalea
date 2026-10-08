@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use rusqlite::params;
 use uuid::Uuid;
 
-use crate::auth::hash_password;
+use crate::auth::{hash_password, verify_password};
 use crate::db::{now_rfc3339, Database};
 
 #[derive(Parser, Debug)]
@@ -154,17 +154,6 @@ fn bootstrap(dir: &Path, email: &str, password: &str, instance: &str) -> anyhow:
     let email = normalize_email(email)?;
     validate_password(password)?;
     let db = open_db(dir)?;
-    let admins: i64 = db.with_conn(|conn| {
-        Ok(
-            conn.query_row("SELECT COUNT(*) FROM users WHERE role = 'admin'", [], |r| {
-                r.get(0)
-            })?,
-        )
-    })?;
-    if admins > 0 {
-        anyhow::bail!("already bootstrapped (an admin user exists)");
-    }
-
     let password_hash = hash_password(password).map_err(|e| anyhow::anyhow!("{e}"))?;
     let user_id = Uuid::new_v4().to_string();
     let now = now_rfc3339();
@@ -175,21 +164,42 @@ fn bootstrap(dir: &Path, email: &str, password: &str, instance: &str) -> anyhow:
         instance
     };
 
-    db.with_conn(|conn| {
-        conn.execute(
+    let created = db.with_conn(|conn| {
+        use rusqlite::OptionalExtension;
+        let tx = rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)?;
+        let existing: Option<(String, bool, String)> = tx.query_row(
+            "SELECT role,disabled,password_hash FROM users WHERE email=?1",
+            params![email], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ).optional()?;
+        if let Some((role, disabled, hash)) = existing {
+            if role == "admin" && !disabled && verify_password(password, &hash).map_err(|error| anyhow::anyhow!("{error}"))? {
+                return Ok(false);
+            }
+            anyhow::bail!("This email already exists but is not an active admin with the supplied password. Existing credentials were not changed. Use the user CLI to recover that account.");
+        }
+        let admins: i64 = tx.query_row("SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=0", [], |row| row.get(0))?;
+        if admins > 0 {
+            anyhow::bail!("An active administrator already exists. Bootstrap will not replace it; use the user CLI to manage additional accounts.");
+        }
+        tx.execute(
             "INSERT INTO users (id, email, password_hash, role, plan, disabled, created_at, updated_at)
              VALUES (?1, ?2, ?3, 'admin', 'pro', 0, ?4, ?4)",
             params![user_id, email, password_hash, now],
         )?;
-        conn.execute(
+        tx.execute(
             "UPDATE settings SET instance_name = ?1 WHERE id = 1",
             params![instance],
         )?;
-        Ok(())
+        tx.commit()?;
+        Ok(true)
     })?;
 
-    println!("ok: admin created ({email})");
-    println!("instance: {instance}");
+    if created {
+        println!("ok: admin created ({email})");
+        println!("instance: {instance}");
+    } else {
+        println!("ok: existing active administrator verified ({email})");
+    }
     Ok(())
 }
 

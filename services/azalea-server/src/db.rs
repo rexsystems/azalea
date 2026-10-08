@@ -11,6 +11,7 @@ pub struct Database {
 impl Database {
     pub fn open(path: &Path) -> Result<Self> {
         let conn = Connection::open(path).with_context(|| format!("open db {}", path.display()))?;
+        conn.busy_timeout(std::time::Duration::from_secs(15))?;
         conn.execute_batch(
             "PRAGMA foreign_keys = ON;
              PRAGMA journal_mode = WAL;",

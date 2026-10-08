@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import * as api from "../lib/api";
@@ -51,7 +57,8 @@ interface AccountSwitcherProps {
   compact?: boolean;
 }
 
-type AddStep = "menu" | "choose" | "selfhost" | "selfhost-login" | "reauth" | "copy-from";
+type AddStep =
+  "menu" | "choose" | "selfhost" | "selfhost-login" | "reauth" | "copy-from";
 
 function kindIcon(kind: AccountKind): ReactNode {
   if (kind === "selfhost") return <Server size={14} />;
@@ -91,6 +98,18 @@ export function AccountSwitcher({
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<AddStep>("menu");
   const [busy, setBusy] = useState(false);
+  const [browserWaiting, setBrowserWaiting] = useState(
+    api.isBrowserLoginPending,
+  );
+  const [browserCode, setBrowserCode] = useState("");
+  useEffect(() => {
+    const changed = (event: Event) => {
+      setBrowserWaiting(Boolean((event as CustomEvent<boolean>).detail));
+      setBrowserCode("");
+    };
+    window.addEventListener("azalea-browser-login", changed);
+    return () => window.removeEventListener("azalea-browser-login", changed);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [serverUrl, setServerUrl] = useState("");
   const [instanceName, setInstanceName] = useState<string | null>(null);
@@ -179,7 +198,7 @@ export function AccountSwitcher({
 
   const title = displayEmail
     ? maskEmail(displayEmail)
-    : active?.label ?? "Local";
+    : (active?.label ?? "Local");
   const subtitle = authDisconnected
     ? "Disconnected"
     : needsAuth
@@ -210,10 +229,13 @@ export function AccountSwitcher({
       setBusy(true);
       setError(null);
       const { base_url, web_url } = resolveSelfHostUrls(serverUrl);
-      const probe = await api.probeSelfhost({ baseUrl: base_url, webUrl: web_url });
+      const probe = await api.probeSelfhost({
+        baseUrl: base_url,
+        webUrl: web_url,
+      });
       const resolved = probe.api_base_url || base_url;
       setResolvedBase(resolved);
-      setResolvedWeb(probe.has_web_ui ? probe.web_url ?? web_url : null);
+      setResolvedWeb(probe.has_web_ui ? (probe.web_url ?? web_url) : null);
       setInstanceName(probe.instance_name);
 
       if (probe.has_web_ui && (probe.web_url || web_url)) {
@@ -320,7 +342,9 @@ export function AccountSwitcher({
         <span
           className="text-[11px] font-medium"
           style={{
-            color: needsAuth ? "var(--warning, #d97706)" : "var(--text-secondary)",
+            color: needsAuth
+              ? "var(--warning, #d97706)"
+              : "var(--text-secondary)",
           }}
         >
           {needsAuth ? subtitle : "Accounts"}
@@ -345,7 +369,10 @@ export function AccountSwitcher({
       <UserAvatar email={displayEmail ?? undefined} size={34} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <div className="truncate text-xs font-medium" style={{ color: "var(--text)" }}>
+          <div
+            className="truncate text-xs font-medium"
+            style={{ color: "var(--text)" }}
+          >
             {title}
           </div>
           {warningIcon}
@@ -357,7 +384,9 @@ export function AccountSwitcher({
             <span
               className="truncate text-[10px] font-semibold"
               style={{
-                color: needsAuth ? "var(--warning, #d97706)" : "var(--text-muted)",
+                color: needsAuth
+                  ? "var(--warning, #d97706)"
+                  : "var(--text-muted)",
               }}
             >
               {subtitle}
@@ -391,7 +420,64 @@ export function AccountSwitcher({
               borderColor: "var(--border)",
             }}
           >
-            {step === "copy-from" ? (
+            {browserWaiting ? (
+              <div className="space-y-3 p-3">
+                <p
+                  className="text-xs font-medium"
+                  style={{ color: "var(--text)" }}
+                >
+                  Waiting for browser sign-in…
+                </p>
+                <p
+                  className="text-[11px]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  If the browser cannot connect to the app, paste the one-time
+                  code it shows here.
+                </p>
+                <input
+                  className={fieldClass}
+                  style={fieldStyle}
+                  aria-label="One-time browser sign-in code"
+                  value={browserCode}
+                  onChange={(event) => setBrowserCode(event.target.value)}
+                  placeholder="One-time sign-in code"
+                  autoComplete="off"
+                />
+                {error && (
+                  <p
+                    className="text-[11px]"
+                    role="alert"
+                    style={{ color: "var(--danger)" }}
+                  >
+                    {error}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={!browserCode.trim()}
+                  className="home-action-primary transition-ui w-full rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
+                  onClick={() =>
+                    void api
+                      .syncSubmitBrowserLoginCode(browserCode)
+                      .catch((err) => setError(String(err)))
+                  }
+                >
+                  Complete sign-in
+                </button>
+                <button
+                  type="button"
+                  className="transition-ui w-full rounded-lg px-3 py-2 text-xs hover-subtle"
+                  onClick={() =>
+                    void api
+                      .syncCancelBrowserLogin()
+                      .catch((err) => setError(String(err)))
+                  }
+                >
+                  Cancel sign-in
+                </button>
+              </div>
+            ) : step === "copy-from" ? (
               <div className="p-2">
                 <div className="mb-1.5 flex items-center gap-1 px-1.5 pt-0.5">
                   <button
@@ -406,12 +492,19 @@ export function AccountSwitcher({
                   >
                     <ArrowLeft size={14} />
                   </button>
-                  <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: "var(--text)" }}
+                  >
                     Copy data from
                   </span>
                 </div>
-                <p className="mb-2 px-1.5 text-[10px]" style={{ color: "var(--text-muted)" }}>
-                  Import hosts and keys from another profile into the active one.
+                <p
+                  className="mb-2 px-1.5 text-[10px]"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Import hosts and keys from another profile into the active
+                  one.
                 </p>
                 <div className="max-h-56 space-y-1 overflow-y-auto">
                   {accounts
@@ -439,7 +532,9 @@ export function AccountSwitcher({
                         className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm transition-ui hover-subtle disabled:opacity-50"
                         style={{ color: "var(--text-secondary)" }}
                       >
-                        <span style={{ color: "var(--text-muted)" }}>{kindIcon(account.kind)}</span>
+                        <span style={{ color: "var(--text-muted)" }}>
+                          {kindIcon(account.kind)}
+                        </span>
                         <span className="min-w-0 flex-1">
                           <span
                             className="block truncate text-xs font-medium"
@@ -458,12 +553,18 @@ export function AccountSwitcher({
                                 : kindLabel(account.kind)}
                           </span>
                         </span>
-                        <Copy size={13} style={{ color: "var(--text-muted)" }} />
+                        <Copy
+                          size={13}
+                          style={{ color: "var(--text-muted)" }}
+                        />
                       </button>
                     ))}
                 </div>
                 {error && (
-                  <p className="mt-2 px-1.5 text-[11px]" style={{ color: "var(--danger)" }}>
+                  <p
+                    className="mt-2 px-1.5 text-[11px]"
+                    style={{ color: "var(--danger)" }}
+                  >
                     {error}
                   </p>
                 )}
@@ -483,7 +584,10 @@ export function AccountSwitcher({
                   >
                     <ArrowLeft size={14} />
                   </button>
-                  <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: "var(--text)" }}
+                  >
                     Add account
                   </span>
                 </div>
@@ -515,7 +619,10 @@ export function AccountSwitcher({
                   />
                 </div>
                 {error && (
-                  <p className="mt-2 px-1.5 text-[11px]" style={{ color: "var(--danger)" }}>
+                  <p
+                    className="mt-2 px-1.5 text-[11px]"
+                    style={{ color: "var(--danger)" }}
+                  >
                     {error}
                   </p>
                 )}
@@ -535,12 +642,18 @@ export function AccountSwitcher({
                   >
                     <ArrowLeft size={14} />
                   </button>
-                  <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: "var(--text)" }}
+                  >
                     Self-hosted
                   </span>
                 </div>
                 <label className="block space-y-1">
-                  <span className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
+                  <span
+                    className="text-[10px] font-medium"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     Server URL
                   </span>
                   <input
@@ -551,10 +664,14 @@ export function AccountSwitcher({
                     placeholder="https://azalea.example.com"
                     autoFocus
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && serverUrl.trim()) void continueSelfhost();
+                      if (e.key === "Enter" && serverUrl.trim())
+                        void continueSelfhost();
                     }}
                   />
-                  <span className="block text-[10px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                  <span
+                    className="block text-[10px] leading-relaxed"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     Public domain uses /api. Local :9482 or …/api stays as-is.
                   </span>
                 </label>
@@ -588,31 +705,53 @@ export function AccountSwitcher({
                   >
                     <ArrowLeft size={14} />
                   </button>
-                  <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: "var(--text)" }}
+                  >
                     Sign in
                   </span>
                 </div>
-                <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                  No web dashboard on this server. Sign in with email and password.
+                <p
+                  className="text-[11px] leading-relaxed"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  No web dashboard on this server. Sign in with email and
+                  password.
                 </p>
                 <div
                   className="rounded-lg border px-2.5 py-2"
-                  style={{ borderColor: "var(--border-subtle)", background: "var(--bg-input)" }}
+                  style={{
+                    borderColor: "var(--border-subtle)",
+                    background: "var(--bg-input)",
+                  }}
                 >
-                  <div className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
+                  <div
+                    className="text-[10px] font-medium"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     Server
                   </div>
-                  <div className="mt-0.5 truncate text-xs font-medium" style={{ color: "var(--text)" }}>
+                  <div
+                    className="mt-0.5 truncate text-xs font-medium"
+                    style={{ color: "var(--text)" }}
+                  >
                     {instanceName}
                   </div>
                   {resolvedBase && (
-                    <div className="mt-0.5 truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    <div
+                      className="mt-0.5 truncate text-[10px]"
+                      style={{ color: "var(--text-muted)" }}
+                    >
                       {resolvedBase.replace(/^https?:\/\//, "")}
                     </div>
                   )}
                 </div>
                 <label className="block space-y-1">
-                  <span className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
+                  <span
+                    className="text-[10px] font-medium"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     Email
                   </span>
                   <input
@@ -627,7 +766,10 @@ export function AccountSwitcher({
                   />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
+                  <span
+                    className="text-[10px] font-medium"
+                    style={{ color: "var(--text-muted)" }}
+                  >
                     Password
                   </span>
                   <input
@@ -639,7 +781,8 @@ export function AccountSwitcher({
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && email.trim() && password) void finishSelfhost();
+                      if (e.key === "Enter" && email.trim() && password)
+                        void finishSelfhost();
                     }}
                   />
                 </label>
@@ -673,12 +816,19 @@ export function AccountSwitcher({
                   >
                     <ArrowLeft size={14} />
                   </button>
-                  <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: "var(--text)" }}
+                  >
                     Reconnect
                   </span>
                 </div>
-                <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                  Account on {active?.label ?? "this profile"} was disconnected. Sign in again.
+                <p
+                  className="text-[11px] leading-relaxed"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Account on {active?.label ?? "this profile"} was disconnected.
+                  Sign in again.
                 </p>
                 {active?.kind === "selfhost" && active.web_url ? (
                   <button
@@ -695,7 +845,10 @@ export function AccountSwitcher({
                 ) : active?.kind === "selfhost" ? (
                   <>
                     <label className="block space-y-1">
-                      <span className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
+                      <span
+                        className="text-[10px] font-medium"
+                        style={{ color: "var(--text-muted)" }}
+                      >
                         Email
                       </span>
                       <input
@@ -708,7 +861,10 @@ export function AccountSwitcher({
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-[10px] font-medium" style={{ color: "var(--text-muted)" }}>
+                      <span
+                        className="text-[10px] font-medium"
+                        style={{ color: "var(--text-muted)" }}
+                      >
                         Password
                       </span>
                       <input
@@ -718,20 +874,29 @@ export function AccountSwitcher({
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && (email.trim() || formEmail) && password) {
+                          if (
+                            e.key === "Enter" &&
+                            (email.trim() || formEmail) &&
+                            password
+                          ) {
                             void finishReauth();
                           }
                         }}
                       />
                     </label>
                     {error && (
-                      <p className="text-[11px]" style={{ color: "var(--danger)" }}>
+                      <p
+                        className="text-[11px]"
+                        style={{ color: "var(--danger)" }}
+                      >
                         {error}
                       </p>
                     )}
                     <button
                       type="button"
-                      disabled={busy || !(email.trim() || formEmail) || !password}
+                      disabled={
+                        busy || !(email.trim() || formEmail) || !password
+                      }
                       onClick={() => void finishReauth()}
                       className="home-action-primary transition-ui w-full rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50"
                     >
@@ -751,8 +916,12 @@ export function AccountSwitcher({
                     Sign in with browser
                   </button>
                 ) : (
-                  <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                    This profile is local only. Switch to Cloud or Self-hosted to connect an account.
+                  <p
+                    className="text-[11px]"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    This profile is local only. Switch to Cloud or Self-hosted
+                    to connect an account.
                   </p>
                 )}
               </div>
@@ -763,12 +932,19 @@ export function AccountSwitcher({
                     className="flex items-start gap-2 border-b px-3 py-2.5"
                     style={{
                       borderColor: "var(--border-subtle)",
-                      background: "color-mix(in srgb, #d97706 12%, transparent)",
+                      background:
+                        "color-mix(in srgb, #d97706 12%, transparent)",
                     }}
                   >
-                    <AlertTriangle size={14} style={{ color: "#d97706", marginTop: 1 }} />
+                    <AlertTriangle
+                      size={14}
+                      style={{ color: "#d97706", marginTop: 1 }}
+                    />
                     <div className="min-w-0 flex-1">
-                      <p className="text-[11px] leading-snug" style={{ color: "var(--text)" }}>
+                      <p
+                        className="text-[11px] leading-snug"
+                        style={{ color: "var(--text)" }}
+                      >
                         {authDisconnected
                           ? `Account on ${active?.label ?? "this profile"} was disconnected. Reconnect again.`
                           : `Sign in to ${active?.label ?? "this profile"} to sync.`}
@@ -792,7 +968,9 @@ export function AccountSwitcher({
                 <div className="max-h-56 overflow-y-auto py-1.5">
                   {accounts.map((account) => {
                     const isActive = account.id === active?.id;
-                    const offlineCount = accounts.filter((a) => a.kind === "offline").length;
+                    const offlineCount = accounts.filter(
+                      (a) => a.kind === "offline",
+                    ).length;
                     const canRemove =
                       accounts.length > 1 &&
                       (account.kind !== "offline" || offlineCount > 1);
@@ -830,7 +1008,10 @@ export function AccountSwitcher({
                             >
                               <span className="truncate">{account.label}</span>
                               {showWarn && (
-                                <AlertTriangle size={12} style={{ color: "#d97706" }} />
+                                <AlertTriangle
+                                  size={12}
+                                  style={{ color: "#d97706" }}
+                                />
                               )}
                             </span>
                             <span
@@ -848,12 +1029,18 @@ export function AccountSwitcher({
                                 : account.email
                                   ? maskEmail(account.email)
                                   : account.base_url
-                                    ? account.base_url.replace(/^https?:\/\//, "")
+                                    ? account.base_url.replace(
+                                        /^https?:\/\//,
+                                        "",
+                                      )
                                     : kindLabel(account.kind)}
                             </span>
                           </span>
                           {isActive && !showWarn && (
-                            <Check size={14} style={{ color: "var(--accent)" }} />
+                            <Check
+                              size={14}
+                              style={{ color: "var(--accent)" }}
+                            />
                           )}
                         </button>
                         {canRemove && (
@@ -870,7 +1057,9 @@ export function AccountSwitcher({
                                   await onRemove(account.id);
                                   if (accounts.length <= 2) close();
                                 } catch (err) {
-                                  setError(String(err).replace(/^Error:\s*/, ""));
+                                  setError(
+                                    String(err).replace(/^Error:\s*/, ""),
+                                  );
                                 } finally {
                                   setBusy(false);
                                 }
@@ -886,7 +1075,10 @@ export function AccountSwitcher({
                     );
                   })}
                   {error && step === "menu" && (
-                    <p className="px-3 pb-1 text-[11px]" style={{ color: "var(--danger)" }}>
+                    <p
+                      className="px-3 pb-1 text-[11px]"
+                      style={{ color: "var(--danger)" }}
+                    >
                       {error}
                     </p>
                   )}
@@ -949,37 +1141,36 @@ export function AccountSwitcher({
                       Reconnect
                     </button>
                   ) : null}
-                  {!authDisconnected &&
-                    needsAuth && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (active?.kind === "selfhost" && !active.web_url) {
-                            setError(null);
-                            setEmail(formEmail ?? "");
-                            setPassword("");
-                            setStep("reauth");
-                            return;
-                          }
-                          if (!onSignIn) return;
-                          close();
-                          onSignIn();
-                        }}
-                        className="home-action-primary mx-1.5 mb-1 mt-0.5 flex w-[calc(100%-0.75rem)] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium"
-                      >
-                        {active?.kind === "selfhost" && !active.web_url ? (
-                          <>
-                            <Server size={14} />
-                            Connect account
-                          </>
-                        ) : (
-                          <>
-                            <Globe size={14} />
-                            Sign in with browser
-                          </>
-                        )}
-                      </button>
-                    )}
+                  {!authDisconnected && needsAuth && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (active?.kind === "selfhost" && !active.web_url) {
+                          setError(null);
+                          setEmail(formEmail ?? "");
+                          setPassword("");
+                          setStep("reauth");
+                          return;
+                        }
+                        if (!onSignIn) return;
+                        close();
+                        onSignIn();
+                      }}
+                      className="home-action-primary mx-1.5 mb-1 mt-0.5 flex w-[calc(100%-0.75rem)] items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium"
+                    >
+                      {active?.kind === "selfhost" && !active.web_url ? (
+                        <>
+                          <Server size={14} />
+                          Connect account
+                        </>
+                      ) : (
+                        <>
+                          <Globe size={14} />
+                          Sign in with browser
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -1031,10 +1222,16 @@ function ChoiceRow({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-xs font-medium" style={{ color: "var(--text)" }}>
+        <span
+          className="block text-xs font-medium"
+          style={{ color: "var(--text)" }}
+        >
           {title}
         </span>
-        <span className="block text-[10px]" style={{ color: "var(--text-muted)" }}>
+        <span
+          className="block text-[10px]"
+          style={{ color: "var(--text-muted)" }}
+        >
           {description}
         </span>
       </span>

@@ -35,6 +35,15 @@ The script asks for:
 - optional host update manager on Linux/systemd
 
 Default install dir: `~/azalea` (or `/root/azalea` when run as root).
+Administrator creation is mandatory: the installer verifies the configured email
+is an active admin in the running server's `/data/azalea.db` and stops on failure.
+Rerunning the installer on a running installation without an active administrator
+offers to repair that account setup while preserving the existing configuration.
+To recover a previous incomplete install without deleting its volume, run
+`docker compose exec azalea-server azalea-server bootstrap --email=you@example.com --instance=Azalea`
+with `AZALEA_BOOTSTRAP_PASSWORD` supplied to that exec process, or use the documented
+bootstrap password option below. Existing active admin credentials are never reset
+by bootstrap; repeating it succeeds only with the same verified account/password.
 An existing installation is not overwritten. Use update commands to upgrade it,
 or `AZALEA_INSTALL_DIR` to create a separate instance.
 

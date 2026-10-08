@@ -118,6 +118,7 @@ pub fn run() {
             app.manage(init_local_terminal_manager());
             app.manage(sync_state);
             app.manage(ai::AiCancelMap::default());
+            app.manage(sync_commands::BrowserLoginState::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -173,6 +174,8 @@ pub fn run() {
             known_hosts::respond_host_key,
             sync_commands::sync_status,
             sync_commands::sync_browser_login,
+            sync_commands::sync_cancel_browser_login,
+            sync_commands::sync_submit_browser_login_code,
             sync_commands::sync_password_login,
             sync_commands::probe_selfhost,
             sync_commands::sync_logout,

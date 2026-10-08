@@ -393,8 +393,35 @@ export function syncStatus(): Promise<SyncStatus> {
  * Opens the system browser to sign in on the Azalea website, then receives the
  * session back on a one-shot loopback server. Resolves once signed in.
  */
-export function syncBrowserLogin(): Promise<void> {
-  return invoke("sync_browser_login");
+let browserLoginGeneration = 0;
+let browserLoginPending = false;
+export function isBrowserLoginPending(): boolean {
+  return browserLoginPending;
+}
+export async function syncBrowserLogin(): Promise<void> {
+  const generation = ++browserLoginGeneration;
+  browserLoginPending = true;
+  window.dispatchEvent(
+    new CustomEvent("azalea-browser-login", { detail: true }),
+  );
+  try {
+    await invoke("sync_browser_login");
+  } finally {
+    if (generation === browserLoginGeneration) {
+      browserLoginPending = false;
+      window.dispatchEvent(
+        new CustomEvent("azalea-browser-login", { detail: false }),
+      );
+    }
+  }
+}
+
+export function syncCancelBrowserLogin(): Promise<void> {
+  return invoke("sync_cancel_browser_login");
+}
+
+export function syncSubmitBrowserLoginCode(code: string): Promise<void> {
+  return invoke("sync_submit_browser_login_code", { code });
 }
 
 export function syncPasswordLogin(
@@ -713,7 +740,12 @@ export interface AiServerConfig {
   accountId: string;
   enabled: boolean;
   defaultModel: string;
-  models: { id: string; label: string; dialect: "openai" | "anthropic"; upstream_model: string }[];
+  models: {
+    id: string;
+    label: string;
+    dialect: "openai" | "anthropic";
+    upstream_model: string;
+  }[];
 }
 
 export function aiServerConfig(): Promise<AiServerConfig> {

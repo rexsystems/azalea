@@ -99,7 +99,7 @@ ask_secret() {
   if [[ ! -r /dev/tty ]]; then
     die "no terminal for prompts; run: bash install.sh"
   fi
-  read -r -s -p "$(printf '%s?%s %s: ' "${C_CYAN}" "${C_RESET}" "$prompt")" reply < /dev/tty || true
+  IFS= read -r -s -p "$(printf '%s?%s %s: ' "${C_CYAN}" "${C_RESET}" "$prompt")" reply < /dev/tty || die "Could not read the administrator password."
   echo >&2
   printf '%s\n' "$reply"
 }
@@ -131,6 +131,33 @@ ask_port() {
     fi
     warn "Enter a port between 1 and 65535."
   done
+}
+
+read_admin_credentials() {
+  while true; do
+    admin_email="$(ask "Admin email" "admin@example.com")"
+    if [[ "$admin_email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$ ]]; then break; fi
+    warn "Enter a valid administrator email address."
+  done
+  while true; do
+    admin_pass="$(ask_secret "Admin password (min 8 chars)")"
+    if [[ ${#admin_pass} -ge 8 ]]; then break; fi
+    warn "Password too short."
+  done
+}
+
+bootstrap_admin() {
+  if ! docker compose exec -T -e AZALEA_DATA_DIR=/data azalea-server azalea-server bootstrap \
+    --email="$admin_email" --password="$admin_pass" --instance="$instance"; then
+    die "Administrator creation failed. The error above must be resolved before installation is complete. Your database and configuration have been preserved."
+  fi
+  local users
+  users="$(docker compose exec -T -e AZALEA_DATA_DIR=/data azalea-server azalea-server user list)" || die "Could not verify the administrator in the installed database."
+  if ! awk -v email="${admin_email,,}" '$2 == email && $3 == "admin" && $5 == "active" { found=1 } END { exit !found }' <<< "$users"; then
+    die "The configured email is not an active administrator in /data/azalea.db. Installation is not complete."
+  fi
+  unset admin_pass
+  ok "Administrator created and verified (${admin_email})"
 }
 
 write_compose() {
@@ -334,6 +361,19 @@ cd "$INSTALL_DIR"
 INSTALL_DIR="$(pwd -P)"
 [[ "$INSTALL_DIR" != "/" && "$INSTALL_DIR" != "$(cd "$HOME" && pwd -P)" ]] || die "Choose a dedicated installation directory."
 if [[ -e .env || -e docker-compose.yml || -e compose.yaml || -e compose.yml || -e docker-compose.yaml ]]; then
+  if [[ -f .env ]] && [[ -n "$(docker compose ps -q azalea-server 2>/dev/null || true)" ]]; then
+    if existing_users="$(docker compose exec -T -e AZALEA_DATA_DIR=/data azalea-server azalea-server user list)" &&
+      ! awk '$3 == "admin" && $5 == "active" { found=1 } END { exit !found }' <<< "$existing_users"; then
+      if ask_yes_no "This installation has no active administrator. Create one without changing its configuration?" "y"; then
+        read_admin_credentials
+        instance="$(docker compose exec -T azalea-server azalea-server settings show | sed -n 's/^instance_name: *//p')"
+        instance="${instance:-Azalea}"
+        bootstrap_admin
+        ok "Existing installation repaired. Sign in with the administrator you just created."
+        exit 0
+      fi
+    fi
+  fi
   die "This directory already contains an installation. Use its update commands; the installer will not overwrite credentials or configuration. Set AZALEA_INSTALL_DIR to a new directory for another instance."
 fi
 
@@ -379,14 +419,7 @@ done
 if [[ -z "$web_url" && "$want_web" -eq 1 ]]; then web_url="http://127.0.0.1:${web_host_port}"; fi
 public_web_for_mail="$web_url"
 
-admin_email="$(ask "Admin email" "admin@example.com")"
-while true; do
-  admin_pass="$(ask_secret "Admin password (min 8 chars)")"
-  if [[ ${#admin_pass} -ge 8 ]]; then
-    break
-  fi
-  warn "Password too short."
-done
+read_admin_credentials
 instance="$(ask "Instance name" "Azalea")"
 
 resend_key=""
@@ -498,14 +531,7 @@ done
 ok "API healthy on :${api_host_port}"
 
 progress "Bootstrapping admin"
-if docker compose exec -T azalea-server azalea-server bootstrap \
-  --email "$admin_email" \
-  --password "$admin_pass" \
-  --instance "$instance"; then
-  ok "Admin ready"
-else
-  warn "Bootstrap skipped or failed (maybe already done). Continuing."
-fi
+bootstrap_admin
 
 if [[ "$install_mode" == "image" && -d /run/systemd/system ]] && command -v python3 >/dev/null 2>&1; then
   if ask_yes_no "Enable the optional host update manager (CLI and dashboard; backup and rollback)?" "y"; then

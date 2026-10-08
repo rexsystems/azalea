@@ -7,7 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
 use crate::store::SharedDatabase;
-use crate::sync::{self, SharedSyncState, SelfHostProbe, SyncOutcome, SyncPreview, SyncStatus};
+use crate::sync::{self, SelfHostProbe, SharedSyncState, SyncOutcome, SyncPreview, SyncStatus};
 
 #[tauri::command]
 pub async fn sync_status(
@@ -21,6 +21,83 @@ pub async fn sync_status(
 // ---------- browser login (loopback handoff) ----------
 
 const BROWSER_LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
+
+#[derive(Default)]
+pub struct BrowserLoginState(
+    parking_lot::Mutex<
+        Option<(
+            String,
+            std::sync::Arc<tokio::sync::Notify>,
+            tokio::sync::mpsc::Sender<String>,
+        )>,
+    >,
+);
+
+impl BrowserLoginState {
+    fn start(
+        &self,
+    ) -> (
+        String,
+        std::sync::Arc<tokio::sync::Notify>,
+        tokio::sync::mpsc::Receiver<String>,
+    ) {
+        let id = random_state();
+        let cancel = std::sync::Arc::new(tokio::sync::Notify::new());
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        if let Some((_, previous, _)) = self.0.lock().replace((id.clone(), cancel.clone(), sender))
+        {
+            previous.notify_one();
+        }
+        (id, cancel, receiver)
+    }
+
+    fn cancel(&self) {
+        if let Some((_, cancel, _)) = self.0.lock().take() {
+            cancel.notify_one();
+        }
+    }
+}
+
+struct BrowserLoginGuard<'a> {
+    state: &'a BrowserLoginState,
+    id: String,
+}
+impl Drop for BrowserLoginGuard<'_> {
+    fn drop(&mut self) {
+        let mut pending = self.state.0.lock();
+        if pending.as_ref().is_some_and(|(id, _, _)| *id == self.id) {
+            pending.take();
+        }
+    }
+}
+
+#[tauri::command]
+pub fn sync_cancel_browser_login(login: tauri::State<'_, BrowserLoginState>) {
+    login.cancel();
+}
+
+#[tauri::command]
+pub fn sync_submit_browser_login_code(
+    login: tauri::State<'_, BrowserLoginState>,
+    code: String,
+) -> Result<(), String> {
+    let code = code.trim();
+    if code.len() < 16
+        || code.len() > 256
+        || !code.chars().all(|character| {
+            character.is_ascii_alphanumeric() || character == '-' || character == '_'
+        })
+    {
+        return Err("Paste the one-time sign-in code shown in the browser.".into());
+    }
+    let pending = login.0.lock();
+    let (_, _, sender) = pending
+        .as_ref()
+        .ok_or("Start a browser sign-in from the app first.")?;
+    sender
+        .try_send(code.into())
+        .map_err(|_| "The code is already being processed. Restart sign-in if it failed.".into())
+}
 
 fn random_state() -> String {
     use rand::rngs::OsRng;
@@ -43,6 +120,7 @@ fn json_response(status: &str, body: &str) -> String {
         "HTTP/1.1 {status}\r\nContent-Type: application/json\r\n\
 Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: content-type\r\n\
 Access-Control-Allow-Methods: POST, OPTIONS\r\nCache-Control: no-store\r\n\
+Access-Control-Allow-Private-Network: true\r\n\
 Content-Length: {}\r\nConnection: close\r\n\r\n{}",
         body.len(),
         body
@@ -51,7 +129,7 @@ Content-Length: {}\r\nConnection: close\r\n\r\n{}",
 
 const PREFLIGHT_RESPONSE: &str = "HTTP/1.1 204 No Content\r\n\
 Access-Control-Allow-Origin: *\r\nAccess-Control-Allow-Headers: content-type\r\n\
-Access-Control-Allow-Methods: POST, OPTIONS\r\nConnection: close\r\n\r\n";
+Access-Control-Allow-Methods: POST, OPTIONS\r\nAccess-Control-Allow-Private-Network: true\r\nConnection: close\r\n\r\n";
 
 const NO_CONTENT_RESPONSE: &str = "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n";
 
@@ -76,7 +154,11 @@ async fn wait_for_callback(listener: TcpListener, expected_state: &str) -> anyho
         let mut content_length = 0usize;
 
         loop {
-            let n = stream.read(&mut tmp).await?;
+            let n = match tokio::time::timeout(Duration::from_secs(10), stream.read(&mut tmp)).await
+            {
+                Ok(Ok(n)) => n,
+                _ => break,
+            };
             if n == 0 {
                 break;
             }
@@ -158,70 +240,83 @@ pub async fn sync_browser_login(
     app: tauri::AppHandle,
     state: tauri::State<'_, SharedSyncState>,
     registry: tauri::State<'_, crate::commands::accounts::SharedAccountRegistry>,
+    login: tauri::State<'_, BrowserLoginState>,
 ) -> Result<(), String> {
-    // Bind the loopback server first so we know which port to advertise.
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .await
-        .map_err(|e| format!("Could not start local login server: {e}"))?;
-    let port = listener
-        .local_addr()
-        .map_err(|e| e.to_string())?
-        .port();
-    let expected_state = random_state();
+    let (id, cancel, mut manual_code) = login.start();
+    let _guard = BrowserLoginGuard { state: &login, id };
+    let work = async {
+        // Bind the loopback server first so we know which port to advertise.
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| format!("Could not start local login server: {e}"))?;
+        let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+        let expected_state = random_state();
 
-    // PKCE material stays in this process for the lifetime of the flow.
-    let pkce = sync::new_pkce_material();
+        // PKCE material stays in this process for the lifetime of the flow.
+        let pkce = sync::new_pkce_material();
 
-    // Ask the server for a handle that ties the browser session to our PKCE
-    // challenge. If we cannot reach the server, bail before opening a browser
-    // window so we surface a clear error to the UI.
-    let (api_base, web) = {
-        let sync = state.lock().await;
-        let api_base = sync::api_base_url_public(&sync)
-            .map_err(|e| e.to_string())?;
-        (api_base, sync::web_base_url(Some(&sync)))
-    };
-    let handle = sync::begin_desktop_pkce(&api_base, &pkce.challenge, &expected_state)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let url = format!(
-        "{}/authorize?port={}&state={}&handle={}",
-        web,
-        port,
-        urlencoding_encode(&expected_state),
-        urlencoding_encode(&handle),
-    );
-
-    app.opener()
-        .open_url(url, None::<&str>)
-        .map_err(|e| format!("Could not open the browser: {e}"))?;
-
-    let code = tokio::time::timeout(
-        BROWSER_LOGIN_TIMEOUT,
-        wait_for_callback(listener, &expected_state),
-    )
-    .await
-    .map_err(|_| "Timed out waiting for the browser sign-in.".to_string())?
-    .map_err(|e| e.to_string())?;
-
-    // Redeem the one-time code with the server using our local PKCE verifier.
-    let session = sync::exchange_desktop_code(&api_base, &handle, &code, &pkce.verifier)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let (account_id, email) = {
-        let mut sync = state.lock().await;
-        sync::login_with_desktop_session(&mut sync, session)
+        // Ask the server for a handle that ties the browser session to our PKCE
+        // challenge. If we cannot reach the server, bail before opening a browser
+        // window so we surface a clear error to the UI.
+        let (api_base, web, original_account) = {
+            let sync = state.lock().await;
+            let api_base = sync::api_base_url_public(&sync).map_err(|e| e.to_string())?;
+            (
+                api_base,
+                sync::web_base_url(Some(&sync)),
+                sync.account_id_clone(),
+            )
+        };
+        let handle = sync::begin_desktop_pkce(&api_base, &pkce.challenge, &expected_state)
             .await
             .map_err(|e| e.to_string())?;
-        (sync.account_id_clone(), sync.email())
-    };
 
-    if let (Some(id), Some(email)) = (account_id, email) {
-        let _ = registry.lock().set_email(&id, Some(email));
+        let url = format!(
+            "{}/authorize?port={}&state={}&handle={}",
+            web,
+            port,
+            urlencoding_encode(&expected_state),
+            urlencoding_encode(&handle),
+        );
+
+        app.opener()
+            .open_url(url, None::<&str>)
+            .map_err(|e| format!("Could not open the browser: {e}"))?;
+
+        let code = tokio::select! {
+            code = wait_for_callback(listener, &expected_state) => code.map_err(|error| error.to_string())?,
+            code = manual_code.recv() => code.ok_or("Browser sign-in was cancelled.")?,
+        };
+
+        // Redeem the one-time code with the server using our local PKCE verifier.
+        let session = sync::exchange_desktop_code(&api_base, &handle, &code, &pkce.verifier)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let (account_id, email) = {
+            let mut sync = state.lock().await;
+            if sync.account_id_clone() != original_account {
+                return Err(
+                    "Account changed during browser sign-in. Start again on the current account."
+                        .into(),
+                );
+            }
+            sync::login_with_desktop_session(&mut sync, session)
+                .await
+                .map_err(|e| e.to_string())?;
+            (sync.account_id_clone(), sync.email())
+        };
+
+        if let (Some(id), Some(email)) = (account_id, email) {
+            let _ = registry.lock().set_email(&id, Some(email));
+        }
+        Ok(())
+    };
+    tokio::select! {
+        biased;
+        _ = cancel.notified() => Err("Browser sign-in cancelled. You can sign in again.".into()),
+        result = tokio::time::timeout(BROWSER_LOGIN_TIMEOUT, work) => result.map_err(|_| "Browser sign-in timed out. You can start it again.".to_string())?,
     }
-    Ok(())
 }
 
 /// Minimal, non-panicking percent-encoding for query-string values so we don't
@@ -239,6 +334,77 @@ fn urlencoding_encode(v: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod browser_login_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn starting_again_cancels_old_attempt_without_old_cleanup_clearing_the_new_one() {
+        let state = BrowserLoginState::default();
+        let (old_id, old_cancel, _) = state.start();
+        let old_guard = BrowserLoginGuard {
+            state: &state,
+            id: old_id,
+        };
+        let (new_id, new_cancel, _) = state.start();
+        tokio::time::timeout(Duration::from_millis(100), old_cancel.notified())
+            .await
+            .unwrap();
+        drop(old_guard);
+        assert_eq!(state.0.lock().as_ref().unwrap().0, new_id);
+        state.cancel();
+        tokio::time::timeout(Duration::from_millis(100), new_cancel.notified())
+            .await
+            .unwrap();
+        assert!(state.0.lock().is_none());
+    }
+
+    #[tokio::test]
+    async fn blocked_browser_can_submit_code_to_the_current_attempt() {
+        let state = BrowserLoginState::default();
+        let (_, _, mut receiver) = state.start();
+        state
+            .0
+            .lock()
+            .as_ref()
+            .unwrap()
+            .2
+            .try_send("one-time-code-for-pkce-exchange".into())
+            .unwrap();
+        assert_eq!(
+            receiver.recv().await.as_deref(),
+            Some("one-time-code-for-pkce-exchange")
+        );
+        state.cancel();
+        assert!(receiver.recv().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn local_network_preflight_and_invalid_state_do_not_consume_the_valid_callback() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let callback = tokio::spawn(wait_for_callback(listener, "expected-state"));
+        let mut preflight = tokio::net::TcpStream::connect(address).await.unwrap();
+        preflight.write_all(b"OPTIONS /callback HTTP/1.1\r\nHost: localhost\r\nAccess-Control-Request-Private-Network: true\r\n\r\n").await.unwrap();
+        let mut response = String::new();
+        preflight.read_to_string(&mut response).await.unwrap();
+        assert!(response.contains("204 No Content"));
+        assert!(response.contains("Access-Control-Allow-Private-Network: true"));
+        for (state, status) in [
+            ("wrong-state", "400 Bad Request"),
+            ("expected-state", "200 OK"),
+        ] {
+            let body = serde_json::json!({"state":state,"code":"one-time-code"}).to_string();
+            let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+            stream.write_all(format!("POST /callback HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+            let mut response = String::new();
+            stream.read_to_string(&mut response).await.unwrap();
+            assert!(response.contains(status));
+        }
+        assert_eq!(callback.await.unwrap().unwrap(), "one-time-code");
+    }
 }
 
 #[tauri::command]

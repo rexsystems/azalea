@@ -5,9 +5,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 // Icons: react-icons/fi is already a dep. Lucide was dropped repo-wide to
 // shrink the client bundle and cut one npm supply-chain surface.
-import { FiCheckCircle, FiHelpCircle, FiLoader, FiXCircle } from "react-icons/fi";
+import {
+  FiCheckCircle,
+  FiHelpCircle,
+  FiLoader,
+  FiXCircle,
+} from "react-icons/fi";
 import { accessRedirect, resolveAccountAccess } from "@/lib/auth-access";
-import { approveDesktopHandoff, ensureSession, getStoredSession } from "@/lib/azalea-api";
+import { approveDesktopHandoff, ensureSession } from "@/lib/azalea-api";
 import { Logo } from "@/components/Logo";
 
 type Phase = "checking" | "ready" | "handing-off" | "done" | "error";
@@ -40,6 +45,8 @@ function AuthorizeInner() {
   const [phase, setPhase] = useState<Phase>("checking");
   const [email, setEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [handoffCode, setHandoffCode] = useState<string | null>(null);
+  const [codeExpiresAt, setCodeExpiresAt] = useState(0);
 
   const paramsValid =
     isValidPort(port) &&
@@ -60,7 +67,7 @@ function AuthorizeInner() {
     }
 
     void (async () => {
-      const session = (await ensureSession()) ?? getStoredSession();
+      const session = await ensureSession();
       if (cancelled) return;
 
       if (!session) {
@@ -72,13 +79,24 @@ function AuthorizeInner() {
       const access = await resolveAccountAccess();
       if (cancelled) return;
       if (access.status !== "ok") {
-        router.replace(accessRedirect(access, backPath(port!, state!, handle!)));
+        router.replace(
+          accessRedirect(access, backPath(port!, state!, handle!)),
+        );
         return;
       }
 
       setEmail(session.user.email ?? null);
       setPhase("ready");
-    })();
+    })().catch((err) => {
+      if (!cancelled) {
+        setPhase("error");
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Could not check your session. Start sign-in again from the app.",
+        );
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -94,8 +112,17 @@ function AuthorizeInner() {
     // the desktop app (holding the matching code_verifier) can redeem it.
     let code: string;
     try {
-      const approved = await approveDesktopHandoff(handle!, state!);
-      code = approved.code;
+      if (handoffCode && Date.now() >= codeExpiresAt)
+        throw new Error(
+          "This sign-in code expired. Cancel sign-in in the app and start again.",
+        );
+      if (handoffCode) code = handoffCode;
+      else {
+        const approved = await approveDesktopHandoff(handle!, state!);
+        code = approved.code;
+        setHandoffCode(code);
+        setCodeExpiresAt(Date.now() + approved.expires_in * 1000);
+      }
     } catch (err) {
       setPhase("error");
       setError(
@@ -115,16 +142,20 @@ function AuthorizeInner() {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify({ state, code }),
+        signal: AbortSignal.timeout(8000),
       });
-      if (!response.ok) throw new Error("The desktop app rejected the sign-in.");
+      if (!response.ok)
+        throw new Error("The desktop app rejected the sign-in.");
     } catch {
       setPhase("error");
-      setError("Could not reach the Azalea app. Make sure it is still open and try again.");
+      setError(
+        "The browser could not connect to Azalea. Open the account menu in the app and paste the one-time code below, or cancel sign-in there and start again.",
+      );
       return;
     }
 
     setPhase("done");
-  }, [handle, port, state]);
+  }, [handle, port, state, handoffCode, codeExpiresAt]);
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-clip px-6 py-16">
@@ -137,7 +168,10 @@ function AuthorizeInner() {
         }}
       />
       <div className="rise relative z-10 w-full max-w-sm text-center">
-        <Link href="/" className="mb-10 inline-flex items-center justify-center gap-2.5">
+        <Link
+          href="/"
+          className="mb-10 inline-flex items-center justify-center gap-2.5"
+        >
           <Logo size={30} style={{ color: "var(--accent)" }} />
           <span
             className="text-xl font-semibold tracking-tight"
@@ -149,7 +183,11 @@ function AuthorizeInner() {
 
         {phase === "checking" && (
           <div className="flex flex-col items-center gap-4">
-            <FiLoader size={30} className="animate-spin" style={{ color: "var(--accent)" }} />
+            <FiLoader
+              size={30}
+              className="animate-spin"
+              style={{ color: "var(--accent)" }}
+            />
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
               Checking your session…
             </p>
@@ -160,17 +198,31 @@ function AuthorizeInner() {
           <div className="flex flex-col items-center gap-5">
             <FiHelpCircle size={34} style={{ color: "var(--accent)" }} />
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">Connect the desktop app?</h1>
-              <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
+              <h1 className="text-xl font-semibold tracking-tight">
+                Connect the desktop app?
+              </h1>
+              <p
+                className="mt-2 text-sm"
+                style={{ color: "var(--text-muted)" }}
+              >
                 This will sign the Azalea desktop app in as{" "}
-                <span style={{ color: "var(--text-secondary)" }}>{email ?? "your account"}</span>.
-                Only continue if you just started this from the app.
+                <span style={{ color: "var(--text-secondary)" }}>
+                  {email ?? "your account"}
+                </span>
+                . Only continue if you just started this from the app.
               </p>
             </div>
-            <button className="btn btn-primary w-full" onClick={() => void handOff()}>
+            <button
+              className="btn btn-primary w-full"
+              onClick={() => void handOff()}
+            >
               Connect Azalea
             </button>
-            <Link href="/account" className="text-xs" style={{ color: "var(--text-muted)" }}>
+            <Link
+              href="/account"
+              className="text-xs"
+              style={{ color: "var(--text-muted)" }}
+            >
               Cancel
             </Link>
           </div>
@@ -178,7 +230,11 @@ function AuthorizeInner() {
 
         {phase === "handing-off" && (
           <div className="flex flex-col items-center gap-4">
-            <FiLoader size={30} className="animate-spin" style={{ color: "var(--accent)" }} />
+            <FiLoader
+              size={30}
+              className="animate-spin"
+              style={{ color: "var(--accent)" }}
+            />
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
               Connecting…
             </p>
@@ -189,8 +245,13 @@ function AuthorizeInner() {
           <div className="flex flex-col items-center gap-4">
             <FiCheckCircle size={34} style={{ color: "#4ade80" }} />
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">You&apos;re connected</h1>
-              <p className="mt-2 text-sm" style={{ color: "var(--text-muted)" }}>
+              <h1 className="text-xl font-semibold tracking-tight">
+                You&apos;re connected
+              </h1>
+              <p
+                className="mt-2 text-sm"
+                style={{ color: "var(--text-muted)" }}
+              >
                 Return to the Azalea desktop app — you can close this tab.
               </p>
             </div>
@@ -203,6 +264,27 @@ function AuthorizeInner() {
             <p className="text-sm" style={{ color: "var(--danger)" }}>
               {error}
             </p>
+            {handoffCode && (
+              <>
+                <input
+                  className="field w-full text-center font-mono text-xs"
+                  readOnly
+                  aria-label="One-time sign-in code"
+                  value={handoffCode}
+                  onFocus={(event) => event.target.select()}
+                />
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Use this code before it expires. It works only with the
+                  sign-in attempt already open in your app.
+                </p>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => void handOff()}
+                >
+                  Retry connection
+                </button>
+              </>
+            )}
             <Link href="/" className="btn btn-ghost">
               Go home
             </Link>
