@@ -520,7 +520,33 @@ select.field option {
 
 .admin-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.server-ai-panel { display: grid; gap: 1rem; margin-top: 1.5rem; }
+.server-ai-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.server-ai-toolbar, .server-ai-save { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+.server-ai-toolbar h2, .server-ai-toolbar h3 { font-size: .9rem; font-weight: 600; }
+.server-ai-toolbar { margin-top: 1rem; }
+.server-ai-key { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin-top: 1rem; }
+.server-ai-key > .rex-label, .server-ai-key > .field { flex: 1; min-width: 220px; }
+.server-ai-catalog { display: grid; gap: .75rem; margin-top: .75rem; }
+.server-ai-model-list { max-height: 18rem; overflow-y: auto; display: grid; gap: .25rem; }
+.server-ai-model { display: flex; align-items: start; gap: .65rem; padding: .5rem; border-radius: .5rem; font-size: .8rem; cursor: pointer; }
+.server-ai-model:hover { background: var(--accent-soft); }
+.server-ai-model input { margin-top: .25rem; }
+.server-ai-model small { display: block; color: var(--text-muted); font-size: .7rem; overflow-wrap: anywhere; }
+.server-ai-model-tags { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .75rem; }
+.server-ai-model-tags button { margin-left: .5rem; cursor: pointer; }
+.server-ai-save { position: sticky; bottom: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--bg-raised); }
+.server-ai-save > p { flex: 1; min-width: 200px; }
+.admin-success { color: var(--accent); font-size: .85rem; }
+
+@media (max-width: 560px) {
+  .admin-topbar { align-items: flex-start; flex-direction: column; }
+  .server-ai-grid { grid-template-columns: 1fr; }
+  .server-ai-save { position: static; }
 }
 
 .admin-heading h1 {

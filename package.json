@@ -18,6 +18,9 @@
     "build:macos": "npm run tauri build --workspace @azalea/desktop -- --bundles app --no-sign",
     "build:macos:ci": "npm run tauri build --workspace @azalea/desktop -- --bundles app",
     "lint": "npm run build --workspace @azalea/desktop",
-    "dev:web": "npm run dev --prefix apps/azalea-web"
+    "dev:web": "npm run dev --prefix apps/azalea-server-web",
+    "dev:dashboard": "npm run dev --prefix apps/azalea-server-web",
+    "build:dashboard": "npm run build --prefix apps/azalea-server-web",
+    "test:dashboard": "npm test --prefix apps/azalea-server-web"
   }
 }

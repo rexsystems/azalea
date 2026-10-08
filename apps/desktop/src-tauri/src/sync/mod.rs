@@ -169,6 +169,10 @@ fn desktop_http_client() -> reqwest::Client {
 /// hosts are always allowed. Prevents plaintext credentials from being sent to
 /// a public sync server.
 fn ensure_https_or_loopback(base_url: &str) -> anyhow::Result<()> {
+    let parsed = reqwest::Url::parse(base_url).map_err(|_|anyhow::anyhow!("Invalid server URL"))?;
+    if !parsed.username().is_empty() || parsed.password().is_some() || parsed.query().is_some() || parsed.fragment().is_some() {
+        anyhow::bail!("Server URLs cannot include credentials, query parameters or fragments.");
+    }
     let (scheme, host) = split_scheme_host(base_url)
         .ok_or_else(|| anyhow::anyhow!("Invalid server URL"))?;
     if scheme == "https" {
@@ -185,6 +189,7 @@ fn ensure_https_or_loopback(base_url: &str) -> anyhow::Result<()> {
         || host == "127.0.0.1"
         || host == "::1"
         || host.ends_with(".local")
+        || host.parse::<std::net::Ipv6Addr>().is_ok_and(|ip|ip.is_unique_local() || ip.is_loopback())
         || is_private_ipv4(&host);
     if is_loopback {
         return Ok(());
@@ -391,6 +396,7 @@ async fn auth_refresh(state: &SyncState, refresh_token: &str) -> anyhow::Result<
     let resp = state
         .http
         .post(format!("{base}/v1/auth/refresh"))
+        .timeout(std::time::Duration::from_secs(20))
         .json(&json!({ "refresh_token": refresh_token }))
         .send()
         .await
@@ -600,6 +606,7 @@ pub struct SelfHostProbe {
     /// True when a management web UI responded (login / authorize).
     pub has_web_ui: bool,
     pub web_url: Option<String>,
+    pub api_base_url: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -619,19 +626,25 @@ pub async fn probe_selfhost(base_url: &str, web_url: Option<&str>) -> anyhow::Re
         .timeout(std::time::Duration::from_secs(12))
         .redirect(reqwest::redirect::Policy::limited(5))
         .build()?;
-    let resp = client
-        .get(format!("{base}/v1/health"))
-        .send()
-        .await
-        .map_err(|err| anyhow::anyhow!("Cannot reach server: {err}"))?;
-    if !resp.status().is_success() {
-        anyhow::bail!("Server health check failed ({})", resp.status());
+    let mut candidates = vec![base.to_string()];
+    if let Some(root) = base.strip_suffix("/api") { candidates.push(root.to_string()); }
+    else { candidates.push(format!("{base}/api")); }
+    let mut found = None;
+    let mut failure = "Server did not report a healthy Azalea API".to_string();
+    for candidate in candidates {
+        match client.get(format!("{candidate}/v1/health")).send().await {
+            Ok(response) if response.status().is_success() => {
+                let body: Value = response.json().await.unwrap_or(Value::Null);
+                if body["ok"].as_bool() == Some(true) && body["instance_name"].as_str().is_some() {
+                    found = Some((candidate, body));
+                    break;
+                }
+            }
+            Ok(response) => failure = format!("Server health check failed ({})", response.status()),
+            Err(error) => failure = format!("Cannot reach server: {error}"),
+        }
     }
-    let body: Value = resp.json().await.unwrap_or(Value::Null);
-    let ok = body.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-    if !ok {
-        anyhow::bail!("Server did not report healthy");
-    }
+    let (resolved_base, body) = found.ok_or_else(||anyhow::anyhow!(failure))?;
     let instance_name = body
         .get("instance_name")
         .and_then(|v| v.as_str())
@@ -647,7 +660,8 @@ pub async fn probe_selfhost(base_url: &str, web_url: Option<&str>) -> anyhow::Re
     let resolved_web = web_url
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .map(|s| s.trim_end_matches('/').to_string());
+        .map(|s| s.trim_end_matches('/').to_string())
+        .or_else(|| resolved_base.ends_with("/api").then(|| resolved_base.trim_end_matches("/api").to_string()));
 
     let has_web_ui = if let Some(ref web) = resolved_web {
         probe_web_ui(&client, web).await
@@ -659,6 +673,7 @@ pub async fn probe_selfhost(base_url: &str, web_url: Option<&str>) -> anyhow::Re
         ok: true,
         instance_name,
         version,
+        api_base_url: resolved_base,
         has_web_ui,
         web_url: if has_web_ui {
             resolved_web
@@ -725,6 +740,17 @@ pub async fn ensure_session(state: &mut SyncState) -> anyhow::Result<()> {
         return Ok(());
     }
     refresh_session(state).await
+}
+
+pub async fn ai_credentials(state: &mut SyncState, account_id: &str) -> anyhow::Result<(String, String)> {
+    if state.account_id.as_deref() != Some(account_id) {
+        anyhow::bail!("Account is changing. Try again after it finishes.");
+    }
+    let base = api_base_url(state)?;
+    ensure_https_or_loopback(&base)?;
+    ensure_session(state).await?;
+    let token = state.access_token.clone().ok_or_else(|| anyhow::anyhow!("Sign in to this self-hosted account first."))?;
+    Ok((format!("{}/v1/ai", base.trim_end_matches('/')), token))
 }
 
 /// True if we still have a persisted refresh token (even if access token refresh

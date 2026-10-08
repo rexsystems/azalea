@@ -10,7 +10,7 @@ Run these to reproduce the sweep:
 cd services/azalea-server && cargo audit
 cd apps/desktop/src-tauri && cargo audit
 cd apps/desktop && npm audit --omit=dev
-cd apps/azalea-web && npm audit --omit=dev
+cd apps/azalea-server-web && npm audit --omit=dev
 ```
 
 `cargo audit` reads from https://github.com/RustSec/advisory-db; run
@@ -69,7 +69,7 @@ upstream crates publish supported versions.
 
 ## npm
 
-Both `apps/desktop` and `apps/azalea-web` report **0 production vulnerabilities**
+Both `apps/desktop` and `apps/azalea-server-web` report **0 production vulnerabilities**
 as of the last audit run.
 
 ## How to add an exception

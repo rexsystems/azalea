@@ -5,7 +5,7 @@ on:
     branches: [master]
     paths:
       - "services/azalea-server/**"
-      - "apps/azalea-web/**"
+      - "apps/azalea-server-web/**"
       - ".github/workflows/azalea-server.yml"
   workflow_dispatch:
 
@@ -15,7 +15,7 @@ permissions:
 
 env:
   SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/azalea-server
-  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/azalea-web
+  WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/azalea-server-web
 
 jobs:
   docker-server:
@@ -109,7 +109,7 @@ jobs:
       - name: Build and push
         uses: useblacksmith/build-push-action@v2 # v6.19.0
         with:
-          context: apps/azalea-web
+          context: apps/azalea-server-web
           push: true
           build-args: |
             NEXT_PUBLIC_AZALEA_API_URL=/api
@@ -125,7 +125,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           OWNER="${{ github.repository_owner }}"
-          NAME="azalea-web"
+          NAME="azalea-server-web"
           set +e
           status=$(gh api "orgs/${OWNER}/packages/container/${NAME}" --jq '.visibility' 2>/dev/null || echo unknown)
           echo "Current visibility: ${status}"

@@ -25,6 +25,7 @@ impl Database {
         conn.execute_batch(include_str!("../migrations/001_init.sql"))?;
         conn.execute_batch(include_str!("../migrations/002_password_reset.sql"))?;
         conn.execute_batch(include_str!("../migrations/003_desktop_auth_codes.sql"))?;
+        conn.execute_batch(include_str!("../migrations/004_ai.sql"))?;
         Ok(())
     }
 

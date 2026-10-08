@@ -6,14 +6,14 @@
 # GHCR push cannot silently swap the runtime out from under you. Example:
 #
 #   AZALEA_SERVER_IMAGE=ghcr.io/rexsystems/azalea-server@sha256:<64hex> \
-#   AZALEA_WEB_IMAGE=ghcr.io/rexsystems/azalea-web@sha256:<64hex> \
+#   AZALEA_WEB_IMAGE=ghcr.io/rexsystems/azalea-server-web@sha256:<64hex> \
 #     bash install.sh
 #
 # The current digests are printed at the end of a successful `docker compose pull`.
 set -euo pipefail
 
 SERVER_IMAGE="${AZALEA_SERVER_IMAGE:-ghcr.io/rexsystems/azalea-server:latest}"
-WEB_IMAGE="${AZALEA_WEB_IMAGE:-ghcr.io/rexsystems/azalea-web:latest}"
+WEB_IMAGE="${AZALEA_WEB_IMAGE:-ghcr.io/rexsystems/azalea-server-web:latest}"
 
 # Warn once when using :latest so operators know they can pin.
 if [[ "$SERVER_IMAGE" == *:latest ]] || [[ "$WEB_IMAGE" == *:latest ]]; then
@@ -150,7 +150,7 @@ services:
       - azalea-data:/data
     restart: unless-stopped
 
-  azalea-web:
+  azalea-server-web:
     image: ${WEB_IMAGE}
     ports:
       - "${web_ports}"
@@ -205,13 +205,13 @@ services:
       - azalea-data:/data
     restart: unless-stopped
 
-  azalea-web:
+  azalea-server-web:
     build:
       context: ./build/web
       args:
         NEXT_PUBLIC_AZALEA_API_URL: /api
         NEXT_PUBLIC_SITE_URL: ${web_url}
-    image: azalea-web:local
+    image: azalea-server-web:local
     ports:
       - "${web_ports}"
     depends_on:
@@ -253,7 +253,7 @@ fetch_build_context() {
   printf 'Cloning %s...\n' "$REPO"
   git clone --depth 1 --filter=blob:none --sparse "$REPO" "$tmp/azalea"
   if [[ "$want_web" -eq 1 ]]; then
-    git -C "$tmp/azalea" sparse-checkout set services/azalea-server apps/azalea-web
+    git -C "$tmp/azalea" sparse-checkout set services/azalea-server apps/azalea-server-web
   else
     git -C "$tmp/azalea" sparse-checkout set services/azalea-server
   fi
@@ -262,7 +262,7 @@ fetch_build_context() {
   cp -a "$tmp/azalea/services/azalea-server/." build/server/
   if [[ "$want_web" -eq 1 ]]; then
     mkdir -p build/web
-    cp -a "$tmp/azalea/apps/azalea-web/." build/web/
+    cp -a "$tmp/azalea/apps/azalea-server-web/." build/web/
   fi
   rm -rf "$tmp"
 }
@@ -281,7 +281,7 @@ try_pull_images() {
     if ! docker pull "$WEB_IMAGE"; then
       warn "Could not pull ${WEB_IMAGE}"
       printf '    Make the GHCR package Public:\n' >&2
-      printf '    https://github.com/orgs/rexsystems/packages/container/package/azalea-web\n' >&2
+      printf '    https://github.com/orgs/rexsystems/packages/container/package/azalea-server-web\n' >&2
       return 1
     fi
   fi

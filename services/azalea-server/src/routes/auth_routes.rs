@@ -1,7 +1,7 @@
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
-use axum::routing::post;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use chrono::{Duration, Utc};
 use rusqlite::params;
@@ -25,6 +25,7 @@ use crate::state::AppState;
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/v1/auth/register", post(register))
+        .route("/v1/auth/config", get(auth_config))
         .route("/v1/auth/login", post(login))
         .route("/v1/auth/refresh", post(refresh))
         .route("/v1/auth/logout", post(logout))
@@ -33,6 +34,12 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/v1/auth/desktop/begin", post(desktop_begin))
         .route("/v1/auth/desktop/approve", post(desktop_approve))
         .route("/v1/auth/desktop/exchange", post(desktop_exchange))
+}
+
+async fn auth_config(State(state): State<Arc<AppState>>) -> ApiResult<Json<serde_json::Value>> {
+    let (signup, provider, site_key, secret) = state.db.with_conn(|conn| Ok(conn.query_row("SELECT signup_enabled,captcha_provider,captcha_site_key,captcha_secret_key FROM settings WHERE id=1",[],|row|Ok((row.get::<_,bool>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?,row.get::<_,String>(3)?)))?))?;
+    let captcha = provider == "turnstile" && !secret.is_empty();
+    Ok(Json(json!({"signup_enabled":signup,"captcha_provider":if captcha {"turnstile"} else {"none"},"captcha_site_key":if captcha {site_key} else {String::new()}})))
 }
 
 // ---------- helpers ----------
@@ -94,7 +101,7 @@ fn load_captcha_secret(state: &AppState) -> ApiResult<String> {
     Ok(state.db.with_conn(|conn| {
         Ok(conn
             .query_row(
-                "SELECT captcha_secret_key FROM settings WHERE id = 1",
+                "SELECT CASE WHEN captcha_provider='turnstile' THEN captcha_secret_key ELSE '' END FROM settings WHERE id = 1",
                 [],
                 |r| r.get::<_, String>(0),
             )

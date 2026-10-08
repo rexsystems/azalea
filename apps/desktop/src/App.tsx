@@ -154,6 +154,9 @@ function App() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [accounts, setAccounts] = useState<api.AccountRecord[]>([]);
   const [activeAccount, setActiveAccount] = useState<api.AccountRecord | null>(null);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("azalea-active-account", { detail: activeAccount?.id ?? null }));
+  }, [activeAccount?.id, syncStatus?.logged_in]);
 
   const refreshAccounts = useCallback(async () => {
     try {

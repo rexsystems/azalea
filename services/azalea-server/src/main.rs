@@ -13,6 +13,7 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
 mod auth;
+mod ai;
 mod captcha;
 mod cli;
 mod db;
@@ -104,6 +105,7 @@ async fn run_serve() -> anyhow::Result<()> {
 
     let limiters = AppState::default_limiters();
     let state = Arc::new(AppState {
+        ai: ai::AiRuntime::new(&jwt_secret)?,
         db,
         jwt_secret,
         mail,

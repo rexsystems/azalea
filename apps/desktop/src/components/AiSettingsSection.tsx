@@ -43,6 +43,7 @@ export function AiSettingsSection() {
     loading: loadingModels,
     error: modelsError,
     refresh: refreshModels,
+    serverConfig,
   } = useAiModels(prefs);
 
   const provider = getProvider(prefs.providerId);
@@ -204,7 +205,7 @@ export function AiSettingsSection() {
               />
             )}
 
-            {(provider.allowCustomUrl || !provider.baseUrl) &&
+            {(provider.allowCustomUrl || !provider.baseUrl) && provider.id !== "selfhost_server" &&
               !provider.needsRegion && (
                 <label className="flex flex-col gap-1.5">
                   <span
@@ -248,7 +249,10 @@ export function AiSettingsSection() {
               </div>
             )}
 
-            <div className="space-y-2">
+            {provider.id === "selfhost_server" ? <div className="space-y-3">
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>Uses the active self-hosted account. Requests and included terminal context go to your server; provider keys remain there. Sign in through the account switcher first.</p>
+              <Button variant="secondary" disabled={busy || !prefs.model.trim() || !serverConfig?.enabled} onClick={() => void testConnection()}>Test server AI</Button>
+            </div> : <div className="space-y-2">
               <div
                 className="text-sm font-medium"
                 style={{ color: "var(--text)" }}
@@ -303,7 +307,7 @@ export function AiSettingsSection() {
                   Test connection
                 </Button>
               </div>
-            </div>
+            </div>}
           </div>
 
           <div
@@ -324,7 +328,7 @@ export function AiSettingsSection() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  disabled={loadingModels || busy || !derivedUrl}
+                  disabled={loadingModels || busy || (!derivedUrl && provider.id !== "selfhost_server")}
                   onClick={refreshModels}
                 >
                   {loadingModels ? "Loading…" : "Refresh models"}
@@ -348,7 +352,10 @@ export function AiSettingsSection() {
                 {modelsError}
               </p>
             )}
-            <label className="flex flex-col gap-1.5">
+            {provider.id === "selfhost_server" ? <div className="space-y-2">
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>Models are managed by this server's administrator.</p>
+              <Button size="sm" variant="ghost" disabled={!serverConfig?.defaultModel} onClick={() => patchPrefs({ model: serverConfig?.defaultModel ?? "" })}>Use server default</Button>
+            </div> : <><label className="flex flex-col gap-1.5">
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                 Add custom model IDs (one per line, or separated by commas)
               </span>
@@ -403,7 +410,7 @@ export function AiSettingsSection() {
                   Remove
                 </Button>
               </div>
-            ))}
+            ))}</>}
           </div>
 
           <div

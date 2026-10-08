@@ -412,6 +412,7 @@ export interface SelfHostProbe {
   version: string | null;
   has_web_ui: boolean;
   web_url: string | null;
+  api_base_url?: string;
 }
 
 export function probeSelfhost(input: {
@@ -706,6 +707,17 @@ export function aiChatStream(
 
 export function aiChatCancel(requestId: string): Promise<void> {
   return invoke("ai_chat_cancel", { requestId });
+}
+
+export interface AiServerConfig {
+  accountId: string;
+  enabled: boolean;
+  defaultModel: string;
+  models: { id: string; label: string; dialect: "openai" | "anthropic"; upstream_model: string }[];
+}
+
+export function aiServerConfig(): Promise<AiServerConfig> {
+  return invoke("ai_server_config");
 }
 
 export function aiWebSearch(

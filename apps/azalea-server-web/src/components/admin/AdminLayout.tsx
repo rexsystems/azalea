@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Logo } from "@/components/Logo";
 
 interface AdminLayoutProps {
@@ -10,6 +11,7 @@ interface AdminLayoutProps {
 }
 
 export function AdminLayout({ title, subtitle, children }: AdminLayoutProps) {
+  const pathname = usePathname();
   return (
     <main className="admin-shell">
       <header className="admin-topbar">
@@ -18,9 +20,11 @@ export function AdminLayout({ title, subtitle, children }: AdminLayoutProps) {
           <span>Azalea</span>
         </Link>
         <nav className="admin-nav">
-          <Link href="/admin" className="btn btn-primary px-3 py-1.5 text-sm">
+          <Link href="/admin" className={`btn ${pathname === "/admin" ? "btn-primary" : "btn-ghost"} px-3 py-1.5 text-sm`} aria-current={pathname === "/admin" ? "page" : undefined}>
             Dashboard
           </Link>
+          <Link href="/admin/settings" className={`btn ${pathname === "/admin/settings" ? "btn-primary" : "btn-ghost"} px-3 py-1.5 text-sm`} aria-current={pathname === "/admin/settings" ? "page" : undefined}>Instance</Link>
+          <Link href="/admin/ai" className={`btn ${pathname === "/admin/ai" ? "btn-primary" : "btn-ghost"} px-3 py-1.5 text-sm`} aria-current={pathname === "/admin/ai" ? "page" : undefined}>AI</Link>
           <Link href="/account" className="btn btn-ghost px-3 py-1.5 text-sm">
             Account
           </Link>

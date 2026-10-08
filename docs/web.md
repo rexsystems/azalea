@@ -2,13 +2,13 @@
 
 ## Self-host dashboard (this monorepo)
 
-[`apps/azalea-web`](../apps/azalea-web) is the **self-host dashboard** shipped by
+[`apps/azalea-server-web`](../apps/azalea-server-web) is the **self-host dashboard** shipped by
 `install.sh`: login, account, admin, and desktop `/authorize` handoff.
 There is **no marketing landing** here (`/` redirects to `/login`).
 
 ```bash
 npm run dev:web
-cd apps/azalea-web && npm run build   # static export -> out/
+cd apps/azalea-server-web && npm run build   # static export -> out/
 ```
 
 Docker: nginx serves `out/` and proxies `/api/` to azalea-server.

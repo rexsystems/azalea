@@ -7,7 +7,7 @@ what we do not, and how to report vulnerabilities.
 
 Email **security@rexsystems.me** with:
 
-- Component (`apps/desktop`, `services/azalea-server`, `apps/azalea-web`, telemetry, or CI).
+- Component (`apps/desktop`, `services/azalea-server`, `apps/azalea-server-web`, telemetry, or CI).
 - Version or commit.
 - Reproduction steps.
 - Expected impact.
@@ -22,7 +22,7 @@ will credit you in the release notes unless you ask otherwise.
 |---|---|---|---|
 | `apps/desktop` (Tauri client) | End user | User-trusted | Holds decrypted secrets in memory. |
 | `services/azalea-server` | User (self-host) or Rexsystems (cloud) | Sees only ciphertext | Never handles vault plaintext. |
-| `apps/azalea-web` (in-repo) | Static export behind nginx | Public | Login and admin UI for the sync API. |
+| `apps/azalea-server-web` (in-repo) | Static export behind nginx | Public | Login and admin UI for the sync API. |
 | `~/projects/azalea-web` (marketing) | Cloudflare Pages | Public | No secrets; no auth surface. |
 | `azalea-telemetry` (private) | Rexsystems only | Opt-in, aggregate | Not part of the sync trust chain. |
 
@@ -122,7 +122,7 @@ each. Re-run before every release:
 cd services/azalea-server && cargo audit
 cd apps/desktop/src-tauri && cargo audit
 cd apps/desktop && npm audit --omit=dev
-cd apps/azalea-web && npm audit --omit=dev
+cd apps/azalea-server-web && npm audit --omit=dev
 ```
 
 ## Deployment checklist

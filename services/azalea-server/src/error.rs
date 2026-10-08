@@ -19,6 +19,8 @@ pub enum ApiError {
     PayloadTooLarge(String),
     #[error("too many requests")]
     TooManyRequests,
+    #[error("{0}")]
+    Upstream(String),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -33,6 +35,7 @@ impl ApiError {
             Self::Conflict(_) => "conflict",
             Self::PayloadTooLarge(_) => "storage_limit",
             Self::TooManyRequests => "too_many_requests",
+            Self::Upstream(_) => "upstream_error",
             Self::Internal(_) => "internal",
         }
     }
@@ -46,6 +49,7 @@ impl ApiError {
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
             Self::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
+            Self::Upstream(_) => StatusCode::BAD_GATEWAY,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

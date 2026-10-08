@@ -14,6 +14,7 @@ interface CustomSelectProps<T extends string> {
   options: SelectOption<T>[];
   ariaLabel: string;
   className?: string;
+  disabled?: boolean;
 }
 
 export function CustomSelect<T extends string>({
@@ -22,11 +23,13 @@ export function CustomSelect<T extends string>({
   options,
   ariaLabel,
   className = "",
+  disabled = false,
 }: CustomSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const selected = options.find((option) => option.value === value);
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
 
   useEffect(() => {
     const onPointerDown = (event: MouseEvent) => {
@@ -49,6 +52,7 @@ export function CustomSelect<T extends string>({
     <div className={`custom-select ${className}`.trim()} ref={rootRef}>
       <button
         type="button"
+        disabled={disabled}
         className="custom-select-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}

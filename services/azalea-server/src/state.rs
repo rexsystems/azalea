@@ -5,6 +5,7 @@ use crate::mail::MailConfig;
 use crate::ratelimit::RateLimiter;
 
 pub struct AppState {
+    pub ai: crate::ai::AiRuntime,
     pub db: Database,
     pub jwt_secret: String,
     pub mail: Option<MailConfig>,

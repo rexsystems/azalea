@@ -20,7 +20,9 @@ export function resolveSelfHostUrls(input: string): {
   if (!raw) {
     throw new Error("Enter your server URL.");
   }
-  if (!/^https?:\/\//i.test(raw)) {
+  const explicitScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(raw);
+  if (explicitScheme && !/^https?:\/\//i.test(raw)) throw new Error("Use an http:// or https:// server URL.");
+  if (!explicitScheme) {
     raw = `https://${raw}`;
   }
 
@@ -31,13 +33,16 @@ export function resolveSelfHostUrls(input: string): {
     throw new Error("Invalid server URL.");
   }
 
-  const host = url.hostname.toLowerCase();
+  if (url.username || url.password || url.search || url.hash) throw new Error("Server URLs must not contain credentials, query parameters or fragments.");
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
   const isLocal =
     host === "localhost" ||
     host === "127.0.0.1" ||
     host === "::1" ||
+    /^(?:fc|fd)[\da-f:]+$/i.test(host) ||
     host.endsWith(".local") ||
     isPrivateIpv4(host);
+  if (!explicitScheme && isLocal) url.protocol = "http:";
 
   if (url.protocol === "http:" && !isLocal) {
     throw new Error(

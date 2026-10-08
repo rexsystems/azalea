@@ -211,7 +211,8 @@ export function AccountSwitcher({
       setError(null);
       const { base_url, web_url } = resolveSelfHostUrls(serverUrl);
       const probe = await api.probeSelfhost({ baseUrl: base_url, webUrl: web_url });
-      setResolvedBase(base_url);
+      const resolved = probe.api_base_url || base_url;
+      setResolvedBase(resolved);
       setResolvedWeb(probe.has_web_ui ? probe.web_url ?? web_url : null);
       setInstanceName(probe.instance_name);
 
@@ -220,7 +221,7 @@ export function AccountSwitcher({
         if (!web) throw new Error("Web UI URL missing.");
         await onConnectSelfhostBrowser({
           label: probe.instance_name,
-          base_url,
+          base_url: resolved,
           web_url: web,
         });
         resetSelfhostForm();

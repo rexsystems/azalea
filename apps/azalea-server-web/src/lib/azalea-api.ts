@@ -17,7 +17,7 @@ export type Session = {
 
 const STORAGE_KEY = "azalea.session";
 
-function apiBase(): string {
+export function apiBase(): string {
   const url = process.env.NEXT_PUBLIC_AZALEA_API_URL?.trim();
   if (!url) {
     // Docker / self-host: nginx serves the site and proxies /api -> azalea-server
@@ -45,37 +45,51 @@ export function clearSession() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-async function request<T>(
+export class ApiRequestError extends Error {
+  constructor(message: string, public status: number, public code?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
+export async function apiRequest<T>(
   path: string,
   init: RequestInit & { auth?: boolean } = {},
 ): Promise<T> {
-  const headers = new Headers(init.headers);
-  headers.set("Content-Type", "application/json");
-  if (init.auth !== false) {
-    const session = getStoredSession();
-    if (session?.access_token) {
-      headers.set("Authorization", `Bearer ${session.access_token}`);
-    }
-  }
-  // credentials: "include" so the browser sends the HttpOnly refresh cookie
-  // on /v1/auth/refresh and /v1/auth/logout. Safe because we also lock CORS
-  // down to an origin allowlist on the server.
-  const res = await fetch(`${apiBase()}${path}`, {
-    ...init,
-    headers,
-    credentials: "include",
-  });
+  const { auth = true, ...options } = init;
+  const send = () => {
+    const headers = new Headers(options.headers);
+    headers.set("Content-Type", "application/json");
+    const token = auth ? getStoredSession()?.access_token : null;
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    return fetch(`${apiBase()}${path}`, { ...options, headers, credentials: "include" });
+  };
+  let res = await send();
+  if (res.status === 401 && auth && await refreshSession()) res = await send();
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(
+    throw new ApiRequestError(
       typeof body?.message === "string"
         ? body.message
         : typeof body?.error === "string"
           ? body.error
           : `Request failed (${res.status})`,
+      res.status,
+      typeof body?.error === "string" ? body.error : undefined,
     );
   }
   return body as T;
+}
+
+const request = apiRequest;
+let refreshInFlight: Promise<Session | null> | null = null;
+
+function sessionUsable(session: Session | null): boolean {
+  if (!session) return false;
+  try {
+    const payload = JSON.parse(atob(session.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.exp === "number" && payload.exp * 1000 > Date.now();
+  } catch { return false; }
 }
 
 export async function login(email: string, password: string): Promise<Session> {
@@ -112,7 +126,8 @@ export async function register(
  * "include"`.
  */
 export async function refreshSession(): Promise<Session | null> {
-  try {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => { try {
     const session = await request<Session>("/v1/auth/refresh", {
       method: "POST",
       auth: false,
@@ -120,10 +135,11 @@ export async function refreshSession(): Promise<Session | null> {
     });
     storeSession(session);
     return session;
-  } catch {
-    clearSession();
+  } catch (err) {
+    if (err instanceof ApiRequestError && (err.status === 401 || err.status === 403) && !sessionUsable(getStoredSession())) clearSession();
     return null;
-  }
+  } finally { refreshInFlight = null; } })();
+  return refreshInFlight;
 }
 
 export async function logout(): Promise<void> {
@@ -176,21 +192,10 @@ export async function resetPassword(
 }
 
 export async function ensureSession(): Promise<Session | null> {
+  const refreshed = await refreshSession();
+  if (refreshed) return refreshed;
   const current = getStoredSession();
-  // Prefer a refresh (cookie). If refresh fails, keep a still-valid access
-  // token instead of wiping localStorage — otherwise a missing cookie on
-  // self-host immediately logs the user out after a successful login.
-  try {
-    const session = await request<Session>("/v1/auth/refresh", {
-      method: "POST",
-      auth: false,
-      body: JSON.stringify({}),
-    });
-    storeSession(session);
-    return session;
-  } catch {
-    return current;
-  }
+  return sessionUsable(current) ? current : null;
 }
 
 // ---------- Desktop PKCE authorization handoff ----------
@@ -211,3 +216,6 @@ export async function approveDesktopHandoff(
 }
 
 export const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+
+export interface AuthConfig { signup_enabled: boolean; captcha_provider: string; captcha_site_key: string; }
+export function getAuthConfig() { return apiRequest<AuthConfig>("/v1/auth/config", { auth: false }); }

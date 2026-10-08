@@ -4,7 +4,8 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
-import { resetPassword, TURNSTILE_SITE_KEY } from "@/lib/azalea-api";
+import { resetPassword } from "@/lib/azalea-api";
+import { useAuthConfig } from "@/lib/use-auth-config";
 import { Logo } from "@/components/Logo";
 
 function ResetPasswordForm() {
@@ -34,8 +35,9 @@ function ResetPasswordForm() {
   const [done, setDone] = useState(false);
   const turnstileRef = useRef<TurnstileInstance | null>(null);
 
-  const captchaRequired = TURNSTILE_SITE_KEY.length > 0;
-  const ready =
+  const { loading: configLoading, error: configError, siteKey } = useAuthConfig();
+  const captchaRequired = siteKey.length > 0;
+  const ready = !configLoading && !configError &&
     token.length > 0 &&
     password.length >= 8 &&
     password === confirm &&
@@ -96,6 +98,7 @@ function ResetPasswordForm() {
           </button>
         ) : (
           <form onSubmit={submit} className="space-y-3">
+            {configError && <p className="admin-error">{configError}</p>}
             <input
               className="field"
               type="password"
@@ -119,7 +122,7 @@ function ResetPasswordForm() {
             {captchaRequired && (
               <Turnstile
                 ref={turnstileRef}
-                siteKey={TURNSTILE_SITE_KEY}
+                siteKey={siteKey}
                 onSuccess={setCaptchaToken}
                 onExpire={() => setCaptchaToken(null)}
                 options={{ theme: "dark" }}

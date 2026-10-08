@@ -14,7 +14,8 @@ export type AiProviderId =
   | "amazon_bedrock"
   | "amazon_bedrock_mantle"
   | "custom_openai"
-  | "custom_anthropic";
+  | "custom_anthropic"
+  | "selfhost_server";
 
 export interface AiModelOption {
   id: string;
@@ -80,6 +81,19 @@ export const BEDROCK_MANTLE_REGIONS = [
 ] as const;
 
 export const AI_PROVIDERS: AiProviderDef[] = [
+  {
+    id: "selfhost_server",
+    name: "Self-hosted server",
+    description: "Use the AI providers and models configured by your active self-hosted server. Provider keys stay on the server.",
+    dialect: "openai",
+    baseUrl: null,
+    needsRegion: false,
+    regionKind: "none",
+    allowCustomUrl: false,
+    defaultModel: "",
+    supportsModelList: true,
+    models: [],
+  },
   {
     id: "openai",
     name: "OpenAI",
@@ -218,7 +232,7 @@ export const AI_PROVIDERS: AiProviderDef[] = [
 ];
 
 export function getProvider(id: AiProviderId): AiProviderDef {
-  return AI_PROVIDERS.find((p) => p.id === id) ?? AI_PROVIDERS[0];
+  return AI_PROVIDERS.find((p) => p.id === id) ?? AI_PROVIDERS.find((p) => p.id === "openai")!;
 }
 
 export function bedrockRuntimeBaseUrl(region: string): string {

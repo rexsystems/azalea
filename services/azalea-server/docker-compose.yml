@@ -18,9 +18,9 @@ services:
     restart: unless-stopped
 
   # Optional dashboard on fixed host port 9843 → container :80.
-  azalea-web:
+  azalea-server-web:
     profiles: ["web"]
-    image: ghcr.io/rexsystems/azalea-web:latest
+    image: ghcr.io/rexsystems/azalea-server-web:latest
     ports:
       - "9843:80"
     depends_on:

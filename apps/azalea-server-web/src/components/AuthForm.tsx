@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { accessRedirect, resolveAccountAccess } from "@/lib/auth-access";
-import { login, register, TURNSTILE_SITE_KEY } from "@/lib/azalea-api";
+import { login, register } from "@/lib/azalea-api";
+import { useAuthConfig } from "@/lib/use-auth-config";
 import { Logo } from "./Logo";
 
 interface AuthFormProps {
@@ -46,6 +47,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileInstance | null>(null);
+  const { config, loading: configLoading, error: configError, siteKey } = useAuthConfig();
 
   useEffect(() => {
     let cancelled = false;
@@ -64,9 +66,9 @@ export function AuthForm({ mode }: AuthFormProps) {
   }, [router, dest]);
 
   const isSignup = mode === "signup";
-  const captchaRequired = TURNSTILE_SITE_KEY.length > 0;
+  const captchaRequired = isSignup && siteKey.length > 0;
   const ready =
-    email.trim().length > 3 &&
+    (!isSignup || (!configLoading && !configError && config?.signup_enabled !== false)) && email.trim().length > 3 &&
     password.length >= 8 &&
     (!isSignup || password === confirm) &&
     (!captchaRequired || captchaToken !== null);
@@ -127,6 +129,8 @@ export function AuthForm({ mode }: AuthFormProps) {
         </p>
 
         <form onSubmit={submit} className="space-y-3">
+          {isSignup && config?.signup_enabled === false && <p className="rex-hint">Registration is disabled on this instance. Ask its administrator for an account.</p>}
+          {isSignup && configError && <p className="admin-error">{configError}</p>}
           <input
             className="field"
             type="email"
@@ -161,7 +165,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           {captchaRequired && (
             <Turnstile
               ref={turnstileRef}
-              siteKey={TURNSTILE_SITE_KEY}
+                siteKey={siteKey}
               onSuccess={setCaptchaToken}
               onExpire={() => setCaptchaToken(null)}
               options={{ theme: "dark" }}

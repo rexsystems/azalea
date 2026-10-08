@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
-import { forgotPassword, TURNSTILE_SITE_KEY } from "@/lib/azalea-api";
+import { forgotPassword } from "@/lib/azalea-api";
+import { useAuthConfig } from "@/lib/use-auth-config";
 import { Logo } from "@/components/Logo";
 
 export default function ForgotPasswordPage() {
@@ -16,8 +17,9 @@ export default function ForgotPasswordPage() {
   const [done, setDone] = useState(false);
   const turnstileRef = useRef<TurnstileInstance | null>(null);
 
-  const captchaRequired = TURNSTILE_SITE_KEY.length > 0;
-  const ready =
+  const { loading: configLoading, error: configError, siteKey } = useAuthConfig();
+  const captchaRequired = siteKey.length > 0;
+  const ready = !configLoading && !configError &&
     email.trim().length > 3 && (!captchaRequired || captchaToken !== null);
 
   const submit = async (e: React.FormEvent) => {
@@ -67,6 +69,7 @@ export default function ForgotPasswordPage() {
           </button>
         ) : (
           <form onSubmit={submit} className="space-y-3">
+            {configError && <p className="admin-error">{configError}</p>}
             <input
               className="field"
               type="email"
@@ -79,7 +82,7 @@ export default function ForgotPasswordPage() {
             {captchaRequired && (
               <Turnstile
                 ref={turnstileRef}
-                siteKey={TURNSTILE_SITE_KEY}
+                siteKey={siteKey}
                 onSuccess={setCaptchaToken}
                 onExpire={() => setCaptchaToken(null)}
                 options={{ theme: "dark" }}

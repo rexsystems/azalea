@@ -40,7 +40,7 @@ Default install dir: `~/azalea` (or `/root/azalea` when run as root).
 cd ~/azalea   # or /root/azalea
 docker compose down -v
 docker rm -f $(docker ps -aq --filter name=azalea) 2>/dev/null || true
-docker image rm ghcr.io/rexsystems/azalea-server:latest ghcr.io/rexsystems/azalea-web:latest \
+docker image rm ghcr.io/rexsystems/azalea-server:latest ghcr.io/rexsystems/azalea-server-web:latest \
   azalea-server:local azalea-web:local 2>/dev/null || true
 rm -rf ~/azalea   # or /root/azalea
 curl -fsSL https://azalea.rexsystems.me/script.sh | bash
@@ -112,7 +112,7 @@ Images must be **Public** on GHCR for anonymous pull:
    Under **Package creation**, enable **Public**.
 2. Open each package:  
    https://github.com/orgs/rexsystems/packages/container/package/azalea-server  
-   https://github.com/orgs/rexsystems/packages/container/package/azalea-web  
+   https://github.com/orgs/rexsystems/packages/container/package/azalea-server-web  
 3. **Package settings** → **Danger Zone** → **Change visibility** → Public.
 
 Notes:
@@ -160,9 +160,9 @@ API URL in the app (no `/api` strip). Or tunnel into Caddy with `/api`.
 
 Add account -> Self-hosted -> `https://yourdomain.com` (or `http://IP:9482`).
 
-## Optional web front (monorepo `apps/azalea-web`)
+## Optional web front (monorepo `apps/azalea-server-web`)
 
-Installer can pull `ghcr.io/rexsystems/azalea-web:latest` on host port **9843**
+Installer can pull `ghcr.io/rexsystems/azalea-server-web:latest` on host port **9843**
 (maps to container `:80`). Put Cloudflare Tunnel or host nginx on `:80` if you want
 that. Nginx in the web image proxies `/api` to `azalea-server`. Sync itself does
 not need the web container.

@@ -1,6 +1,6 @@
 mod admin;
 mod auth_routes;
-mod extractors;
+pub(crate) mod extractors;
 mod vault;
 
 use axum::extract::State;
@@ -17,6 +17,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .merge(auth_routes::router())
         .merge(vault::router())
         .merge(admin::router())
+        .merge(crate::ai::router())
 }
 
 async fn health(State(state): State<Arc<AppState>>) -> Json<Value> {

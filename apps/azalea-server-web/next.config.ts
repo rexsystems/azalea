@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -19,8 +20,8 @@ function loadPublicEnvFile(): Record<string, string> {
 
 const publicEnv = loadPublicEnvFile();
 
-const nextConfig: NextConfig = {
-  output: "export",
+const nextConfig = (phase: string): NextConfig => ({
+  output: phase === PHASE_DEVELOPMENT_SERVER ? undefined : "export",
   images: { unoptimized: true },
   // Workspace install puts next at repo root.
   turbopack: { root: path.join(__dirname, "../..") },
@@ -30,6 +31,9 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_GITHUB_REPO:
       process.env.NEXT_PUBLIC_GITHUB_REPO ?? publicEnv.NEXT_PUBLIC_GITHUB_REPO ?? "",
   },
-};
+  ...(phase === PHASE_DEVELOPMENT_SERVER ? {
+    rewrites: async () => [{ source: "/api/:path*", destination: `${(process.env.AZALEA_SERVER_URL || "http://127.0.0.1:9482").replace(/\/+$/, "")}/:path*` }],
+  } : {}),
+});
 
 export default nextConfig;

@@ -1,33 +1,7 @@
-import { getStoredSession } from "./azalea-api";
+import { apiRequest } from "./azalea-api";
 import type { AdminSettings, AdminUser } from "./admin-users";
 
-function apiBase() {
-  return (process.env.NEXT_PUBLIC_AZALEA_API_URL ?? "/api").replace(/\/$/, "");
-}
-
-async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const session = getStoredSession();
-  if (!session) throw new Error("Not signed in");
-  const res = await fetch(`${apiBase()}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-      ...(init?.headers ?? {}),
-    },
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(
-      typeof body?.message === "string"
-        ? body.message
-        : typeof body?.error === "string"
-          ? body.error
-          : `HTTP ${res.status}`,
-    );
-  }
-  return body as T;
-}
+const adminFetch = apiRequest;
 
 export function listAdminUsers() {
   return adminFetch<AdminUser[]>("/v1/admin/users");
@@ -69,4 +43,30 @@ export function patchAdminUser(
     method: "PATCH",
     body: JSON.stringify(body),
   });
+}
+
+export interface ServerAiProvider {
+  id: string;
+  name: string;
+  provider: string;
+  dialect: "openai" | "anthropic";
+  base_url: string;
+  models: { id: string; label: string }[];
+  key_configured: boolean;
+}
+
+export interface ServerAiSettings {
+  enabled: boolean;
+  default_model: string;
+  requests_per_minute: number;
+  max_output_tokens: number;
+  providers: ServerAiProvider[];
+}
+
+export function getServerAiSettings() { return adminFetch<ServerAiSettings>("/v1/admin/ai"); }
+export function saveServerAiSettings(input: Omit<ServerAiSettings, "providers"> & { providers: (ServerAiProvider & { api_key?: string; clear_key?: boolean })[] }) {
+  return adminFetch<ServerAiSettings>("/v1/admin/ai", { method: "PUT", body: JSON.stringify(input) });
+}
+export function getServerProviderModels(id: string) {
+  return adminFetch<{ id: string; label: string }[]>(`/v1/admin/ai/providers/${encodeURIComponent(id)}/models`);
 }
