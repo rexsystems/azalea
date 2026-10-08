@@ -18,7 +18,8 @@ set `AZALEA_SERVER_URL` to change the backend target.
 
 Administrators configure instance identity, registration, storage and captcha
 at `/admin/settings`, and shared AI connections and default models at
-`/admin/ai`. Captcha settings are read from the server at runtime.
+`/admin/ai`. Captcha settings are read from the server at runtime. The optional
+host update manager is controlled at `/admin/updates` or through the admin CLI.
 
 ## Public marketing site
 

@@ -117,6 +117,30 @@ async fn credentials_are_encrypted_masked_and_bound_to_the_saved_endpoint() {
 #[tokio::test]
 async fn permissions_and_model_validation_apply_before_upstream_requests() {
     let fixture = Fixture::new().await;
+    assert_eq!(
+        reqwest::get(format!("{}/v1/admin/updates", fixture.url))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        fixture
+            .request(reqwest::Method::POST, "/v1/admin/updates/check", "user")
+            .json(&json!({}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::FORBIDDEN
+    );
+    let updates = fixture
+        .request(reqwest::Method::GET, "/v1/admin/updates", "admin")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(updates.status(), StatusCode::OK);
+    assert_eq!(updates.json::<Value>().await.unwrap()["connected"], false);
     let no_auth = reqwest::get(format!("{}/v1/admin/ai", fixture.url))
         .await
         .unwrap();

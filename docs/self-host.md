@@ -26,13 +26,34 @@ chmod +x install.sh
 ```
 
 The script asks for:
-- public domain (optional)
+- whether to include the optional dashboard or use only the API/admin CLI
+- access mode: local/LAN, Cloudflare Tunnel, or your HTTPS reverse proxy
+- public hostname for HTTPS modes
 - admin email / password
 - Resend mail (optional)
-- whether you want the **optional** web dashboard on **:9843**
-- bind to localhost vs public :9482
+- API and dashboard host ports (defaults **9482** and **9843**)
+- optional host update manager on Linux/systemd
 
 Default install dir: `~/azalea` (or `/root/azalea` when run as root).
+An existing installation is not overwritten. Use update commands to upgrade it,
+or `AZALEA_INSTALL_DIR` to create a separate instance.
+
+Local/LAN mode exposes the selected dashboard port, or the API port for a
+CLI-only setup. The desktop app accepts HTTP on localhost/private network
+addresses. Public connections use HTTPS. The installer enables HTTP browser
+cookies only for local/LAN dashboard mode; HTTPS modes retain secure cookies.
+
+Cloudflare/HTTPS modes bind host ports to localhost. With a dashboard, route
+the hostname to `http://127.0.0.1:9843` (or your selected dashboard port).
+With API/CLI only, route it to `http://127.0.0.1:9482` (or your API host port).
+The generated `cloudflared.example.yml` uses the hostname and port you chose.
+For a tunnel running in Docker, join the Compose network and use
+`http://azalea-server-web:80` or `http://azalea-server:9482` instead.
+
+In both HTTPS modes the desktop server address is `https://your-hostname`.
+API-only installations use email/password sign-in; browser authorization and
+password-reset pages require a dashboard. A CLI-only install can configure
+mail only if you supply an existing compatible password-reset web host.
 
 ## Wipe and reinstall from zero
 
@@ -200,7 +221,77 @@ docker compose pull
 docker compose up -d
 ```
 
-Backup = Docker volume with SQLite under `/data`.
+These commands preserve the data volume, but do not make a backup or provide
+automatic rollback. Source-built installations must refresh their source
+build contexts and run `docker compose up -d --build` instead. Pinned image
+digests must be changed explicitly before a manual update.
+
+### Managed updates
+
+The optional host manager supports **API/CLI-only and dashboard installations**.
+It runs on Linux with Docker Compose and systemd. The server exchanges bounded
+update requests through a shared directory; it has no Docker socket mount.
+The manager checks tagged public GHCR images every six hours and applies updates
+only when requested. Custom registries, digest-pinned and source-built images
+retain their manual update workflow.
+
+Fresh installs offer to enable the manager. For an existing installation, first
+upgrade to a server image that includes the update commands, then run on its host:
+
+```bash
+cd /path/to/your/azalea-installation
+curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/update-manager.py -o update-manager.py
+sudo python3 update-manager.py --directory "$PWD" install
+```
+
+Setup attaches the shared request directory, restarts the API, and enables a
+per-installation systemd service.
+
+For a custom Compose setup, add `--compose-file /path/to/base.yaml`, repeat
+`--extra-compose-file /path/to/override.yaml` for additional configuration,
+and supply `--project-name` if you used `docker compose -p`. Setup refuses to
+drop Compose files that were used by the existing server container.
+
+Follow progress in **Admin → Updates**, or use the CLI:
+
+```bash
+docker compose exec azalea-server azalea-server update check
+docker compose exec azalea-server azalea-server update status
+docker compose exec azalea-server azalea-server update apply
+docker compose exec azalea-server azalea-server update status
+docker compose exec azalea-server azalea-server update rollback
+```
+
+Commands queue an operation; use `status` again to see its result. Host CLI
+equivalents are `sudo python3 update-manager.py --directory "$PWD" status`
+and `check`, `apply`, `rollback`. Dashboard access through Cloudflare uses the
+same authenticated `/api` calls; the manager has no public endpoint.
+
+An update downloads exact checked image digests before stopping the API. It
+then saves an integrity-checked SQLite snapshot, Compose configuration, `.env`
+and local rollback image tags. Server and installed dashboard are recreated
+and health-checked. A failed restart triggers recovery of the previous images,
+database and configuration. The manager also resumes interrupted recovery
+after a host/service restart.
+
+Rollback restores the **pre-update database and configuration**, replacing later
+changes. Replaced database/configuration files are retained alongside the backup
+for recovery. Backups and secrets are stored in the root-only
+`.azalea-update-manager/backups` directory and are not automatically pruned.
+Keep off-host backups as well.
+
+The manager stores image overrides separately. For host maintenance commands
+that recreate containers, include those files so you keep the managed image
+and request directory:
+
+```bash
+sudo docker compose -f docker-compose.yml \
+  -f azalea-updater.compose.json \
+  -f .azalea-update-manager/images.compose.json up -d
+```
+
+The image override is created after the first managed update/rollback; omit it
+before then. Include any existing custom Compose override files too.
 
 ## Build from source
 

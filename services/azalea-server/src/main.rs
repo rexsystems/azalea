@@ -12,8 +12,8 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
-mod auth;
 mod ai;
+mod auth;
 mod captcha;
 mod cli;
 mod db;
@@ -54,9 +54,7 @@ async fn run_serve() -> anyhow::Result<()> {
     let jwt_secret = match env::var("AZALEA_JWT_SECRET") {
         Ok(v) if !v.is_empty() => v,
         _ if is_dev => {
-            tracing::warn!(
-                "AZALEA_JWT_SECRET not set; using ephemeral secret (AZALEA_ENV=dev)"
-            );
+            tracing::warn!("AZALEA_JWT_SECRET not set; using ephemeral secret (AZALEA_ENV=dev)");
             hex::encode(rand::random::<[u8; 32]>())
         }
         _ => {
@@ -72,11 +70,6 @@ async fn run_serve() -> anyhow::Result<()> {
     let allow_insecure_cookie = env::var("AZALEA_ALLOW_INSECURE_COOKIE")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
-    if allow_insecure_cookie && !addr.ip().is_loopback() {
-        anyhow::bail!(
-            "AZALEA_ALLOW_INSECURE_COOKIE is only valid when AZALEA_BIND is loopback (127.0.0.1)"
-        );
-    }
 
     // Default `/` so self-host behind nginx `/api` still sends the cookie.
     let cookie_path = env::var("AZALEA_COOKIE_PATH")
@@ -149,9 +142,7 @@ async fn run_serve() -> anyhow::Result<()> {
         tracing::info!("CORS disabled (same-origin only); set AZALEA_ALLOWED_ORIGINS to enable");
     }
 
-    let app = app
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    let app = app.layer(TraceLayer::new_for_http()).with_state(state);
 
     tracing::info!("azalea-server listening on {addr}");
     let listener = tokio::net::TcpListener::bind(addr).await?;

@@ -26,11 +26,9 @@ async fn health(State(state): State<Arc<AppState>>) -> Json<Value> {
         .db
         .with_conn(|conn| {
             Ok(conn
-                .query_row(
-                    "SELECT instance_name FROM settings WHERE id = 1",
-                    [],
-                    |r| r.get::<_, String>(0),
-                )
+                .query_row("SELECT instance_name FROM settings WHERE id = 1", [], |r| {
+                    r.get::<_, String>(0)
+                })
                 .unwrap_or_else(|_| "Azalea".into()))
         })
         .unwrap_or_else(|_| "Azalea".into());

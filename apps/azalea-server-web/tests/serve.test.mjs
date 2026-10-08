@@ -55,7 +55,7 @@ test(
       (await fetch(url, { redirect: "manual" })).headers.get("location"),
       "/login",
     );
-    for (const route of ["/login", "/admin/ai", "/admin/settings"]) {
+  for (const route of ["/login", "/admin/ai", "/admin/settings", "/admin/updates"]) {
       const result = await fetch(`${url}${route}`);
       assert.equal(result.status, 200);
       assert.match(result.headers.get("content-type"), /text\/html/);

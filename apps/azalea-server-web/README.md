@@ -11,7 +11,7 @@ Public product site (landing / download / `script.sh`): separate repo
 ## Routes
 
 `/login` · `/signup` · `/forgot-password` · `/reset-password` ·
-`/account` · `/admin` · `/admin/settings` · `/admin/ai` · `/authorize`
+`/account` · `/admin` · `/admin/settings` · `/admin/ai` · `/admin/updates` · `/authorize`
 
 ## Local
 
@@ -29,6 +29,11 @@ Instance settings, signup and Turnstile are loaded from the running server.
 In **Admin → AI**, save provider connections, load their real model catalogs
 or add exact custom IDs, and choose a default model. Saved API keys remain
 encrypted on the server; blank key fields retain the saved key.
+
+**Admin → Updates** shows the installed version/revision and published image
+changes. An optional host manager provides checked updates, database/configuration
+backups and rollback. It also works with API/CLI-only installs; see
+[managed updates](../../docs/self-host.md#managed-updates).
 
 ## Docker
 

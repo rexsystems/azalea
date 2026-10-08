@@ -14,8 +14,7 @@ pub struct AppState {
     /// serves the web app and reverse-proxies /api/).
     #[allow(dead_code)]
     pub allowed_origins: Vec<String>,
-    /// When true, the refresh cookie omits the `Secure` attribute so it works
-    /// over plain-HTTP localhost during development. Never enable in prod.
+    /// Explicit opt-in for HTTP localhost/LAN dashboard installations.
     pub allow_insecure_cookie: bool,
     /// `Path=` for the refresh cookie. Default `/` so self-host nginx `/api`
     /// proxy still receives the cookie on `/api/v1/auth/refresh`.

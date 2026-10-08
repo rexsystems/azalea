@@ -15,12 +15,9 @@ set -euo pipefail
 SERVER_IMAGE="${AZALEA_SERVER_IMAGE:-ghcr.io/rexsystems/azalea-server:latest}"
 WEB_IMAGE="${AZALEA_WEB_IMAGE:-ghcr.io/rexsystems/azalea-server-web:latest}"
 
-# Warn once when using :latest so operators know they can pin.
-if [[ "$SERVER_IMAGE" == *:latest ]] || [[ "$WEB_IMAGE" == *:latest ]]; then
-  printf '\033[38;5;221m[warn]\033[0m Using floating :latest tags. For a reproducible install, pin AZALEA_SERVER_IMAGE and AZALEA_WEB_IMAGE to sha256 digests (see comment at top of this script).\n' >&2
-fi
 REPO="${AZALEA_REPO:-https://github.com/rexsystems/azalea.git}"
 INSTALL_DIR="${AZALEA_INSTALL_DIR:-$HOME/azalea}"
+INSTALLER_SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   C_RESET=$'\033[0m'
@@ -122,6 +119,18 @@ ask_yes_no() {
     y|yes) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+ask_port() {
+  local port
+  while true; do
+    port="$(ask "$1" "$2")"
+    if [[ "$port" =~ ^[0-9]{1,5}$ ]] && ((10#$port >= 1 && 10#$port <= 65535)); then
+      printf '%s\n' "$((10#$port))"
+      return
+    fi
+    warn "Enter a port between 1 and 65535."
+  done
 }
 
 write_compose() {
@@ -315,20 +324,60 @@ EOM
 fi
 need_cmd docker
 docker compose version >/dev/null 2>&1 || die "docker compose plugin required"
+docker info >/dev/null 2>&1 || die "Cannot reach Docker. Start the Docker service and give this user access, or run the installer with sudo."
 ok "Docker ready"
 
 progress "Gathering config"
+[[ "$INSTALL_DIR" != "/" && "$INSTALL_DIR" != "$HOME" ]] || die "Choose a dedicated installation directory."
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
+INSTALL_DIR="$(pwd -P)"
+[[ "$INSTALL_DIR" != "/" && "$INSTALL_DIR" != "$(cd "$HOME" && pwd -P)" ]] || die "Choose a dedicated installation directory."
+if [[ -e .env || -e docker-compose.yml || -e compose.yaml || -e compose.yml || -e docker-compose.yaml ]]; then
+  die "This directory already contains an installation. Use its update commands; the installer will not overwrite credentials or configuration. Set AZALEA_INSTALL_DIR to a new directory for another instance."
+fi
 
-domain="$(ask "Public domain (empty = IP only)" "")"
+printf '\nChoose what to install. The API and admin CLI always work without a dashboard.\n'
+want_web=0
+if ask_yes_no "Add the optional web dashboard (browser admin and account pages)?" "y"; then
+  want_web=1
+fi
+printf '\nAccess mode:\n  1) Local / LAN, direct ports\n  2) Cloudflare Tunnel, HTTPS on your domain\n  3) Your own HTTPS reverse proxy\n'
+access_mode="$(ask "Access mode (1, 2 or 3)" "1")"
+[[ "$access_mode" =~ ^[123]$ ]] || die "Choose access mode 1, 2 or 3."
+domain=""
 web_url=""
-if [[ -n "$domain" ]]; then
+if [[ "$access_mode" != "1" ]]; then
+  domain="$(ask "Public hostname (for example sync.example.com)" "")"
   domain="${domain#https://}"
-  domain="${domain#http://}"
   domain="${domain%/}"
+  [[ "$domain" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]{1,5})?$ ]] || die "Enter a hostname without paths, credentials or query parameters."
   web_url="https://${domain}"
 fi
+
+api_host_port="$(ask_port "API host port" "9482")"
+bind_localhost=0
+[[ "$access_mode" != "1" || "$want_web" -eq 1 ]] && bind_localhost=1
+if [[ "$access_mode" == "1" && "$want_web" -eq 0 ]] && ask_yes_no "Restrict the API to localhost (only clients on this host)?" "n"; then bind_localhost=1; fi
+api_ports="${api_host_port}:9482"
+[[ "$bind_localhost" -eq 1 ]] && api_ports="127.0.0.1:${api_host_port}:9482"
+web_host_port=""
+web_ports=""
+allow_insecure_cookie="0"
+if [[ "$want_web" -eq 1 ]]; then
+  web_host_port="$(ask_port "Dashboard host port" "9843")"
+  [[ "$web_host_port" != "$api_host_port" ]] || die "The API and dashboard need different host ports."
+  web_ports="${web_host_port}:80"
+  if [[ "$access_mode" != "1" ]]; then web_ports="127.0.0.1:${web_host_port}:80"; else allow_insecure_cookie="1"; fi
+fi
+for port in "$api_host_port" "${web_host_port:-}"; do
+  [[ -z "$port" ]] && continue
+  if command -v ss >/dev/null 2>&1 && ss -ltnH | awk '{print $4}' | grep -qE ":${port}$"; then
+    die "Port ${port} is already in use. Re-run and choose another port."
+  fi
+done
+if [[ -z "$web_url" && "$want_web" -eq 1 ]]; then web_url="http://127.0.0.1:${web_host_port}"; fi
+public_web_for_mail="$web_url"
 
 admin_email="$(ask "Admin email" "admin@example.com")"
 while true; do
@@ -343,54 +392,19 @@ instance="$(ask "Instance name" "Azalea")"
 resend_key=""
 mail_from="Azalea <onboarding@resend.dev>"
 if ask_yes_no "Configure Resend for password-reset emails?" "n"; then
+  if [[ "$want_web" -eq 0 ]]; then
+    public_web_for_mail="$(ask "URL of an existing password-reset web page host (optional; empty disables mail)" "")"
+  elif [[ "$access_mode" == "1" ]]; then
+    public_web_for_mail="$(ask "Dashboard URL reachable by email recipients" "$web_url")"
+  fi
+  if [[ -n "$public_web_for_mail" ]]; then
+  [[ "$public_web_for_mail" =~ ^https?://[^[:space:]]+$ ]] || die "Enter an HTTP(S) web URL."
   resend_key="$(ask "RESEND_API_KEY" "")"
   mail_from="$(ask "From address" "Azalea <noreply@${domain:-example.com}>")"
-fi
-
-want_web=0
-if ask_yes_no "Install web dashboard too (browser login / admin)?" "y"; then
-  want_web=1
-fi
-
-bind_localhost=0
-if [[ "$want_web" -eq 1 ]]; then
-  if ask_yes_no "Bind API :9482 to localhost only (recommended for Cloudflare Tunnel)?" "y"; then
-    bind_localhost=1
-  fi
-elif [[ -n "$domain" ]] && ask_yes_no "Bind API port 9482 to 127.0.0.1 only?" "y"; then
-  bind_localhost=1
+  else ok "Password-reset mail disabled; API and CLI login remain available."; fi
 fi
 
 jwt_secret="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-
-api_ports="9482:9482"
-if [[ "$bind_localhost" -eq 1 ]]; then
-  api_ports="127.0.0.1:9482:9482"
-fi
-
-# Fixed dashboard host port (not 80 / 8787).
-web_host_port=""
-web_ports=""
-if [[ "$want_web" -eq 1 ]]; then
-  web_host_port="9843"
-  web_ports="${web_host_port}:80"
-fi
-
-if [[ -z "$web_url" ]]; then
-  if [[ "$want_web" -eq 1 && -n "$web_host_port" ]]; then
-    web_url="http://127.0.0.1:${web_host_port}"
-  else
-    web_url="http://127.0.0.1"
-  fi
-fi
-
-public_web_for_mail="$web_url"
-if [[ "$want_web" -eq 0 ]]; then
-  public_web_for_mail="http://127.0.0.1:9482"
-  if [[ -n "$domain" ]]; then
-    public_web_for_mail="https://${domain}"
-  fi
-fi
 ok "Config saved"
 if [[ "$want_web" -eq 1 ]]; then
   ok "Dashboard host port: ${web_host_port}"
@@ -402,20 +416,23 @@ AZALEA_JWT_SECRET=${jwt_secret}
 RESEND_API_KEY=${resend_key}
 AZALEA_MAIL_FROM=${mail_from}
 AZALEA_PUBLIC_WEB_URL=${public_web_for_mail}
+AZALEA_ALLOW_INSECURE_COOKIE=${allow_insecure_cookie}
 EOF
 chmod 600 .env
 ok ".env written"
 
-if [[ "$want_web" -eq 1 ]]; then
+if [[ "$access_mode" != "1" ]]; then
+  proxy_host_port="${web_host_port:-$api_host_port}"
   cat > nginx-host.example.conf <<EOF
-# Optional: put the dashboard on :80 via host nginx (default install uses :${web_host_port}).
-# Cloudflare Tunnel: point the tunnel at http://127.0.0.1:${web_host_port} instead.
+# Add TLS with your reverse proxy before exposing this hostname.
 server {
   listen 80;
-  server_name _;
+  server_name ${domain%%:*};
   location / {
-    proxy_pass http://127.0.0.1:${web_host_port};
+    proxy_pass http://127.0.0.1:${proxy_host_port};
     proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_read_timeout 190s;
     proxy_set_header Host \$host;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto \$scheme;
@@ -428,8 +445,8 @@ EOF
 # tunnel: <id>
 # credentials-file: /root/.cloudflared/<id>.json
 ingress:
-  - hostname: your.domain.tld
-    service: http://127.0.0.1:${web_host_port}
+  - hostname: ${domain%%:*}
+    service: http://127.0.0.1:${proxy_host_port}
   - service: http_status:404
 EOF
   ok "Wrote nginx-host.example.conf + cloudflared.example.yml"
@@ -450,24 +467,6 @@ else
 fi
 
 progress "Starting containers"
-if docker compose ps -q 2>/dev/null | grep -q .; then
-  docker compose down >/dev/null 2>&1 || true
-fi
-for p in 9482 ${web_host_port:-}; do
-  [[ -z "$p" ]] && continue
-  if command -v ss >/dev/null 2>&1 && ss -ltn | grep -qE ":${p}\\s"; then
-    docker ps --format '{{.ID}} {{.Names}} {{.Ports}}' | while read -r id name ports; do
-      case "$ports" in
-        *"${p}"*) docker stop "$id" >/dev/null 2>&1 || true ;;
-      esac
-    done
-  fi
-done
-docker ps -a --format '{{.Names}}' | while read -r name; do
-  case "$name" in
-    *azalea*) docker rm -f "$name" >/dev/null 2>&1 || true ;;
-  esac
-done
 docker compose up -d
 ok "Containers up"
 
@@ -489,14 +488,14 @@ printf '\n'
 progress "Waiting for API health"
 healthy=0
 for _ in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:9482/v1/health" >/dev/null 2>&1; then
+  if curl -fsS "http://127.0.0.1:${api_host_port}/v1/health" >/dev/null 2>&1; then
     healthy=1
     break
   fi
   sleep 2
 done
-[[ "$healthy" -eq 1 ]] || die "API did not become healthy on :9482"
-ok "API healthy on :9482"
+[[ "$healthy" -eq 1 ]] || die "API did not become healthy on :${api_host_port}"
+ok "API healthy on :${api_host_port}"
 
 progress "Bootstrapping admin"
 if docker compose exec -T azalea-server azalea-server bootstrap \
@@ -508,26 +507,40 @@ else
   warn "Bootstrap skipped or failed (maybe already done). Continuing."
 fi
 
+if [[ "$install_mode" == "image" && -d /run/systemd/system ]] && command -v python3 >/dev/null 2>&1; then
+  if ask_yes_no "Enable the optional host update manager (CLI and dashboard; backup and rollback)?" "y"; then
+    updater_source="${INSTALLER_SOURCE_DIR}/update-manager.py"
+    updater_script="${INSTALL_DIR}/update-manager.py"
+    updater_ready=0
+    if [[ -f "$updater_source" ]]; then
+      if cp "$updater_source" "$updater_script"; then updater_ready=1; fi
+    elif curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/update-manager.py -o "$updater_script"; then updater_ready=1; fi
+    if [[ "$updater_ready" -eq 1 ]]; then
+      if [[ "$EUID" -eq 0 ]]; then
+        if ! python3 "$updater_script" --directory "$INSTALL_DIR" install; then warn "API installation is complete; update manager setup needs attention. See docs/self-host.md#managed-updates."; fi
+      elif command -v sudo >/dev/null 2>&1; then
+        if ! sudo python3 "$updater_script" --directory "$INSTALL_DIR" install; then warn "API installation is complete; retry update manager setup with sudo later."; fi
+      else warn "Run as root later: python3 ${updater_script} --directory ${INSTALL_DIR} install"; fi
+    else warn "Could not download the optional update manager. The API remains usable with manual updates."; fi
+  fi
+fi
+
 printf '\n%s══ Done ══%s\n' "${C_GREEN}${C_BOLD}" "${C_RESET}"
 printf '  %sMode%s         %s\n' "${C_DIM}" "${C_RESET}" "$install_mode"
-printf '  %sAPI%s          %shttp://127.0.0.1:9482/v1/health%s\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "${C_RESET}"
+printf '  %sAPI%s          %shttp://127.0.0.1:%s/v1/health%s\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$api_host_port" "${C_RESET}"
 printf '  %sAdmin%s        %s\n' "${C_DIM}" "${C_RESET}" "$admin_email"
 printf '  %sInstall dir%s  %s\n' "${C_DIM}" "${C_RESET}" "$INSTALL_DIR"
 
 if [[ "$want_web" -eq 1 ]]; then
-  printf '  %sDashboard%s    %shttp://YOUR_IP:%s/%s  (local %s)\n' \
-    "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$web_host_port" "${C_RESET}" "$web_url"
-  printf '  %sDesktop URL%s  %shttp://YOUR_IP:%s%s  (uses /api via the dashboard)\n' \
-    "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$web_host_port" "${C_RESET}"
+  if [[ -n "$domain" ]]; then dashboard_address="https://${domain}"; else dashboard_address="http://YOUR_LAN_IP:${web_host_port}"; fi
+  printf '  %sDashboard%s    %s%s/login%s\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$dashboard_address" "${C_RESET}"
+  printf '  %sDesktop URL%s  %s%s%s  (API via /api)\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$dashboard_address" "${C_RESET}"
   printf '  %sSign in%s      %s/login%s · %sAuthorize%s /authorize\n' \
     "${C_DIM}" "${C_RESET}" "${C_MAGENTA}" "${C_RESET}" "${C_MAGENTA}" "${C_RESET}"
-  printf '  %sTunnel%s       point Cloudflare Tunnel at %shttp://127.0.0.1:%s%s\n' \
-    "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$web_host_port" "${C_RESET}"
-  printf '  %sOptional :80%s see %snginx-host.example.conf%s\n' \
-    "${C_DIM}" "${C_RESET}" "${C_DIM}" "${C_RESET}"
 else
   printf '  %sDashboard%s    not installed (CLI only)\n' "${C_DIM}" "${C_RESET}"
-  printf '  %sDesktop URL%s  %shttp://YOUR_IP:9482%s\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "${C_RESET}"
+  if [[ -n "$domain" ]]; then api_address="https://${domain}"; elif [[ "$bind_localhost" -eq 1 ]]; then api_address="http://127.0.0.1:${api_host_port}"; else api_address="http://YOUR_LAN_IP:${api_host_port}"; fi
+  printf '  %sDesktop URL%s  %s%s%s  (email/password sign-in)\n' "${C_DIM}" "${C_RESET}" "${C_CYAN}" "$api_address" "${C_RESET}"
 fi
 
 printf '\n%sCLI%s\n' "${C_WHITE}${C_BOLD}" "${C_RESET}"
@@ -535,18 +548,20 @@ printf '  cd %s\n' "$INSTALL_DIR"
 printf '  docker compose exec azalea-server azalea-server user list\n'
 printf '  docker compose exec azalea-server azalea-server user create --email u@x.com --password secret123\n'
 
-if [[ -n "$domain" && "$want_web" -eq 1 ]]; then
+if [[ -n "$domain" ]]; then
   printf '\n%sDNS / Tunnel%s\n' "${C_WHITE}${C_BOLD}" "${C_RESET}"
   printf '  Point DNS for %s%s%s here, then either:\n' "${C_CYAN}" "$domain" "${C_RESET}"
-  printf '  - Cloudflare Tunnel → http://127.0.0.1:%s (see cloudflared.example.yml)\n' "$web_host_port"
-  printf '  - Host nginx on :80 → proxy to 127.0.0.1:%s (see nginx-host.example.conf)\n' "$web_host_port"
+  printf '  - Cloudflare Tunnel → http://127.0.0.1:%s (see cloudflared.example.yml)\n' "${web_host_port:-$api_host_port}"
+  printf '  - HTTPS reverse proxy → http://127.0.0.1:%s (see nginx-host.example.conf)\n' "${web_host_port:-$api_host_port}"
+  printf '  - Desktop server address: https://%s\n' "$domain"
+  printf '  - Tunnel/proxy runs on this host. For a containerized tunnel, join the Compose network and use azalea-server-web:80 or azalea-server:9482.\n'
 fi
 
-printf '\n%sWipe + reinstall%s\n' "${C_WHITE}${C_BOLD}" "${C_RESET}"
-printf '  cd %s && docker compose down -v\n' "$INSTALL_DIR"
-printf '  docker rm -f $(docker ps -aq --filter name=azalea) 2>/dev/null || true\n'
-printf '  rm -rf %s\n' "$INSTALL_DIR"
-printf '  curl -fsSL https://azalea.rexsystems.me/script.sh | bash\n'
-
 printf '\n%sUpdates%s\n' "${C_WHITE}${C_BOLD}" "${C_RESET}"
-printf '  cd %s && docker compose pull && docker compose up -d\n\n' "$INSTALL_DIR"
+if [[ -f azalea-updater.compose.json ]]; then
+  printf '  cd %s\n' "$INSTALL_DIR"
+  printf '  docker compose exec azalea-server azalea-server update status\n  docker compose exec azalea-server azalea-server update check\n  docker compose exec azalea-server azalea-server update apply\n  docker compose exec azalea-server azalea-server update rollback\n'
+elif [[ "$install_mode" == "build" ]]; then
+  printf '  Refresh build/server and optional build/web from source, then docker compose up -d --build.\n'
+else printf '  cd %s && docker compose pull && docker compose up -d\n' "$INSTALL_DIR"; fi
+printf '\n'

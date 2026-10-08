@@ -136,7 +136,9 @@ When operating a self-hosted `azalea-server`:
   requires an explicit allowlist.
 - Terminate TLS in front of the server (nginx, Caddy, Cloudflare, etc.).
   Refresh cookies are set `Secure` unless
-  `AZALEA_ALLOW_INSECURE_COOKIE=1` **and** the listen address is loopback.
+  `AZALEA_ALLOW_INSECURE_COOKIE=1` explicitly enables HTTP cookies for a
+  localhost/LAN dashboard, including Docker bridge deployments. The installer
+  leaves it disabled for HTTPS/Cloudflare modes.
 - Rotate `TELEMETRY_ADMIN_TOKEN` if you fork the telemetry service; it
   must be at least 24 characters, and the service refuses to boot in prod
   without one.

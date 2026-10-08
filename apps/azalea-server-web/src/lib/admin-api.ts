@@ -83,3 +83,45 @@ export function getServerProviderModels(id: string) {
     `/v1/admin/ai/providers/${encodeURIComponent(id)}/models`,
   );
 }
+
+export interface ServerUpdateStatus {
+  version: string;
+  revision: string;
+  connected: boolean;
+  request_pending?: boolean;
+  phase: string;
+  message: string;
+  available?: boolean;
+  check_id?: string;
+  operation_id?: string;
+  last_checked?: number;
+  backup_id?: string;
+  backup_created_at?: number;
+  rollback_available?: boolean;
+  images?: {
+    service: string;
+    image: string;
+    version: string;
+    revision: string;
+    current_digest: string;
+    latest_digest: string;
+    available: boolean;
+  }[];
+}
+
+export function getServerUpdateStatus() {
+  return adminFetch<ServerUpdateStatus>("/v1/admin/updates");
+}
+
+export function requestServerUpdate(
+  action: "check" | "apply" | "rollback",
+  selection?: string,
+) {
+  return adminFetch<{ id: string; queued: boolean }>(
+    `/v1/admin/updates/${action}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ selection }),
+    },
+  );
+}

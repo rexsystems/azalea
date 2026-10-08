@@ -43,7 +43,12 @@ pub enum Command {
 }
 
 #[derive(Subcommand, Debug)]
-pub enum UpdateCommand { Status, Check, Apply, Rollback }
+pub enum UpdateCommand {
+    Status,
+    Check,
+    Apply,
+    Rollback,
+}
 
 #[derive(Subcommand, Debug)]
 pub enum UserCommand {
@@ -132,12 +137,16 @@ pub fn run_cli(command: Command) -> anyhow::Result<()> {
             let result = match cmd {
                 UpdateCommand::Status => status,
                 UpdateCommand::Check => crate::updates::request_action("check", None, "cli")?,
-                UpdateCommand::Apply => crate::updates::request_action("apply", status["check_id"].as_str(), "cli")?,
-                UpdateCommand::Rollback => crate::updates::request_action("rollback", status["backup_id"].as_str(), "cli")?,
+                UpdateCommand::Apply => {
+                    crate::updates::request_action("apply", status["check_id"].as_str(), "cli")?
+                }
+                UpdateCommand::Rollback => {
+                    crate::updates::request_action("rollback", status["backup_id"].as_str(), "cli")?
+                }
             };
             println!("{}", serde_json::to_string_pretty(&result)?);
             Ok(())
-        },
+        }
     }
 }
 
@@ -146,11 +155,11 @@ fn bootstrap(dir: &Path, email: &str, password: &str, instance: &str) -> anyhow:
     validate_password(password)?;
     let db = open_db(dir)?;
     let admins: i64 = db.with_conn(|conn| {
-        Ok(conn.query_row(
-            "SELECT COUNT(*) FROM users WHERE role = 'admin'",
-            [],
-            |r| r.get(0),
-        )?)
+        Ok(
+            conn.query_row("SELECT COUNT(*) FROM users WHERE role = 'admin'", [], |r| {
+                r.get(0)
+            })?,
+        )
     })?;
     if admins > 0 {
         anyhow::bail!("already bootstrapped (an admin user exists)");
@@ -160,7 +169,11 @@ fn bootstrap(dir: &Path, email: &str, password: &str, instance: &str) -> anyhow:
     let user_id = Uuid::new_v4().to_string();
     let now = now_rfc3339();
     let instance = instance.trim();
-    let instance = if instance.is_empty() { "Azalea" } else { instance };
+    let instance = if instance.is_empty() {
+        "Azalea"
+    } else {
+        instance
+    };
 
     db.with_conn(|conn| {
         conn.execute(
