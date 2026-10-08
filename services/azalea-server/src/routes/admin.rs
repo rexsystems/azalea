@@ -128,17 +128,62 @@ async fn patch_settings(
     _admin: AdminUser,
     Json(body): Json<PatchSettingsBody>,
 ) -> ApiResult<Json<SettingsResponse>> {
-    if body.instance_name.as_ref().is_some_and(|value|value.trim().is_empty() || value.len()>100)
-        || body.free_limit_bytes.is_some_and(|value|!(1024..=1073741824).contains(&value))
-        || body.pro_limit_bytes.is_some_and(|value|!(1024..=1073741824).contains(&value)) {
+    if body
+        .instance_name
+        .as_ref()
+        .is_some_and(|value| value.trim().is_empty() || value.len() > 100)
+        || body
+            .free_limit_bytes
+            .is_some_and(|value| !(1024..=1073741824).contains(&value))
+        || body
+            .pro_limit_bytes
+            .is_some_and(|value| !(1024..=1073741824).contains(&value))
+    {
         return Err(ApiError::BadRequest("Use a nonempty instance name (up to 100 characters) and storage limits between 1 KiB and 1 GiB.".into()));
     }
-    if body.captcha_provider.as_ref().is_some_and(|provider| !["none","turnstile"].contains(&provider.as_str())) {
-        return Err(ApiError::BadRequest("Supported captcha providers are none and turnstile.".into()));
+    if body
+        .captcha_provider
+        .as_ref()
+        .is_some_and(|provider| !["none", "turnstile"].contains(&provider.as_str()))
+    {
+        return Err(ApiError::BadRequest(
+            "Supported captcha providers are none and turnstile.".into(),
+        ));
     }
-    let (current_provider,current_site,current_secret) = state.db.with_conn(|conn|Ok(conn.query_row("SELECT captcha_provider,captcha_site_key,captcha_secret_key FROM settings WHERE id=1",[],|row|Ok((row.get::<_,String>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?)))?))?;
-    if body.captcha_provider.as_deref().unwrap_or(&current_provider) == "turnstile" && (body.captcha_site_key.as_deref().unwrap_or(&current_site).trim().is_empty() || body.captcha_secret_key.as_deref().unwrap_or(&current_secret).trim().is_empty()) {
-        return Err(ApiError::BadRequest("Turnstile needs a site key and a secret key.".into()));
+    let (current_provider, current_site, current_secret) = state.db.with_conn(|conn| {
+        Ok(conn.query_row(
+            "SELECT captcha_provider,captcha_site_key,captcha_secret_key FROM settings WHERE id=1",
+            [],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            },
+        )?)
+    })?;
+    if body
+        .captcha_provider
+        .as_deref()
+        .unwrap_or(&current_provider)
+        == "turnstile"
+        && (body
+            .captcha_site_key
+            .as_deref()
+            .unwrap_or(&current_site)
+            .trim()
+            .is_empty()
+            || body
+                .captcha_secret_key
+                .as_deref()
+                .unwrap_or(&current_secret)
+                .trim()
+                .is_empty())
+    {
+        return Err(ApiError::BadRequest(
+            "Turnstile needs a site key and a secret key.".into(),
+        ));
     }
     state.db.with_conn(|conn| {
         let conn = conn.unchecked_transaction()?;
@@ -243,7 +288,11 @@ async fn create_user(
             "password must be at least 8 characters".into(),
         ));
     }
-    let role = if body.role == "admin" { "admin" } else { "user" };
+    let role = if body.role == "admin" {
+        "admin"
+    } else {
+        "user"
+    };
     let plan = if body.plan == "pro" { "pro" } else { "free" };
     let password_hash = hash_password(&body.password)?;
     let id = Uuid::new_v4().to_string();
@@ -285,34 +334,93 @@ async fn patch_user(
     Json(body): Json<PatchUserBody>,
 ) -> ApiResult<Json<serde_json::Value>> {
     use rusqlite::OptionalExtension;
-    if body.role.as_deref().is_some_and(|role| !["admin", "user"].contains(&role))
-        || body.plan.as_deref().is_some_and(|plan| !["free", "pro"].contains(&plan)) {
+    if body
+        .role
+        .as_deref()
+        .is_some_and(|role| !["admin", "user"].contains(&role))
+        || body
+            .plan
+            .as_deref()
+            .is_some_and(|plan| !["free", "pro"].contains(&plan))
+    {
         return Err(ApiError::BadRequest("Invalid role or plan.".into()));
     }
-    if body.password.as_ref().is_some_and(|password| !password.is_empty() && password.len() < 8) {
-        return Err(ApiError::BadRequest("Password must contain at least 8 characters.".into()));
+    if body
+        .password
+        .as_ref()
+        .is_some_and(|password| !password.is_empty() && password.len() < 8)
+    {
+        return Err(ApiError::BadRequest(
+            "Password must contain at least 8 characters.".into(),
+        ));
     }
-    let password_hash = body.password.as_deref().filter(|password| !password.is_empty()).map(hash_password).transpose()?;
+    let password_hash = body
+        .password
+        .as_deref()
+        .filter(|password| !password.is_empty())
+        .map(hash_password)
+        .transpose()?;
     let now = now_rfc3339();
     let result = state.db.with_conn(|conn| {
         let tx = conn.unchecked_transaction()?;
-        let target: Option<(String, i64)> = tx.query_row("SELECT role,disabled FROM users WHERE id=?1", params![id], |row| Ok((row.get(0)?,row.get(1)?))).optional()?;
-        let Some((role, disabled)) = target else { return Ok(0); };
-        if role == "admin" && disabled == 0 && (body.disabled == Some(true) || body.role.as_deref() == Some("user")) {
-            let admins: i64 = tx.query_row("SELECT count(*) FROM users WHERE role='admin' AND disabled=0", [], |row|row.get(0))?;
-            if admins <= 1 { return Ok(1); }
+        let target: Option<(String, i64)> = tx
+            .query_row(
+                "SELECT role,disabled FROM users WHERE id=?1",
+                params![id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        let Some((role, disabled)) = target else {
+            return Ok(0);
+        };
+        if role == "admin"
+            && disabled == 0
+            && (body.disabled == Some(true) || body.role.as_deref() == Some("user"))
+        {
+            let admins: i64 = tx.query_row(
+                "SELECT count(*) FROM users WHERE role='admin' AND disabled=0",
+                [],
+                |row| row.get(0),
+            )?;
+            if admins <= 1 {
+                return Ok(1);
+            }
         }
-        if let Some(disabled) = body.disabled { tx.execute("UPDATE users SET disabled=?2,updated_at=?3 WHERE id=?1", params![id,disabled,now])?; }
-        if let Some(role) = &body.role { tx.execute("UPDATE users SET role=?2,updated_at=?3 WHERE id=?1", params![id,role,now])?; }
-        if let Some(plan) = &body.plan { tx.execute("UPDATE users SET plan=?2,updated_at=?3 WHERE id=?1", params![id,plan,now])?; }
-        if let Some(hash) = &password_hash { tx.execute("UPDATE users SET password_hash=?2,updated_at=?3 WHERE id=?1", params![id,hash,now])?; }
-        if body.disabled == Some(true) || password_hash.is_some() { tx.execute("DELETE FROM sessions WHERE user_id=?1",params![id])?; }
+        if let Some(disabled) = body.disabled {
+            tx.execute(
+                "UPDATE users SET disabled=?2,updated_at=?3 WHERE id=?1",
+                params![id, disabled, now],
+            )?;
+        }
+        if let Some(role) = &body.role {
+            tx.execute(
+                "UPDATE users SET role=?2,updated_at=?3 WHERE id=?1",
+                params![id, role, now],
+            )?;
+        }
+        if let Some(plan) = &body.plan {
+            tx.execute(
+                "UPDATE users SET plan=?2,updated_at=?3 WHERE id=?1",
+                params![id, plan, now],
+            )?;
+        }
+        if let Some(hash) = &password_hash {
+            tx.execute(
+                "UPDATE users SET password_hash=?2,updated_at=?3 WHERE id=?1",
+                params![id, hash, now],
+            )?;
+        }
+        if body.disabled == Some(true) || password_hash.is_some() {
+            tx.execute("DELETE FROM sessions WHERE user_id=?1", params![id])?;
+        }
         tx.commit()?;
         Ok(2)
     })?;
     match result {
         0 => Err(ApiError::NotFound("User not found.".into())),
-        1 => Err(ApiError::BadRequest("Keep at least one active administrator.".into())),
+        1 => Err(ApiError::BadRequest(
+            "Keep at least one active administrator.".into(),
+        )),
         _ => Ok(Json(serde_json::json!({ "ok": true }))),
     }
 }

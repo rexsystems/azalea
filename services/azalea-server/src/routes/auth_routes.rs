@@ -39,7 +39,9 @@ pub fn router() -> Router<Arc<AppState>> {
 async fn auth_config(State(state): State<Arc<AppState>>) -> ApiResult<Json<serde_json::Value>> {
     let (signup, provider, site_key, secret) = state.db.with_conn(|conn| Ok(conn.query_row("SELECT signup_enabled,captcha_provider,captcha_site_key,captcha_secret_key FROM settings WHERE id=1",[],|row|Ok((row.get::<_,bool>(0)?,row.get::<_,String>(1)?,row.get::<_,String>(2)?,row.get::<_,String>(3)?)))?))?;
     let captcha = provider == "turnstile" && !secret.is_empty();
-    Ok(Json(json!({"signup_enabled":signup,"captcha_provider":if captcha {"turnstile"} else {"none"},"captcha_site_key":if captcha {site_key} else {String::new()}})))
+    Ok(Json(
+        json!({"signup_enabled":signup,"captcha_provider":if captcha {"turnstile"} else {"none"},"captcha_site_key":if captcha {site_key} else {String::new()}}),
+    ))
 }
 
 // ---------- helpers ----------
@@ -144,12 +146,7 @@ async fn register(
     validate_password(&body.password)?;
 
     let captcha_secret = load_captcha_secret(&state)?;
-    captcha::verify(
-        &captcha_secret,
-        body.captcha_token.as_deref(),
-        Some(&ip),
-    )
-    .await?;
+    captcha::verify(&captcha_secret, body.captcha_token.as_deref(), Some(&ip)).await?;
 
     let signup_enabled: i64 = state.db.with_conn(|conn| {
         Ok(conn.query_row(
@@ -207,7 +204,10 @@ async fn login(
     check_limit(&state.auth_login_limiter, &format!("login:ip:{ip}"))?;
 
     let email = normalize_email(&body.email)?;
-    check_limit(&state.auth_identifier_limiter, &identifier_key("login", &email))?;
+    check_limit(
+        &state.auth_identifier_limiter,
+        &identifier_key("login", &email),
+    )?;
 
     let row: Option<(String, String, String, i64)> = state.db.with_conn(|conn| {
         Ok(conn
@@ -256,17 +256,27 @@ async fn refresh(
 
     let token_hash = hash_token(&refresh_token);
 
-    let session: Option<(String, String, String, String, i64, String)> = state.db.with_conn(|conn| {
-        Ok(conn
-            .query_row(
-                "SELECT s.id, s.user_id, u.email, u.role, u.disabled, s.expires_at
+    let session: Option<(String, String, String, String, i64, String)> =
+        state.db.with_conn(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT s.id, s.user_id, u.email, u.role, u.disabled, s.expires_at
                  FROM sessions s JOIN users u ON u.id = s.user_id
                  WHERE s.refresh_token_hash = ?1",
-                params![token_hash],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
-            )
-            .ok())
-    })?;
+                    params![token_hash],
+                    |r| {
+                        Ok((
+                            r.get(0)?,
+                            r.get(1)?,
+                            r.get(2)?,
+                            r.get(3)?,
+                            r.get(4)?,
+                            r.get(5)?,
+                        ))
+                    },
+                )
+                .ok())
+        })?;
 
     let Some((session_id, user_id, email, role, disabled, expires_at)) = session else {
         return Err(ApiError::Unauthorized("invalid refresh token".into()));
@@ -313,11 +323,7 @@ async fn refresh(
     if !client.is_desktop() {
         push_set_cookie(
             &mut response_headers,
-            &refresh_cookie_value(
-                &new_refresh,
-                state.secure_cookies(),
-                state.cookie_path(),
-            ),
+            &refresh_cookie_value(&new_refresh, state.secure_cookies(), state.cookie_path()),
         );
     }
 
@@ -345,7 +351,12 @@ async fn logout(
         );
     }
 
-    Ok((StatusCode::OK, response_headers, Json(json!({ "ok": true }))).into_response())
+    Ok((
+        StatusCode::OK,
+        response_headers,
+        Json(json!({ "ok": true })),
+    )
+        .into_response())
 }
 
 /// Create a fresh session row and issue a `SessionResponse`. For desktop
@@ -373,8 +384,13 @@ fn create_session(
         Ok(())
     })?;
 
-    let access =
-        issue_access_token(state.jwt_secret.as_str(), user_id, email, role, ACCESS_TTL_SECS)?;
+    let access = issue_access_token(
+        state.jwt_secret.as_str(),
+        user_id,
+        email,
+        role,
+        ACCESS_TTL_SECS,
+    )?;
     let session = SessionResponse {
         access_token: access,
         refresh_token: if client.is_desktop() {
@@ -526,7 +542,10 @@ async fn reset_password(
     };
     if expires_at < now {
         let _ = state.db.with_conn(|conn| {
-            conn.execute("DELETE FROM password_resets WHERE id = ?1", params![reset_id])?;
+            conn.execute(
+                "DELETE FROM password_resets WHERE id = ?1",
+                params![reset_id],
+            )?;
             Ok(())
         });
         return Err(ApiError::BadRequest("Invalid or expired reset link".into()));
@@ -593,8 +612,7 @@ async fn desktop_begin(
     let handle = random_token();
     let handle_hash = hash_token(&handle);
     let now = now_rfc3339();
-    let expires =
-        (Utc::now() + Duration::seconds(DESKTOP_HANDLE_TTL_SECS)).to_rfc3339();
+    let expires = (Utc::now() + Duration::seconds(DESKTOP_HANDLE_TTL_SECS)).to_rfc3339();
 
     state.db.with_conn(|conn| {
         conn.execute(
@@ -672,8 +690,7 @@ async fn desktop_approve(
     // Issue the one-time authorization code.
     let code = random_token();
     let code_hash = hash_token(&code);
-    let code_expires =
-        (Utc::now() + Duration::seconds(DESKTOP_CODE_TTL_SECS)).to_rfc3339();
+    let code_expires = (Utc::now() + Duration::seconds(DESKTOP_CODE_TTL_SECS)).to_rfc3339();
 
     state.db.with_conn(|conn| {
         conn.execute(
@@ -712,17 +729,18 @@ async fn desktop_exchange(
     let handle_hash = hash_token(&body.handle);
     let now_str = now_rfc3339();
 
-    let row: Option<(String, Option<String>, Option<String>, String)> = state.db.with_conn(|conn| {
-        Ok(conn
-            .query_row(
-                "SELECT code_challenge, code_hash, user_id, expires_at
+    let row: Option<(String, Option<String>, Option<String>, String)> =
+        state.db.with_conn(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT code_challenge, code_hash, user_id, expires_at
                  FROM desktop_auth_codes
                  WHERE handle_hash = ?1 AND approved_at IS NOT NULL",
-                params![handle_hash],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-            )
-            .ok())
-    })?;
+                    params![handle_hash],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                )
+                .ok())
+        })?;
 
     let Some((code_challenge, code_hash_opt, user_id_opt, expires_at)) = row else {
         return Err(ApiError::BadRequest("invalid or expired code".into()));
@@ -741,8 +759,8 @@ async fn desktop_exchange(
         return Err(ApiError::BadRequest("invalid or expired code".into()));
     }
 
-    let expected_hash = code_hash_opt
-        .ok_or_else(|| ApiError::BadRequest("invalid or expired code".into()))?;
+    let expected_hash =
+        code_hash_opt.ok_or_else(|| ApiError::BadRequest("invalid or expired code".into()))?;
     let user_id =
         user_id_opt.ok_or_else(|| ApiError::BadRequest("invalid or expired code".into()))?;
 

@@ -41,12 +41,35 @@ cd ~/azalea   # or /root/azalea
 docker compose down -v
 docker rm -f $(docker ps -aq --filter name=azalea) 2>/dev/null || true
 docker image rm ghcr.io/rexsystems/azalea-server:latest ghcr.io/rexsystems/azalea-server-web:latest \
-  azalea-server:local azalea-web:local 2>/dev/null || true
+  azalea-server:local azalea-server-web:local 2>/dev/null || true
 rm -rf ~/azalea   # or /root/azalea
 curl -fsSL https://azalea.rexsystems.me/script.sh | bash
 ```
 
 `down -v` deletes the SQLite volume (users / vaults). Skip `-v` if you want to keep data.
+
+## Shared AI in the dashboard
+
+Open **Admin → AI** to add provider connections and their API keys. Save the
+connection before loading its model catalog, enable the models you want to
+offer, then choose the default and enable server AI. Providers without a
+compatible catalog, including Bedrock Runtime, accept exact model IDs.
+
+In the desktop app, sign in to this self-hosted account and select
+**Self-hosted server** in AI settings. The app loads the server's models and
+default automatically. Requests use the current account session; provider
+keys stay on the server. Conversation and terminal context sent to AI pass
+through this server to the chosen provider.
+
+Provider keys are encrypted at rest. By default the encryption key is derived
+from `AZALEA_JWT_SECRET`; retain that secret with your database backup.
+Alternatively set `AZALEA_AI_ENCRYPTION_KEY` to a stable 64-character hex key
+before saving provider credentials, and retain it in backups. Changing either
+encryption source requires saving provider keys again. Rate and output limits
+are configured on the same AI page.
+
+The self-hosted dashboard source is `apps/azalea-server-web`; the API is
+`services/azalea-server`. Docker installs use the `azalea-server-web` image.
 
 ## Admin without web UI (CLI)
 
@@ -119,7 +142,7 @@ Notes:
 - Org packages start **private** on first publish. CI usually cannot flip that.
 - Rebuilding / pushing new tags does **not** flip a Public package back to private.
 - If it looks private again, you probably got a **new** package name (e.g. first
-  `azalea-web` publish) or the package was deleted and recreated.
+  `azalea-server-web` publish) or the package was deleted and recreated.
 
 Until Public, `docker pull` stays unauthorized and the installer falls back to building from source.
 

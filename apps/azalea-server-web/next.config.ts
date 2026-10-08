@@ -29,11 +29,20 @@ const nextConfig = (phase: string): NextConfig => ({
     NEXT_PUBLIC_SITE_URL:
       process.env.NEXT_PUBLIC_SITE_URL ?? publicEnv.NEXT_PUBLIC_SITE_URL ?? "",
     NEXT_PUBLIC_GITHUB_REPO:
-      process.env.NEXT_PUBLIC_GITHUB_REPO ?? publicEnv.NEXT_PUBLIC_GITHUB_REPO ?? "",
+      process.env.NEXT_PUBLIC_GITHUB_REPO ??
+      publicEnv.NEXT_PUBLIC_GITHUB_REPO ??
+      "",
   },
-  ...(phase === PHASE_DEVELOPMENT_SERVER ? {
-    rewrites: async () => [{ source: "/api/:path*", destination: `${(process.env.AZALEA_SERVER_URL || "http://127.0.0.1:9482").replace(/\/+$/, "")}/:path*` }],
-  } : {}),
+  ...(phase === PHASE_DEVELOPMENT_SERVER
+    ? {
+        rewrites: async () => [
+          {
+            source: "/api/:path*",
+            destination: `${(process.env.AZALEA_SERVER_URL || "http://127.0.0.1:9482").replace(/\/+$/, "")}/:path*`,
+          },
+        ],
+      }
+    : {}),
 });
 
 export default nextConfig;

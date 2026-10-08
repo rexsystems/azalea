@@ -1,7 +1,6 @@
 # Azalea Sync API v1
 
-Self-hostable zero-knowledge vault sync. Desktop and `azalea-web` talk to this HTTP API.
-Desktop and `azalea-web` talk to this HTTP API only.
+Self-hostable zero-knowledge vault sync. Desktop and `azalea-server-web` talk to this HTTP API.
 
 Base URL examples:
 

@@ -29,7 +29,7 @@ own server (first-run wizard / account switcher).
 
 - Email/password against `azalea-server` (`/v1/auth/*`)
 - Vault REST: `GET` / `PUT` / `DELETE /v1/vault` with optimistic locking on `version`
-- Browser login via azalea-web `/authorize`, then refresh token handoff to the desktop app
+- Browser login via azalea-server-web `/authorize`, then refresh token handoff to the desktop app
 
 ## Desktop
 

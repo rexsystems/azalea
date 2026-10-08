@@ -107,7 +107,11 @@ async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
 
 fn normalize_plan_row(mut row: AccountPlanRow) -> AccountPlanRow {
     let plan = row.plan.trim().to_ascii_lowercase();
-    row.plan = if plan == "pro" { "pro".into() } else { "free".into() };
+    row.plan = if plan == "pro" {
+        "pro".into()
+    } else {
+        "free".into()
+    };
     if row.limit_bytes <= 0 {
         row.limit_bytes = if row.plan == "pro" {
             10 * 1024 * 1024
@@ -169,12 +173,17 @@ fn desktop_http_client() -> reqwest::Client {
 /// hosts are always allowed. Prevents plaintext credentials from being sent to
 /// a public sync server.
 fn ensure_https_or_loopback(base_url: &str) -> anyhow::Result<()> {
-    let parsed = reqwest::Url::parse(base_url).map_err(|_|anyhow::anyhow!("Invalid server URL"))?;
-    if !parsed.username().is_empty() || parsed.password().is_some() || parsed.query().is_some() || parsed.fragment().is_some() {
+    let parsed =
+        reqwest::Url::parse(base_url).map_err(|_| anyhow::anyhow!("Invalid server URL"))?;
+    if !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+    {
         anyhow::bail!("Server URLs cannot include credentials, query parameters or fragments.");
     }
-    let (scheme, host) = split_scheme_host(base_url)
-        .ok_or_else(|| anyhow::anyhow!("Invalid server URL"))?;
+    let (scheme, host) =
+        split_scheme_host(base_url).ok_or_else(|| anyhow::anyhow!("Invalid server URL"))?;
     if scheme == "https" {
         return Ok(());
     }
@@ -189,7 +198,9 @@ fn ensure_https_or_loopback(base_url: &str) -> anyhow::Result<()> {
         || host == "127.0.0.1"
         || host == "::1"
         || host.ends_with(".local")
-        || host.parse::<std::net::Ipv6Addr>().is_ok_and(|ip|ip.is_unique_local() || ip.is_loopback())
+        || host
+            .parse::<std::net::Ipv6Addr>()
+            .is_ok_and(|ip| ip.is_unique_local() || ip.is_loopback())
         || is_private_ipv4(&host);
     if is_loopback {
         return Ok(());
@@ -265,7 +276,6 @@ fn keyring_name(state: &SyncState, key: &str) -> String {
         None => key.to_string(),
     }
 }
-
 
 /// Base URL of the Azalea management website used for browser login.
 pub fn web_base_url(state: Option<&SyncState>) -> String {
@@ -495,7 +505,10 @@ pub fn new_pkce_material() -> PkceMaterial {
     rand::RngCore::fill_bytes(&mut OsRng, &mut bytes);
     let verifier = URL_SAFE_NO_PAD.encode(bytes);
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-    PkceMaterial { verifier, challenge }
+    PkceMaterial {
+        verifier,
+        challenge,
+    }
 }
 
 /// Ask the server to open a PKCE handle. Returns the handle string that goes
@@ -616,7 +629,10 @@ pub struct ProbeSelfhostInput {
 }
 
 /// Probe a self-host API base URL (before the account is bound).
-pub async fn probe_selfhost(base_url: &str, web_url: Option<&str>) -> anyhow::Result<SelfHostProbe> {
+pub async fn probe_selfhost(
+    base_url: &str,
+    web_url: Option<&str>,
+) -> anyhow::Result<SelfHostProbe> {
     let base = base_url.trim().trim_end_matches('/');
     if base.is_empty() {
         anyhow::bail!("Server URL is required");
@@ -627,8 +643,11 @@ pub async fn probe_selfhost(base_url: &str, web_url: Option<&str>) -> anyhow::Re
         .redirect(reqwest::redirect::Policy::limited(5))
         .build()?;
     let mut candidates = vec![base.to_string()];
-    if let Some(root) = base.strip_suffix("/api") { candidates.push(root.to_string()); }
-    else { candidates.push(format!("{base}/api")); }
+    if let Some(root) = base.strip_suffix("/api") {
+        candidates.push(root.to_string());
+    } else {
+        candidates.push(format!("{base}/api"));
+    }
     let mut found = None;
     let mut failure = "Server did not report a healthy Azalea API".to_string();
     for candidate in candidates {
@@ -644,7 +663,7 @@ pub async fn probe_selfhost(base_url: &str, web_url: Option<&str>) -> anyhow::Re
             Err(error) => failure = format!("Cannot reach server: {error}"),
         }
     }
-    let (resolved_base, body) = found.ok_or_else(||anyhow::anyhow!(failure))?;
+    let (resolved_base, body) = found.ok_or_else(|| anyhow::anyhow!(failure))?;
     let instance_name = body
         .get("instance_name")
         .and_then(|v| v.as_str())
@@ -661,7 +680,11 @@ pub async fn probe_selfhost(base_url: &str, web_url: Option<&str>) -> anyhow::Re
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(|s| s.trim_end_matches('/').to_string())
-        .or_else(|| resolved_base.ends_with("/api").then(|| resolved_base.trim_end_matches("/api").to_string()));
+        .or_else(|| {
+            resolved_base
+                .ends_with("/api")
+                .then(|| resolved_base.trim_end_matches("/api").to_string())
+        });
 
     let has_web_ui = if let Some(ref web) = resolved_web {
         probe_web_ui(&client, web).await
@@ -675,11 +698,7 @@ pub async fn probe_selfhost(base_url: &str, web_url: Option<&str>) -> anyhow::Re
         version,
         api_base_url: resolved_base,
         has_web_ui,
-        web_url: if has_web_ui {
-            resolved_web
-        } else {
-            None
-        },
+        web_url: if has_web_ui { resolved_web } else { None },
     })
 }
 
@@ -742,14 +761,20 @@ pub async fn ensure_session(state: &mut SyncState) -> anyhow::Result<()> {
     refresh_session(state).await
 }
 
-pub async fn ai_credentials(state: &mut SyncState, account_id: &str) -> anyhow::Result<(String, String)> {
+pub async fn ai_credentials(
+    state: &mut SyncState,
+    account_id: &str,
+) -> anyhow::Result<(String, String)> {
     if state.account_id.as_deref() != Some(account_id) {
         anyhow::bail!("Account is changing. Try again after it finishes.");
     }
     let base = api_base_url(state)?;
     ensure_https_or_loopback(&base)?;
     ensure_session(state).await?;
-    let token = state.access_token.clone().ok_or_else(|| anyhow::anyhow!("Sign in to this self-hosted account first."))?;
+    let token = state
+        .access_token
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("Sign in to this self-hosted account first."))?;
     Ok((format!("{}/v1/ai", base.trim_end_matches('/')), token))
 }
 
@@ -833,8 +858,8 @@ pub async fn fetch_vault(state: &SyncState) -> anyhow::Result<Option<VaultRow>> 
         return Ok(None);
     }
 
-    let row: VaultRow = serde_json::from_value(body)
-        .map_err(|_| anyhow::anyhow!("Unexpected vault response"))?;
+    let row: VaultRow =
+        serde_json::from_value(body).map_err(|_| anyhow::anyhow!("Unexpected vault response"))?;
     Ok(Some(row))
 }
 
@@ -920,17 +945,17 @@ async fn update_vault(
 
 // ---------- vault build / apply ----------
 
-fn local_vault_json(db: &SharedDatabase, settings: Option<Value>) -> anyhow::Result<(String, String)> {
+fn local_vault_json(
+    db: &SharedDatabase,
+    settings: Option<Value>,
+) -> anyhow::Result<(String, String)> {
     let backup = build_backup(db, settings).map_err(|err| anyhow::anyhow!(err))?;
     let json = serde_json::to_string(&backup)?;
     let fingerprint = diff::semantic_fingerprint(&backup);
     Ok((json, fingerprint))
 }
 
-fn apply_remote_vault(
-    db: &SharedDatabase,
-    plaintext: &[u8],
-) -> anyhow::Result<Option<Value>> {
+fn apply_remote_vault(db: &SharedDatabase, plaintext: &[u8]) -> anyhow::Result<Option<Value>> {
     let json = String::from_utf8(plaintext.to_vec())
         .map_err(|_| anyhow::anyhow!("Corrupted vault payload"))?;
     let backup: AzaleaBackup =
@@ -940,7 +965,11 @@ fn apply_remote_vault(
     Ok(result.settings)
 }
 
-fn set_synced_meta(db: &SharedDatabase, version: i64, settings: Option<&Value>) -> anyhow::Result<()> {
+fn set_synced_meta(
+    db: &SharedDatabase,
+    version: i64,
+    settings: Option<&Value>,
+) -> anyhow::Result<()> {
     // Recompute the fingerprint from the just-synced local state.
     let (_, fingerprint) = local_vault_json(db, settings.cloned())?;
     let db = db.lock();
@@ -968,10 +997,19 @@ fn synced_meta(db: &SharedDatabase) -> (i64, Option<String>) {
 pub enum SyncOutcome {
     NeedsSetup,
     Locked,
-    InSync { version: i64 },
-    Pushed { version: i64 },
-    Pulled { version: i64, settings: Option<Value> },
-    Conflict { remote_version: i64 },
+    InSync {
+        version: i64,
+    },
+    Pushed {
+        version: i64,
+    },
+    Pulled {
+        version: i64,
+        settings: Option<Value>,
+    },
+    Conflict {
+        remote_version: i64,
+    },
 }
 
 pub async fn setup_passphrase(
@@ -983,7 +1021,9 @@ pub async fn setup_passphrase(
     ensure_session(state).await?;
 
     if fetch_vault(state).await?.is_some() {
-        anyhow::bail!("A vault already exists for this account. Unlock it with your passphrase instead.");
+        anyhow::bail!(
+            "A vault already exists for this account. Unlock it with your passphrase instead."
+        );
     }
 
     let salt = crypto::generate_salt();
@@ -1108,7 +1148,8 @@ async fn remote_backup(
         // will rewrite the blob as V2 with AAD binding.
         crypto::decrypt(vault_key, &vault.ciphertext)
     })?;
-    let json = String::from_utf8(plaintext).map_err(|_| anyhow::anyhow!("Corrupted vault payload"))?;
+    let json =
+        String::from_utf8(plaintext).map_err(|_| anyhow::anyhow!("Corrupted vault payload"))?;
     parse_backup_json(&json)
 }
 
@@ -1117,7 +1158,9 @@ async fn remote_backup(
 pub enum SyncPreview {
     NeedsSetup,
     Locked,
-    InSync { version: i64 },
+    InSync {
+        version: i64,
+    },
     Push {
         remote_version: i64,
         local: diff::VaultDiff,
@@ -1159,10 +1202,14 @@ pub async fn preview_sync(
 
     if vault.version <= last_version {
         if !dirty {
-            return Ok(SyncPreview::InSync { version: vault.version });
+            return Ok(SyncPreview::InSync {
+                version: vault.version,
+            });
         }
         if local_diff.is_empty() {
-            return Ok(SyncPreview::InSync { version: vault.version });
+            return Ok(SyncPreview::InSync {
+                version: vault.version,
+            });
         }
         return Ok(SyncPreview::Push {
             remote_version: vault.version,
@@ -1172,7 +1219,9 @@ pub async fn preview_sync(
 
     if !dirty || local_diff.is_empty() && remote_diff.is_empty() {
         if remote_diff.is_empty() {
-            return Ok(SyncPreview::InSync { version: vault.version });
+            return Ok(SyncPreview::InSync {
+                version: vault.version,
+            });
         }
         return Ok(SyncPreview::Pull {
             remote_version: vault.version,
@@ -1211,13 +1260,17 @@ pub async fn perform_sync(
     if vault.version <= last_version {
         // We are up to date with (or ahead of) the remote.
         if !dirty {
-            return Ok(SyncOutcome::InSync { version: vault.version });
+            return Ok(SyncOutcome::InSync {
+                version: vault.version,
+            });
         }
         let local_backup = parse_backup_json(&local_json)?;
         let remote_backup = remote_backup(state, &vault_key, &vault).await?;
         if diff::diff_backups(&local_backup, &remote_backup).is_empty() {
             set_synced_meta(db, vault.version, settings.as_ref())?;
-            return Ok(SyncOutcome::InSync { version: vault.version });
+            return Ok(SyncOutcome::InSync {
+                version: vault.version,
+            });
         }
         match push_local(
             state,
@@ -1227,12 +1280,17 @@ pub async fn perform_sync(
             &vault,
             plan.limit_bytes,
         )
-        .await? {
+        .await?
+        {
             Some(new_version) => {
                 set_synced_meta(db, new_version, settings.as_ref())?;
-                Ok(SyncOutcome::Pushed { version: new_version })
+                Ok(SyncOutcome::Pushed {
+                    version: new_version,
+                })
             }
-            None => Ok(SyncOutcome::Conflict { remote_version: vault.version }),
+            None => Ok(SyncOutcome::Conflict {
+                remote_version: vault.version,
+            }),
         }
     } else {
         // Remote moved ahead of us - never pull without explicit user choice.
@@ -1254,7 +1312,10 @@ pub async fn perform_sync(
                 .or_else(|_| crypto::decrypt(&vault_key, &vault.ciphertext))?;
             let settings = apply_remote_vault(db, &plaintext)?;
             set_synced_meta(db, vault.version, settings.as_ref())?;
-            return Ok(SyncOutcome::Pulled { version: vault.version, settings });
+            return Ok(SyncOutcome::Pulled {
+                version: vault.version,
+                settings,
+            });
         }
         if resolution == Some("keep_local") {
             return match push_local(
@@ -1265,15 +1326,22 @@ pub async fn perform_sync(
                 &vault,
                 plan.limit_bytes,
             )
-            .await? {
+            .await?
+            {
                 Some(new_version) => {
                     set_synced_meta(db, new_version, settings.as_ref())?;
-                    Ok(SyncOutcome::Pushed { version: new_version })
+                    Ok(SyncOutcome::Pushed {
+                        version: new_version,
+                    })
                 }
-                None => Ok(SyncOutcome::Conflict { remote_version: vault.version }),
+                None => Ok(SyncOutcome::Conflict {
+                    remote_version: vault.version,
+                }),
             };
         }
-        Ok(SyncOutcome::Conflict { remote_version: vault.version })
+        Ok(SyncOutcome::Conflict {
+            remote_version: vault.version,
+        })
     }
 }
 

@@ -40,9 +40,18 @@ const command = await load("../src/lib/aiCommand.ts", [
 ]);
 const ai = await load("../src/lib/ai.ts");
 const web = await load("../src/lib/aiWeb.ts");
+const selfhost = await load("../src/lib/selfhostUrl.ts");
 const token = "azalea_test";
 const start = `\x1b]9999;${token}:start\x07`;
 const end = (code = 0) => `\x1b]9999;${token}:done:${code}\x07`;
+
+test("self-host URLs support direct API, dashboard proxy and private IPv6", () => {
+  assert.deepEqual(selfhost.resolveSelfHostUrls("https://sync.example.com"), { base_url: "https://sync.example.com/api", web_url: "https://sync.example.com" });
+  assert.deepEqual(selfhost.resolveSelfHostUrls("http://127.0.0.1:9482"), { base_url: "http://127.0.0.1:9482", web_url: null });
+  assert.deepEqual(selfhost.resolveSelfHostUrls("192.168.1.2:9843"), { base_url: "http://192.168.1.2:9843/api", web_url: "http://192.168.1.2:9843" });
+  assert.deepEqual(selfhost.resolveSelfHostUrls("http://[fd00::1]:9843/api/"), { base_url: "http://[fd00::1]:9843/api", web_url: "http://[fd00::1]:9843" });
+  for (const url of ["http://public.example.com", "https://user:secret@sync.example.com", "https://sync.example.com?token=secret", "https://sync.example.com#fragment", "ftp://sync.example.com", "http://[2001:4860:4860::8888]"]) assert.throws(() => selfhost.resolveSelfHostUrls(url));
+});
 
 test("completion markers work across every possible event boundary", () => {
   const input = `old output${start}hello\r\n${end(17)}prompt`;

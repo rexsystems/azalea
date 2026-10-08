@@ -46,7 +46,11 @@ export function clearSession() {
 }
 
 export class ApiRequestError extends Error {
-  constructor(message: string, public status: number, public code?: string) {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+  ) {
     super(message);
     this.name = "ApiRequestError";
   }
@@ -62,10 +66,15 @@ export async function apiRequest<T>(
     headers.set("Content-Type", "application/json");
     const token = auth ? getStoredSession()?.access_token : null;
     if (token) headers.set("Authorization", `Bearer ${token}`);
-    return fetch(`${apiBase()}${path}`, { ...options, headers, credentials: "include" });
+    return fetch(`${apiBase()}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+    });
   };
   let res = await send();
-  if (res.status === 401 && auth && await refreshSession()) res = await send();
+  if (res.status === 401 && auth && (await refreshSession()))
+    res = await send();
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new ApiRequestError(
@@ -87,9 +96,18 @@ let refreshInFlight: Promise<Session | null> | null = null;
 function sessionUsable(session: Session | null): boolean {
   if (!session) return false;
   try {
-    const payload = JSON.parse(atob(session.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    const payload = JSON.parse(
+      atob(
+        session.access_token
+          .split(".")[1]
+          .replace(/-/g, "+")
+          .replace(/_/g, "/"),
+      ),
+    );
     return typeof payload.exp === "number" && payload.exp * 1000 > Date.now();
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 export async function login(email: string, password: string): Promise<Session> {
@@ -127,18 +145,27 @@ export async function register(
  */
 export async function refreshSession(): Promise<Session | null> {
   if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => { try {
-    const session = await request<Session>("/v1/auth/refresh", {
-      method: "POST",
-      auth: false,
-      body: JSON.stringify({}),
-    });
-    storeSession(session);
-    return session;
-  } catch (err) {
-    if (err instanceof ApiRequestError && (err.status === 401 || err.status === 403) && !sessionUsable(getStoredSession())) clearSession();
-    return null;
-  } finally { refreshInFlight = null; } })();
+  refreshInFlight = (async () => {
+    try {
+      const session = await request<Session>("/v1/auth/refresh", {
+        method: "POST",
+        auth: false,
+        body: JSON.stringify({}),
+      });
+      storeSession(session);
+      return session;
+    } catch (err) {
+      if (
+        err instanceof ApiRequestError &&
+        (err.status === 401 || err.status === 403) &&
+        !sessionUsable(getStoredSession())
+      )
+        clearSession();
+      return null;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
   return refreshInFlight;
 }
 
@@ -215,7 +242,14 @@ export async function approveDesktopHandoff(
   });
 }
 
-export const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
+export const TURNSTILE_SITE_KEY =
+  process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
 
-export interface AuthConfig { signup_enabled: boolean; captcha_provider: string; captcha_site_key: string; }
-export function getAuthConfig() { return apiRequest<AuthConfig>("/v1/auth/config", { auth: false }); }
+export interface AuthConfig {
+  signup_enabled: boolean;
+  captcha_provider: string;
+  captcha_site_key: string;
+}
+export function getAuthConfig() {
+  return apiRequest<AuthConfig>("/v1/auth/config", { auth: false });
+}

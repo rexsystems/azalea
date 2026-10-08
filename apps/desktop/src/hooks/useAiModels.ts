@@ -31,7 +31,11 @@ export function useAiModels(prefs: AiPrefs) {
 
   useEffect(() => {
     if (provider.id !== "selfhost_server") return;
-    const changed = () => { setCatalog(null); setServerConfig(null); refresh(); };
+    const changed = () => {
+      setCatalog(null);
+      setServerConfig(null);
+      refresh();
+    };
     window.addEventListener("azalea-active-account", changed);
     return () => window.removeEventListener("azalea-active-account", changed);
   }, [provider.id, refresh]);
@@ -41,16 +45,30 @@ export function useAiModels(prefs: AiPrefs) {
     setError(null);
     setLoading(false);
     setServerConfig(null);
-    if (!provider.supportsModelList || (!url && provider.id !== "selfhost_server")) return;
+    if (provider.id === "selfhost_server") setCatalog(null);
+    if (
+      !provider.supportsModelList ||
+      (!url && provider.id !== "selfhost_server")
+    )
+      return;
     setLoading(true);
     const load = async () => {
-      if (provider.id !== "selfhost_server") return aiListModels(provider.id, url);
+      if (provider.id !== "selfhost_server")
+        return aiListModels(provider.id, url);
       const config = await aiServerConfig();
       if (cancelled) return [];
       setServerConfig(config);
-      if (!config.enabled) throw new Error("AI is disabled on this server. Its administrator can enable it in the dashboard.");
+      if (!config.enabled)
+        throw new Error(
+          "AI is disabled on this server. Its administrator can enable it in the dashboard.",
+        );
       const current = getAiPrefs();
-      if (current.providerId === "selfhost_server" && (!current.model || !config.models.some((model) => model.id === current.model))) setAiPrefs({ model: config.defaultModel });
+      if (
+        current.providerId === "selfhost_server" &&
+        (!current.model ||
+          !config.models.some((model) => model.id === current.model))
+      )
+        setAiPrefs({ model: config.defaultModel });
       return config.models;
     };
     void load()
@@ -60,7 +78,9 @@ export function useAiModels(prefs: AiPrefs) {
         setCatalog({ scope, models });
         if (!models.length)
           setError(
-            "The provider returned no models. Add a custom model ID below.",
+            provider.id === "selfhost_server"
+              ? "This server has no enabled AI models. Ask its administrator to configure them."
+              : "The provider returned no models. Add a custom model ID below.",
           );
       })
       .catch((err) => {
@@ -75,12 +95,23 @@ export function useAiModels(prefs: AiPrefs) {
   }, [provider.id, provider.supportsModelList, scope, url, revision]);
 
   const models = useMemo(() => {
-    const live = catalog?.scope === scope ? catalog.models : provider.id === "selfhost_server" ? undefined : cache.get(scope);
+    const live =
+      catalog?.scope === scope
+        ? catalog.models
+        : provider.id === "selfhost_server"
+          ? undefined
+          : cache.get(scope);
     const result = new Map<string, AiModelOption>();
     for (const model of live ?? provider.models) result.set(model.id, model);
-    for (const id of provider.id === "selfhost_server" ? [] : prefs.customModels[provider.id] ?? [])
+    for (const id of provider.id === "selfhost_server"
+      ? []
+      : (prefs.customModels[provider.id] ?? []))
       result.set(id, { id, label: id });
-    if (prefs.model.trim() && !result.has(prefs.model))
+    if (
+      provider.id !== "selfhost_server" &&
+      prefs.model.trim() &&
+      !result.has(prefs.model)
+    )
       result.set(prefs.model, {
         id: prefs.model,
         label: live ? `${prefs.model} (not listed by provider)` : prefs.model,

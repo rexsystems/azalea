@@ -11,7 +11,9 @@ export function getAdminSettings() {
   return adminFetch<AdminSettings>("/v1/admin/settings");
 }
 
-export function patchAdminSettings(body: Partial<AdminSettings> & { captcha_secret_key?: string }) {
+export function patchAdminSettings(
+  body: Partial<AdminSettings> & { captcha_secret_key?: string },
+) {
   return adminFetch<AdminSettings>("/v1/admin/settings", {
     method: "PATCH",
     body: JSON.stringify(body),
@@ -63,10 +65,21 @@ export interface ServerAiSettings {
   providers: ServerAiProvider[];
 }
 
-export function getServerAiSettings() { return adminFetch<ServerAiSettings>("/v1/admin/ai"); }
-export function saveServerAiSettings(input: Omit<ServerAiSettings, "providers"> & { providers: (ServerAiProvider & { api_key?: string; clear_key?: boolean })[] }) {
-  return adminFetch<ServerAiSettings>("/v1/admin/ai", { method: "PUT", body: JSON.stringify(input) });
+export function getServerAiSettings() {
+  return adminFetch<ServerAiSettings>("/v1/admin/ai");
+}
+export function saveServerAiSettings(
+  input: Omit<ServerAiSettings, "providers"> & {
+    providers: (ServerAiProvider & { api_key?: string; clear_key?: boolean })[];
+  },
+) {
+  return adminFetch<ServerAiSettings>("/v1/admin/ai", {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
 }
 export function getServerProviderModels(id: string) {
-  return adminFetch<{ id: string; label: string }[]>(`/v1/admin/ai/providers/${encodeURIComponent(id)}/models`);
+  return adminFetch<{ id: string; label: string }[]>(
+    `/v1/admin/ai/providers/${encodeURIComponent(id)}/models`,
+  );
 }

@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use crate::commands::accounts::SharedAccountRegistry;
+use crate::store::accounts::AccountKind;
+use crate::sync::SharedSyncState;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::ipc::Channel;
 use tauri::State;
-use crate::store::accounts::AccountKind;
-use crate::commands::accounts::SharedAccountRegistry;
-use crate::sync::SharedSyncState;
 
 use crate::keys::{
     ai_api_key_present as key_present, delete_ai_api_key as key_delete, get_ai_api_key,
@@ -58,44 +58,108 @@ pub struct AiModelInfo {
     pub label: String,
 }
 
-async fn selfhost_credentials(sync: &SharedSyncState, registry: &SharedAccountRegistry) -> Result<(String, String, String), String> {
-    let account = registry.lock().active().cloned().filter(|account|account.kind == AccountKind::Selfhost)
-        .ok_or_else(|| "Select and sign in to a self-hosted account to use server AI.".to_string())?;
+async fn selfhost_credentials(
+    sync: &SharedSyncState,
+    registry: &SharedAccountRegistry,
+) -> Result<(String, String, String), String> {
+    let account = registry
+        .lock()
+        .active()
+        .cloned()
+        .filter(|account| account.kind == AccountKind::Selfhost)
+        .ok_or_else(|| {
+            "Select and sign in to a self-hosted account to use server AI.".to_string()
+        })?;
     let shared = sync.clone();
     let account_id = account.id.clone();
     let (base, token) = tokio::spawn(async move {
         let mut state = shared.lock().await;
-        crate::sync::ai_credentials(&mut state, &account_id).await.map_err(|err|err.to_string())
-    }).await.map_err(|_| "Could not restore the server account session.".to_string())??;
-    Ok((base,token,account.id))
+        crate::sync::ai_credentials(&mut state, &account_id)
+            .await
+            .map_err(|err| err.to_string())
+    })
+    .await
+    .map_err(|_| "Could not restore the server account session.".to_string())??;
+    Ok((base, token, account.id))
 }
 
-async fn load_server_config(base: &str, token: &str) -> Result<Value,String> {
-    let response = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).redirect(reqwest::redirect::Policy::none()).build().map_err(|err|err.to_string())?
-        .get(format!("{base}/config")).bearer_auth(token).send().await.map_err(|_| "Could not reach the self-hosted AI server.".to_string())?;
+async fn load_server_config(base: &str, token: &str) -> Result<Value, String> {
+    let response = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|err| err.to_string())?
+        .get(format!("{base}/config"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|_| "Could not reach the self-hosted AI server.".to_string())?;
     let status = response.status();
-    let text = response.text().await.map_err(|err|err.to_string())?;
-    if !status.is_success() { return Err(format_http_error(status.as_u16(),&text)); }
-    serde_json::from_str(&text).map_err(|_|"Invalid server AI configuration.".to_string())
+    let text = response.text().await.map_err(|err| err.to_string())?;
+    if !status.is_success() {
+        return Err(format_http_error(status.as_u16(), &text));
+    }
+    serde_json::from_str(&text).map_err(|_| "Invalid server AI configuration.".to_string())
+}
+
+fn require_active_server_account(
+    registry: &SharedAccountRegistry,
+    account_id: &str,
+) -> Result<(), String> {
+    if registry
+        .lock()
+        .active()
+        .is_some_and(|account| account.id == account_id && account.kind == AccountKind::Selfhost)
+    {
+        Ok(())
+    } else {
+        Err("Account changed while loading server AI. Try again on the current account.".into())
+    }
 }
 
 #[tauri::command]
-pub async fn ai_server_config(sync: State<'_,SharedSyncState>, registry: State<'_,SharedAccountRegistry>) -> Result<Value,String> {
-    let (base,token,account_id)=selfhost_credentials(&sync,&registry).await?;
-    let config=load_server_config(&base,&token).await?;
-    Ok(json!({"accountId":account_id,"enabled":config["enabled"],"defaultModel":config["default_model"],"models":config["models"]}))
+pub async fn ai_server_config(
+    sync: State<'_, SharedSyncState>,
+    registry: State<'_, SharedAccountRegistry>,
+) -> Result<Value, String> {
+    let (base, token, account_id) = selfhost_credentials(&sync, &registry).await?;
+    let config = load_server_config(&base, &token).await?;
+    require_active_server_account(&registry, &account_id)?;
+    Ok(
+        json!({"accountId":account_id,"enabled":config["enabled"],"defaultModel":config["default_model"],"models":config["models"]}),
+    )
 }
 
-async fn chat_credentials(input: &mut AiChatInput, sync: &SharedSyncState, registry: &SharedAccountRegistry) -> Result<String,String> {
-    if input.provider_id != "selfhost_server" { return require_key(&input.provider_id); }
-    let (base,token,_)=selfhost_credentials(sync,registry).await?;
-    let config=load_server_config(&base,&token).await?;
-    if config["enabled"].as_bool()!=Some(true) { return Err("AI is disabled on this server. Ask its administrator to configure it.".into()); }
-    if input.model.trim().is_empty() { input.model=config["default_model"].as_str().unwrap_or("").into(); }
-    let model=config["models"].as_array().and_then(|models|models.iter().find(|model|model["id"].as_str()==Some(input.model.as_str())))
-        .ok_or_else(|| "This model is not provided by the active server. Refresh the server model list.".to_string())?;
-    input.dialect=model["dialect"].as_str().unwrap_or("openai").into();
-    input.base_url=base;
+async fn chat_credentials(
+    input: &mut AiChatInput,
+    sync: &SharedSyncState,
+    registry: &SharedAccountRegistry,
+) -> Result<String, String> {
+    if input.provider_id != "selfhost_server" {
+        return require_key(&input.provider_id);
+    }
+    let (base, token, account_id) = selfhost_credentials(sync, registry).await?;
+    let config = load_server_config(&base, &token).await?;
+    require_active_server_account(registry, &account_id)?;
+    if config["enabled"].as_bool() != Some(true) {
+        return Err("AI is disabled on this server. Ask its administrator to configure it.".into());
+    }
+    if input.model.trim().is_empty() {
+        input.model = config["default_model"].as_str().unwrap_or("").into();
+    }
+    let model = config["models"]
+        .as_array()
+        .and_then(|models| {
+            models
+                .iter()
+                .find(|model| model["id"].as_str() == Some(input.model.as_str()))
+        })
+        .ok_or_else(|| {
+            "This model is not provided by the active server. Refresh the server model list."
+                .to_string()
+        })?;
+    input.dialect = model["dialect"].as_str().unwrap_or("openai").into();
+    input.base_url = base;
     Ok(token)
 }
 
@@ -366,17 +430,22 @@ pub fn ai_chat_cancel(request_id: String, cancels: State<'_, AiCancelMap>) -> Re
 pub async fn ai_list_models(
     provider_id: String,
     base_url: String,
-    sync: State<'_,SharedSyncState>,
-    registry: State<'_,SharedAccountRegistry>,
+    sync: State<'_, SharedSyncState>,
+    registry: State<'_, SharedAccountRegistry>,
 ) -> Result<Vec<AiModelInfo>, String> {
-    let (base_url,api_key) = if provider_id=="selfhost_server" {
-        let (base,token,_)=selfhost_credentials(&sync,&registry).await?;
-        (base,token)
-    } else { (base_url,if provider_id == "openrouter" {
-        String::new() // The model catalog is public; chat still requires a key.
+    let (base_url, api_key) = if provider_id == "selfhost_server" {
+        let (base, token, _) = selfhost_credentials(&sync, &registry).await?;
+        (base, token)
     } else {
-        require_key(&provider_id)?
-    }) };
+        (
+            base_url,
+            if provider_id == "openrouter" {
+                String::new() // The model catalog is public; chat still requires a key.
+            } else {
+                require_key(&provider_id)?
+            },
+        )
+    };
     let base = normalize_base_url(&base_url);
     if base.is_empty() {
         return Err("Base URL is empty".into());
@@ -459,13 +528,26 @@ pub async fn ai_list_models(
 }
 
 #[tauri::command]
-pub async fn ai_chat(mut input: AiChatInput, sync: State<'_,SharedSyncState>, registry: State<'_,SharedAccountRegistry>) -> Result<AiChatResult, String> {
-    let api_key = chat_credentials(&mut input,&sync,&registry).await?;
+pub async fn ai_chat(
+    mut input: AiChatInput,
+    sync: State<'_, SharedSyncState>,
+    registry: State<'_, SharedAccountRegistry>,
+) -> Result<AiChatResult, String> {
+    let api_key = chat_credentials(&mut input, &sync, &registry).await?;
     let base = normalize_base_url(&input.base_url);
     validate_chat(&base, &input)?;
     let dialect = input.dialect.to_lowercase();
     match dialect.as_str() {
-        "anthropic" => chat_anthropic(&base, &api_key, &input.model, &input.messages, input.provider_id=="selfhost_server").await,
+        "anthropic" => {
+            chat_anthropic(
+                &base,
+                &api_key,
+                &input.model,
+                &input.messages,
+                input.provider_id == "selfhost_server",
+            )
+            .await
+        }
         _ => chat_openai(&base, &api_key, &input.model, &input.messages).await,
     }
 }
@@ -476,8 +558,8 @@ pub async fn ai_chat_stream(
     mut input: AiChatInput,
     on_event: Channel<AiStreamEvent>,
     cancels: State<'_, AiCancelMap>,
-    sync: State<'_,SharedSyncState>,
-    registry: State<'_,SharedAccountRegistry>,
+    sync: State<'_, SharedSyncState>,
+    registry: State<'_, SharedAccountRegistry>,
 ) -> Result<(), String> {
     let cancel = Arc::new(tokio::sync::Notify::new());
     if let Ok(mut map) = cancels.inner.lock() {
@@ -485,7 +567,7 @@ pub async fn ai_chat_stream(
     }
 
     let work = async {
-        let api_key = chat_credentials(&mut input,&sync,&registry).await?;
+        let api_key = chat_credentials(&mut input, &sync, &registry).await?;
         let base = normalize_base_url(&input.base_url);
         validate_chat(&base, &input)?;
         let dialect = input.dialect.to_lowercase();
@@ -498,7 +580,7 @@ pub async fn ai_chat_stream(
                     &api_key,
                     &input.model,
                     &input.messages,
-                    input.provider_id=="selfhost_server",
+                    input.provider_id == "selfhost_server",
                 )
                 .await
             }
@@ -744,13 +826,17 @@ async fn chat_anthropic(
 
     let client = reqwest::Client::new();
     let request = client.post(&url);
-    let response = (if bearer { request.bearer_auth(api_key) } else { request.header("x-api-key",api_key) })
-        .header("anthropic-version", "2023-06-01")
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|err| format!("Request failed: {err}"))?;
+    let response = (if bearer {
+        request.bearer_auth(api_key)
+    } else {
+        request.header("x-api-key", api_key)
+    })
+    .header("anthropic-version", "2023-06-01")
+    .header("Content-Type", "application/json")
+    .json(&body)
+    .send()
+    .await
+    .map_err(|err| format!("Request failed: {err}"))?;
 
     let status = response.status();
     let text = response
@@ -790,14 +876,18 @@ async fn stream_anthropic(
 
     let client = reqwest::Client::new();
     let request = client.post(&url);
-    let response = (if bearer { request.bearer_auth(api_key) } else { request.header("x-api-key",api_key) })
-        .header("anthropic-version", "2023-06-01")
-        .header("Content-Type", "application/json")
-        .header("Accept", "text/event-stream")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|err| format!("Request failed: {err}"))?;
+    let response = (if bearer {
+        request.bearer_auth(api_key)
+    } else {
+        request.header("x-api-key", api_key)
+    })
+    .header("anthropic-version", "2023-06-01")
+    .header("Content-Type", "application/json")
+    .header("Accept", "text/event-stream")
+    .json(&body)
+    .send()
+    .await
+    .map_err(|err| format!("Request failed: {err}"))?;
 
     let status = response.status();
     if !status.is_success() {

@@ -11,7 +11,14 @@ npm run dev:web
 cd apps/azalea-server-web && npm run build   # static export -> out/
 ```
 
-Docker: nginx serves `out/` and proxies `/api/` to azalea-server.
+Docker: nginx serves `out/` and proxies `/api/` to azalea-server. Local
+development uses the same `/api` path through Next's proxy. After building,
+`npm start --prefix apps/azalea-server-web` serves the export with an API proxy;
+set `AZALEA_SERVER_URL` to change the backend target.
+
+Administrators configure instance identity, registration, storage and captcha
+at `/admin/settings`, and shared AI connections and default models at
+`/admin/ai`. Captcha settings are read from the server at runtime.
 
 ## Public marketing site
 
