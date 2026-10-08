@@ -46,3 +46,6 @@ headers (`libasound2-dev` on Ubuntu or `alsa-lib-devel` on Fedora). The Linux
 release workflow installs these dependencies for x64 and ARM64 builds. Speech
 engine CPU flags are kept portable rather than tied to the CI runner's CPU.
 Microphone/tray support is desktop-only.
+macOS builds target macOS 11.0 or newer. The release workflow derives both
+`MACOSX_DEPLOYMENT_TARGET` and `CMAKE_OSX_DEPLOYMENT_TARGET` from Tauri's configured
+minimum so the bundled speech engine uses the same deployment baseline.

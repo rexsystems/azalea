@@ -283,12 +283,18 @@ jobs:
         with:
           targets: ${{ matrix.rust_target }}
 
+      - name: Configure macOS deployment target
+        id: macos
+        run: |
+          MACOS_TARGET=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').bundle.macOS.minimumSystemVersion")
+          printf 'MACOSX_DEPLOYMENT_TARGET=%s\nCMAKE_OSX_DEPLOYMENT_TARGET=%s\n' "$MACOS_TARGET" "$MACOS_TARGET" >> "$GITHUB_ENV"
+          printf 'deployment_target=%s\n' "$MACOS_TARGET" >> "$GITHUB_OUTPUT"
+
       - name: Rust cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/desktop/src-tauri -> target
-          # Separate keys so arm64 / x86_64 caches do not clobber each other.
-          shared-key: desktop-macos-${{ matrix.rust_target }}
+          shared-key: desktop-macos-${{ matrix.rust_target }}-${{ steps.macos.outputs.deployment_target }}
           cache-on-failure: true
 
       - name: Install dependencies
