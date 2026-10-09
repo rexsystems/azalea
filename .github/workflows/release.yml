@@ -26,7 +26,7 @@ permissions:
 # and signer steps that actually need it, so a compromised curl or npm script
 # in an unrelated step can't read it out of the environment.
 env:
-  # Public R2 custom domain — used when writing updater fragment download URLs.
+  # Public R2 custom domain; used when writing updater fragment download URLs.
   UPDATER_DOWNLOAD_BASE_URL: https://updates.azalea.rexsystems.me
   R2_BUCKET: azalea-updates
   R2_ENDPOINT: https://f92074baafe52a6a6b5b47c82488090d.r2.cloudflarestorage.com
@@ -34,14 +34,14 @@ env:
 jobs:
   # Allocate "<base>+<N>" once: N resets to 1 whenever tauri.conf version base changes.
   version:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     outputs:
       base: ${{ steps.resolve.outputs.base }}
       build: ${{ steps.resolve.outputs.build }}
       stamped: ${{ steps.resolve.outputs.stamped }}
       tag: ${{ steps.resolve.outputs.tag }}
     steps:
-      - uses: useblacksmith/checkout@v1 # v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Resolve per-base build number
         id: resolve
@@ -51,7 +51,7 @@ jobs:
 
   build-windows:
     needs: [version]
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: windows-2025
     env:
       VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
       UPDATER_ARTIFACT_PREFIX: builds/${{ needs.version.outputs.tag }}
@@ -128,11 +128,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: blacksmith-4vcpu-ubuntu-2404
+          - runner: ubuntu-24.04
             rust_target: x86_64-unknown-linux-gnu
             platform_key: linux-x86_64
             artifact_name: linux-x64
-          - runner: blacksmith-4vcpu-ubuntu-2204-arm
+          - runner: ubuntu-24.04-arm
             rust_target: aarch64-unknown-linux-gnu
             platform_key: linux-aarch64
             artifact_name: linux-arm64
@@ -142,7 +142,7 @@ jobs:
       UPDATER_ARTIFACT_PREFIX: builds/${{ needs.version.outputs.tag }}
 
     steps:
-      - uses: useblacksmith/checkout@v1 # v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Setup Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
@@ -157,7 +157,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/desktop/src-tauri -> target
-          shared-key: desktop-${{ matrix.platform_key }}-${{ matrix.runner }}
+          shared-key: desktop-${{ matrix.platform_key }}
           cache-on-failure: true
 
       - name: Verify native build architecture
@@ -264,7 +264,7 @@ jobs:
           - rust_target: x86_64-apple-darwin
             platform_key: darwin-x86_64
             artifact_name: macos-x64
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: macos-15
     env:
       VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
       UPDATER_ARTIFACT_PREFIX: builds/${{ needs.version.outputs.tag }}
@@ -363,12 +363,12 @@ jobs:
 
   publish:
     needs: [version, build-windows, build-linux, build-macos]
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     env:
       VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
 
     steps:
-      - uses: useblacksmith/checkout@v1 # v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Download artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0

@@ -28,17 +28,15 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: blacksmith-4vcpu-ubuntu-2404
+            runner: ubuntu-24.04
           - arch: arm64
-            runner: blacksmith-4vcpu-ubuntu-2404-arm
+            runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: useblacksmith/checkout@v1 # v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
-      - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@v2
-        with:
-          cache-key: services/azalea-server/Dockerfile-${{ matrix.arch }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GHCR
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
@@ -56,7 +54,7 @@ jobs:
             type=sha,format=long,prefix=,suffix=-${{ matrix.arch }}
 
       - name: Build and push
-        uses: useblacksmith/build-push-action@v2 # v6.19.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: services/azalea-server
           platforms: linux/${{ matrix.arch }}
@@ -64,6 +62,8 @@ jobs:
             AZALEA_BUILD_REVISION=${{ github.sha }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=azalea-server-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=azalea-server-${{ matrix.arch }}
           labels: |
             ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
@@ -104,17 +104,15 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: blacksmith-4vcpu-ubuntu-2404
+            runner: ubuntu-24.04
           - arch: arm64
-            runner: blacksmith-4vcpu-ubuntu-2404-arm
+            runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: useblacksmith/checkout@v1 # v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
-      - name: Setup Blacksmith Builder
-        uses: useblacksmith/setup-docker-builder@v2
-        with:
-          cache-key: apps/azalea-server-web/Dockerfile-${{ matrix.arch }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GHCR
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
@@ -132,7 +130,7 @@ jobs:
             type=sha,format=long,prefix=,suffix=-${{ matrix.arch }}
 
       - name: Build and push
-        uses: useblacksmith/build-push-action@v2 # v6.19.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: apps/azalea-server-web
           platforms: linux/${{ matrix.arch }}
@@ -141,6 +139,8 @@ jobs:
             NEXT_PUBLIC_AZALEA_API_URL=/api
             NEXT_PUBLIC_SITE_URL=
           tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=azalea-server-web-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=azalea-server-web-${{ matrix.arch }}
           labels: |
             ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
@@ -174,21 +174,24 @@ jobs:
 
   publish-manifests:
     needs: [docker-server, docker-web]
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         image: [azalea-server, azalea-server-web]
     steps:
       - name: Log in to GHCR
-        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
       - name: Docker metadata
         id: meta
-        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f # v5.8.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
