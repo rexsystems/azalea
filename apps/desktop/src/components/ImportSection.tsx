@@ -141,7 +141,7 @@ export function ImportSection({
               OpenSSH (~/.ssh)
             </div>
             <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-              Detect private keys and Host entries from your SSH config, then import what you want.
+              Scan private keys and Host entries from your SSH config, then import what you need.
             </p>
           </div>
           <Button variant="secondary" disabled={disabled} onClick={() => void runScan()}>
@@ -288,7 +288,7 @@ export function ImportSection({
           Azalea backup / other files
         </div>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Import an Azalea backup JSON, OpenSSH config, or other supported host export.
+          Import an Azalea backup JSON, an OpenSSH config, or another supported host export.
         </p>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="secondary" disabled={busy || importing} onClick={onImportBackup}>

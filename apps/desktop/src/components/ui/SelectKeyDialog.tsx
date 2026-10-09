@@ -43,7 +43,7 @@ export function SelectKeyDialog({
 
         {keys.length === 0 ? (
           <p className="mt-4 text-sm text-amber-200">
-            No SSH keys in Keychain. Add a key first, then connect again.
+            No SSH keys in Keychain. Add a key, then connect again.
           </p>
         ) : (
           <div className="mt-4 max-h-64 space-y-2 overflow-y-auto">

@@ -126,8 +126,8 @@ export function VoiceSettingsSection() {
       {!status.ttsReady && (
         <div className="space-y-2">
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Download Piper for clearer spoken replies (~90 MB with runtime).
-            System speech remains the fallback.
+            Optional: download Piper for spoken replies (~90 MB with runtime).
+            System speech is the fallback.
           </p>
           <Button
             disabled={controlsDisabled}
@@ -149,7 +149,7 @@ export function VoiceSettingsSection() {
         <SettingToggle
           disabled={controlsDisabled}
           label="Enable voice assistant"
-          description="Off by default. Uses your system-default microphone to listen locally for Hey Azalea. Audio stays on this computer."
+          description="Off by default. Listens on the system microphone for Hey Azalea. Audio stays on this computer."
           checked={status.preferences.enabled}
           onChange={(enabled) => {
             if (enabled && !status.modelReady)
@@ -164,7 +164,7 @@ export function VoiceSettingsSection() {
         <SettingToggle
           disabled={controlsDisabled}
           label="Keep Azalea in the system tray"
-          description="Closing the window keeps the assistant running while enabled. Quit Azalea from the tray to stop it completely."
+          description="Closing the window keeps the assistant running. Quit Azalea from the tray to stop it."
           checked={status.preferences.keepInTray}
           onChange={(keepInTray) => save({ keepInTray })}
         />
@@ -177,14 +177,14 @@ export function VoiceSettingsSection() {
         <SettingToggle
           disabled={controlsDisabled}
           label="Voice replies"
-          description="Speak results with Piper when downloaded, otherwise system speech."
+          description="Speaks results with Piper when downloaded, otherwise system speech."
           checked={status.preferences.voiceReplies}
           onChange={(voiceReplies) => save({ voiceReplies })}
         />
         <SettingToggle
           disabled={controlsDisabled}
           label="Wake saved servers by voice"
-          description="Uses Wake-on-LAN for hosts with a configured MAC address in the active account."
+          description="Sends Wake-on-LAN to hosts that have a MAC address in the active account."
           checked={status.preferences.allowWakeOnLan}
           onChange={(allowWakeOnLan) => save({ allowWakeOnLan })}
         />
@@ -214,8 +214,8 @@ export function VoiceSettingsSection() {
         onChange={(sensitivity) => save({ sensitivity: Number(sensitivity) })}
       />
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-        Select the language you speak for short commands. If a saved name is
-        misheard, repeat it; ambiguous names never wake a server.
+        Pick the language you speak for short commands. If a saved name is
+        misheard, repeat it. Ambiguous names never wake a server.
       </p>
       {status.microphone && (
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>

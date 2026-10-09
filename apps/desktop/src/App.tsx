@@ -1662,7 +1662,7 @@ function App() {
     setPendingPrompt({
       title: `Password for ${host.name}`,
       message:
-        "Key auth failed or no password is saved. Enter the SSH password to store it and retry (key stays as fallback).",
+        "Key auth failed or no password is saved. Enter the SSH password to store it and retry. The key stays as a fallback.",
       placeholder: "SSH password",
       confirmLabel: "Save & connect",
       inputType: "password",

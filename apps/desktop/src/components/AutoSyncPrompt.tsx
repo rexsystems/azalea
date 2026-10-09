@@ -38,7 +38,7 @@ export function AutoSyncPrompt({
             </h3>
             <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
               Auto-sync is on{email ? ` for ${maskEmail(email)}` : ""}. Enter your master passphrase
-              to unlock the vault and review any pending sync changes.
+              to unlock the vault and review pending sync changes.
             </p>
           </div>
           <button

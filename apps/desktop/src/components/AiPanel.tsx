@@ -1448,7 +1448,7 @@ export function AiPanel({
                 className="mx-auto max-w-[260px] text-[13px] leading-relaxed"
                 style={{ color: "var(--text-secondary)" }}
               >
-                Ask about errors, draft commands, or switch to Agent to run them
+                Ask about errors or draft commands. Switch to Agent to run them
                 and read the output.
               </p>
             </div>

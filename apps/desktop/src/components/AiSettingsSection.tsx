@@ -152,7 +152,7 @@ export function AiSettingsSection() {
       <div className="mb-6 space-y-2">
         <SettingToggle
           label="Enable AI features"
-          description="When off, AI stays hidden everywhere except this Settings tab. Keys stay in your keychain."
+          description="When off, AI stays hidden except on this Settings tab. Keys stay in the OS keychain."
           checked={enabled}
           onChange={(on) => {
             setAiEnabled(on);
@@ -163,8 +163,8 @@ export function AiSettingsSection() {
 
       {!enabled ? (
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          AI is off. Turn it on above to configure providers and use Ask / Agent
-          in the terminal.
+          AI is off. Turn it on to configure a provider and use Ask / Agent in
+          the terminal.
         </p>
       ) : (
         <div className="space-y-5">
@@ -250,7 +250,7 @@ export function AiSettingsSection() {
             )}
 
             {provider.id === "selfhost_server" ? <div className="space-y-3">
-              <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>Uses the active self-hosted account. Requests and included terminal context go to your server; provider keys remain there. Sign in through the account switcher first.</p>
+              <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>Uses the active self-hosted account. Requests and terminal context go to your server; provider keys stay there. Sign in from the account switcher first.</p>
               <Button variant="secondary" disabled={busy || !prefs.model.trim() || !serverConfig?.enabled} onClick={() => void testConnection()}>Test server AI</Button>
             </div> : <div className="space-y-2">
               <div
@@ -337,8 +337,8 @@ export function AiSettingsSection() {
             </div>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
               {provider.supportsModelList
-                ? "Models come directly from your provider. Custom IDs are saved for this provider and appear in chat immediately."
-                : "This endpoint has no model-list API. Select a supported model or add its exact ID from your provider."}
+                ? "Listed from your provider. Custom IDs you add are saved for this provider."
+                : "This endpoint has no model list. Pick a supported model or add the exact ID."}
             </p>
             <Select
               label="Active model"
@@ -466,9 +466,9 @@ export function AiSettingsSection() {
                   color: "#fca5a5",
                 }}
               >
-                Full access lets Agent run suggested shell commands on the
-                active session without asking. Destructive commands can wipe
-                data. Prefer Confirm unless you trust the model and host.
+                Full access runs Agent shell commands on the active session
+                without asking. Destructive commands can wipe data. Prefer
+                Confirm unless you trust the model and the host.
               </div>
             )}
           </div>

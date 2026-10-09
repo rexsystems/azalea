@@ -86,7 +86,7 @@ export const AI_PROVIDERS: AiProviderDef[] = [
   {
     id: "selfhost_server",
     name: "Self-hosted server",
-    description: "Use the AI providers and models configured by your active self-hosted server. Provider keys stay on the server.",
+    description: "Providers and models from your active self-hosted server. Keys stay on the server.",
     dialect: "openai",
     baseUrl: null,
     needsRegion: false,
@@ -138,7 +138,7 @@ export const AI_PROVIDERS: AiProviderDef[] = [
   {
     id: "groq",
     name: "Groq",
-    description: "Fast OpenAI-compatible inference.",
+    description: "OpenAI-compatible API on Groq.",
     dialect: "openai",
     baseUrl: "https://api.groq.com/openai/v1",
     needsRegion: false,
@@ -151,7 +151,7 @@ export const AI_PROVIDERS: AiProviderDef[] = [
   {
     id: "openrouter",
     name: "OpenRouter",
-    description: "Multi-model OpenAI-compatible gateway.",
+    description: "OpenAI-compatible gateway for many models.",
     dialect: "openai",
     baseUrl: "https://openrouter.ai/api/v1",
     needsRegion: false,
@@ -164,7 +164,7 @@ export const AI_PROVIDERS: AiProviderDef[] = [
   {
     id: "ollama",
     name: "Ollama",
-    description: "Local OpenAI-compatible server.",
+    description: "Local OpenAI-compatible endpoint (default 11434).",
     dialect: "openai",
     baseUrl: "http://127.0.0.1:11434/v1",
     needsRegion: false,

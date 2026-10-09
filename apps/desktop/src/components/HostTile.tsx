@@ -185,7 +185,7 @@ export function GroupSection({
             color: "var(--text-muted)",
           }}
         >
-          Empty group - add a server
+          Empty group. Add a server.
         </div>
       ) : (
         <div
@@ -228,7 +228,7 @@ export function EmptyHostsState({ onAddServer }: { onAddServer: () => void }) {
         No hosts yet
       </p>
       <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-        Click New Host to add your first server
+        Add a server with New Host.
       </p>
       <button
         onClick={onAddServer}

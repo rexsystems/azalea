@@ -121,7 +121,7 @@ export function AiWebSearchSettings({
       </div>
       <SettingToggle
         label="Allow web search"
-        description="Ask and Agent can search for current information and cite sources. Queries are sent to your selected search provider."
+        description="Ask and Agent can search the web and cite sources. Queries go to the search provider you select."
         checked={prefs.webSearchEnabled}
         onChange={(webSearchEnabled) => onChange({ webSearchEnabled })}
       />
@@ -144,13 +144,13 @@ export function AiWebSearchSettings({
       />
       {prefs.webSearchProvider === "mwmbl" ? (
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Ready to use without a key or account. Mwmbl searches its independent
-          public index, which has less coverage than larger engines.
+          Works without a key or account. Mwmbl uses its own public index, with
+          less coverage than larger engines.
         </p>
       ) : prefs.webSearchProvider === "duckduckgo" ? (
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Ready to use without an API key. Searches use DuckDuckGo's public
-          results; temporary limits or browser verification are shown as errors.
+          Works without an API key. Uses DuckDuckGo public results; temporary
+          limits or browser verification show up as errors.
         </p>
       ) : prefs.webSearchProvider === "searxng" ? (
         <label className="flex flex-col gap-1.5">

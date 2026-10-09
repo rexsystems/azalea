@@ -101,6 +101,6 @@ export const connectScreenOptions: { id: ConnectScreenMode; label: string; descr
     {
       id: "instant",
       label: "Instant terminal",
-      description: "Jump straight to the terminal while connecting",
+      description: "Open the terminal while the session connects",
     },
   ];

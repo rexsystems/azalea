@@ -214,7 +214,7 @@ export function SyncSection({
       setError(
         accountKind === "cloud"
           ? "Cloud vault is full. Remove hosts or keys locally, then try again, or upgrade to Pro."
-          : "Vault is full. Remove hosts or keys locally, then try again.",
+          : "Vault is full. Remove hosts or keys on this device, then try again.",
       );
       return;
     }
@@ -577,8 +577,8 @@ export function SyncSection({
         </div>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
           {accountKind === "cloud"
-            ? "Sync shows what would change before anything is uploaded or downloaded. Local data is unlimited. Only encrypted cloud storage counts toward your plan."
-            : "Sync shows what would change before anything is uploaded or downloaded."}
+            ? "Sync previews changes before upload or download. Local data is unlimited; only encrypted cloud storage counts toward your plan."
+            : "Sync previews changes before upload or download."}
         </p>
       </div>
     );
@@ -593,7 +593,7 @@ export function SyncSection({
         {status?.configured && status.logged_in && (
           <SettingToggle
             label="Prompt for passphrase on startup"
-            description="When signed in, ask for your master passphrase at launch and review pending sync changes."
+            description="When signed in, ask for the master passphrase at launch and show pending sync changes."
             checked={autoSync}
             onChange={(enabled) => {
               setAutoSync(enabled);
@@ -636,8 +636,8 @@ export function SyncSection({
               Save your recovery key
             </h4>
             <p className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
-              This is the only way to recover your vault if you forget the master passphrase. It is
-              shown once - store it somewhere safe.
+              This is the only way to recover your vault if you forget the master passphrase. Shown
+              once; store it somewhere safe.
             </p>
             <RecoveryKeyDisplay value={recoveryKey} />
             <div className="grid grid-cols-2 gap-2">

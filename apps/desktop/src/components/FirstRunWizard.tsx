@@ -116,9 +116,9 @@ export function FirstRunWizard({
 
   const subtitle =
     step === "choose"
-      ? "Pick how you want to use Azalea."
+      ? "Choose a sync option for this install."
       : step === "selfhost"
-        ? "Enter your azalea-server URL."
+        ? "URL of your azalea-server."
         : `Sign in to ${instanceName ?? "your server"}.`;
 
   return (
@@ -144,21 +144,21 @@ export function FirstRunWizard({
               <Choice
                 icon={<Globe size={18} />}
                 title="Azalea Cloud"
-                description="Sync through our hosted service."
+                description="Hosted sync from Rexsystems."
                 disabled={busy}
                 onClick={() => void finishSimple("cloud")}
               />
               <Choice
                 icon={<Server size={18} />}
                 title="Self-hosted"
-                description="Your own azalea-server instance."
+                description="Your own azalea-server."
                 disabled={busy}
                 onClick={() => setStep("selfhost")}
               />
               <Choice
                 icon={<SquareTerminal size={18} />}
                 title="Offline"
-                description="Local only. No sync account."
+                description="This device only. No sync."
                 disabled={busy}
                 onClick={() => void finishSimple("offline")}
               />
@@ -202,7 +202,7 @@ export function FirstRunWizard({
           ) : (
             <div className="space-y-3">
               <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                No web dashboard detected. Sign in with email and password.
+                No web dashboard on this server. Sign in with email and password.
               </p>
               {instanceName && (
                 <p className="text-sm font-medium" style={{ color: "var(--text)" }}>

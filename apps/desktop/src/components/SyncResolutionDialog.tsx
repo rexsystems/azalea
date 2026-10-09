@@ -95,14 +95,14 @@ function dialogCopy(preview: SyncPreview): {
       return {
         title: "Upload local changes?",
         description:
-          "This device has changes that are not in the cloud yet. Review them before uploading.",
+          "This device has changes that are not in the cloud yet. Review them, then upload.",
         primaryLabel: "Upload to cloud",
       };
     case "pull":
       return {
         title: "Download cloud changes?",
         description:
-          "The cloud vault is newer than what this device last synced. Review what would change here before downloading.",
+          "The cloud vault is newer than this device's last sync. Review what would change here, then download.",
         primaryLabel: "Use cloud vault",
         primaryResolution: "keep_cloud",
       };
@@ -110,7 +110,7 @@ function dialogCopy(preview: SyncPreview): {
       return {
         title: "Sync conflict",
         description:
-          "Both this device and the cloud changed since the last sync. Choose which version to keep - the other side will be overwritten.",
+          "This device and the cloud both changed since the last sync. Keep one version; the other side is overwritten.",
         primaryLabel: "Keep this device",
         primaryResolution: "keep_local",
         showSecondary: true,

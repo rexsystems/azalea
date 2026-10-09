@@ -22,18 +22,18 @@ export function TelemetryConsentDialog({ onChoice }: TelemetryConsentDialogProps
           className="text-lg font-semibold"
           style={{ color: "var(--text)" }}
         >
-          Help improve Azalea?
+          Share anonymous usage data?
         </h2>
         <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-          Share anonymous usage (app version, OS) and crash reports so we can fix bugs faster.
-          Never hostnames, emails, keys, or commands. You can change this anytime in Settings → Privacy.
+          A daily ping with app version and OS, plus crash reports. No hostnames, emails, keys, or
+          commands. Change this later in Settings → Privacy.
         </p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button variant="secondary" className="w-full sm:w-auto" onClick={() => onChoice(false)}>
-            No thanks
+            Do not share
           </Button>
           <Button className="w-full sm:w-auto" onClick={() => onChoice(true)}>
-            Allow
+            Share data
           </Button>
         </div>
       </div>

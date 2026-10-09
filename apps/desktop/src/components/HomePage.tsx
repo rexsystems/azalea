@@ -48,45 +48,10 @@ export function HomePage({
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
-    const messages =
-      h >= 5 && h < 12
-        ? [
-            "Good morning",
-            "Morning",
-            "Rise and shine",
-            "Fresh start",
-            "Coffee first?",
-          ]
-        : h >= 12 && h < 18
-          ? [
-              "Good afternoon",
-              "Hey there",
-              "Keep going",
-              "Afternoon focus",
-              "Back at it",
-            ]
-          : h >= 18 && h < 22
-            ? [
-                "Good evening",
-                "Evening, captain",
-                "Wrapping up?",
-                "Nice and calm",
-                "Still shipping?",
-              ]
-            : [
-                "Good night",
-                "Late session",
-                "Burning the midnight oil",
-                "Quiet hours",
-                "Night owl mode",
-              ];
-
-    const day = new Date().toDateString();
-    const bucket = h >= 5 && h < 12 ? "am" : h >= 12 && h < 18 ? "pm" : h >= 18 && h < 22 ? "eve" : "night";
-    let hash = 0;
-    const seed = `${day}:${bucket}`;
-    for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-    return messages[hash % messages.length];
+    if (h >= 5 && h < 12) return "Good morning";
+    if (h >= 12 && h < 18) return "Good afternoon";
+    if (h >= 18 && h < 22) return "Good evening";
+    return "Good night";
   }, []);
 
   const stats = [
@@ -98,7 +63,7 @@ export function HomePage({
   const actions = [
     {
       label: "New host",
-      description: "Add an SSH server",
+      description: "SSH host, user, and key",
       icon: Plus,
       onClick: onAddServer,
       primary: true,
@@ -107,7 +72,7 @@ export function HomePage({
       ? [
           {
             label: "Local terminal",
-            description: "Open a shell here",
+            description: "Shell on this machine",
             icon: SquareTerminal,
             onClick: onOpenLocalTerminal,
             primary: false,
@@ -116,14 +81,14 @@ export function HomePage({
       : []),
     {
       label: "Keychain",
-      description: "Manage identities",
+      description: "SSH keys on this device",
       icon: KeyRound,
       onClick: onOpenKeys,
       primary: false,
     },
     {
       label: "Settings",
-      description: "Theme, sync, backup",
+      description: "Theme, sync, and backup",
       icon: Settings,
       onClick: onOpenSettings,
       primary: false,
@@ -146,8 +111,8 @@ export function HomePage({
             </h2>
             <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
               {hosts.length === 0
-                ? "Add your first host to get started."
-                : "Pick up where you left off, or jump in with a quick action."}
+                ? "Add an SSH host to connect."
+                : "Recent hosts and shortcuts."}
             </p>
           </div>
         </div>
@@ -182,10 +147,10 @@ export function HomePage({
         >
           <div className="mb-4">
             <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>
-              Quick actions
+              Shortcuts
             </h3>
             <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-              Common stuff, one click away.
+              Hosts, keys, and settings.
             </p>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -237,7 +202,7 @@ export function HomePage({
                 Recent hosts
               </h3>
               <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-                Last updated on this device.
+                Sorted by last connection.
               </p>
             </div>
             {hosts.length > 0 && (
@@ -262,7 +227,7 @@ export function HomePage({
                 No hosts yet
               </p>
               <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-                Create one and it will show up here.
+                Use New host above, or open Hosts.
               </p>
               <button
                 type="button"

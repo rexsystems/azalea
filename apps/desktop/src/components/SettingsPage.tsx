@@ -276,7 +276,7 @@ export function SettingsPage({
             Settings
           </h2>
           <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
-            Manage appearance, sessions, sync, and backups
+            Appearance, terminal, sync, AI, and backups
           </p>
         </div>
 
@@ -321,11 +321,11 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="Appearance"
-                  description="Choose how Azalea looks across the app."
+                  description="Theme, icons, and optional custom CSS."
                 />
                 <SettingRow
                   label="Theme"
-                  description="Pick a color scheme for the whole UI."
+                  description="Color scheme for the whole UI."
                 >
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                     {themes.map((t) => {
@@ -390,7 +390,7 @@ export function SettingsPage({
 
                 <SettingRow
                   label="Icons"
-                  description="Switch the app icon pack. Pixel Icons is experimental."
+                  description="Hugeicons by default. Pixel Icons is experimental."
                 >
                   <div className="grid gap-3 sm:grid-cols-2">
                     {iconPacks.map((pack) => {
@@ -441,12 +441,12 @@ export function SettingsPage({
 
                 <SettingRow
                   label="Custom CSS"
-                  description="Inject your own CSS on top of the active theme. Override variables like --bg-base and --accent."
+                  description="Extra CSS on the active theme. You can override variables such as --bg-base and --accent."
                 >
                   <div className="grid gap-3">
                     <SettingToggle
                       label="Enable custom CSS"
-                      description="Uses the last applied CSS. Edit the box and click Apply CSS to save changes."
+                      description="Applies the CSS below. Edit, then Apply CSS to save."
                       checked={customCssEnabled}
                       onChange={(checked) => {
                         setCustomCssEnabled(checked);
@@ -514,11 +514,11 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="Connect experience"
-                  description="Control what you see when opening an SSH session."
+                  description="What you see while an SSH session starts."
                 />
                 <SettingRow
                   label="Session open"
-                  description="Animated connect screen or jump straight into the terminal."
+                  description="Animated connect screen, or go straight to the terminal."
                 >
                   <div className="grid gap-3">
                     {connectScreenOptions.map((opt) => {
@@ -562,13 +562,13 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="Terminal"
-                  description="Copy, paste, and display preferences for sessions."
+                  description="Clipboard and font size for sessions."
                 />
                 <SettingRow label="Clipboard">
                   <div className="space-y-2">
                     <SettingToggle
                       label="Select to copy"
-                      description="Copy selected text to clipboard automatically"
+                      description="Copies selected text to the clipboard."
                       checked={terminalSettings.selectToCopy}
                       onChange={(v) =>
                         onTerminalSettingsChange({ selectToCopy: v })
@@ -576,7 +576,7 @@ export function SettingsPage({
                     />
                     <SettingToggle
                       label="Right-click to paste"
-                      description="Paste from clipboard on right click"
+                      description="Pastes from the clipboard on right-click."
                       checked={terminalSettings.rightClickToPaste}
                       onChange={(v) =>
                         onTerminalSettingsChange({ rightClickToPaste: v })
@@ -636,7 +636,7 @@ export function SettingsPage({
               >
                 <PanelHeader
                   title="Import"
-                  description="Bring in keys and hosts from ~/.ssh, or restore from an Azalea backup / config file."
+                  description="Import from ~/.ssh, or restore an Azalea backup or config file."
                 />
                 <ImportSection
                   busy={backupBusy}
@@ -651,7 +651,7 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="Backup & restore"
-                  description="Export an unencrypted archive of hosts, keys, passwords, groups, and settings. Keep it somewhere safe."
+                  description="Exports hosts, keys, passwords, groups, and settings as an unencrypted archive. Store it somewhere safe."
                 />
                 <SettingRow label="Local backup">
                   <div className="space-y-2">
@@ -667,7 +667,7 @@ export function SettingsPage({
                       className="text-xs"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      To import a backup or OpenSSH files, use the Import tab.
+                      Import a backup or OpenSSH files from the Import tab.
                     </p>
                   </div>
                 </SettingRow>
@@ -678,11 +678,11 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="AI"
-                  description="Bring your own API keys. Prompts go to the provider you choose. Off by default."
+                  description="Your API keys, your provider. Off by default."
                 />
                 <SettingRow
                   label="Terminal AI"
-                  description="Ask and Agent modes in the active terminal session."
+                  description="Ask and Agent in the active terminal session."
                 >
                   <AiSettingsSection />
                 </SettingRow>
@@ -693,7 +693,7 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="Voice assistant"
-                  description="Local speech recognition and spoken replies. Disabled by default."
+                  description="Local speech recognition and spoken replies. Off by default."
                 />
                 <SettingRow label="Hey Azalea">
                   <VoiceSettingsSection />
@@ -705,13 +705,13 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="Privacy"
-                  description="Azalea asks once at startup whether to share anonymous usage and crash data. Change it anytime here."
+                  description="Asked once at startup. You can change these anytime."
                 />
                 <SettingRow label="Diagnostics">
                   <div className="space-y-2">
                     <SettingToggle
                       label="Share anonymous usage & crash reports"
-                      description="Daily install ping (active users) and crash reports to help fix bugs. Never includes hostnames, emails, keys, or commands."
+                      description="Daily install ping and crash reports. No hostnames, emails, keys, or commands."
                       checked={telemetryOn}
                       onChange={(on) => {
                         setTelemetryEnabled(on);
@@ -724,7 +724,7 @@ export function SettingsPage({
                   <div className="space-y-2">
                     <SettingToggle
                       label="Hide addresses on host cards"
-                      description="Show only the username on Home and Hosts cards. Hostname and IP stay available in Edit and connect flows."
+                      description="Home and Hosts show the username only. Hostname and IP stay in Edit and connect."
                       checked={hideHostAddresses}
                       onChange={(on) => {
                         setStoredHideHostAddresses(on);
@@ -743,7 +743,7 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="About"
-                  description="Version info and application updates."
+                  description="Version and updates."
                 />
                 <SettingRow label="Application">
                   <div
@@ -777,7 +777,7 @@ export function SettingsPage({
                 </SettingRow>
                 <SettingRow
                   label="Updates"
-                  description="Download and install the latest desktop release."
+                  description="Check for and install the latest desktop release."
                 >
                   <UpdateSection embedded />
                 </SettingRow>

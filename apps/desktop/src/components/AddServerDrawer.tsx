@@ -244,7 +244,7 @@ export function AddServerDrawer({
           label="Password"
           type="password"
           placeholder={isEdit ? "Leave blank to keep current" : "Optional"}
-          hint={isEdit ? undefined : "Optional - you can also use an SSH key"}
+          hint={isEdit ? undefined : "Optional; you can use an SSH key instead"}
           icon={<Lock size={15} />}
           value={values.password}
           onChange={(e) =>
@@ -265,7 +265,7 @@ export function AddServerDrawer({
               <KeyRound size={15} />
               SSH Key
             </span>
-            No SSH keys yet. You can save this host and pick a key when connecting.
+            No SSH keys yet. Save this host and pick a key when connecting.
           </div>
         ) : (
           <Select

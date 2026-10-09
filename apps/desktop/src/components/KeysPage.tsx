@@ -289,7 +289,7 @@ export function KeysPage({
             </h2>
             <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
               {keys.length === 0
-                ? "Generate, import, and install SSH identities"
+                ? "Generate, import, or install SSH keys"
                 : `${keys.length} key${keys.length === 1 ? "" : "s"}`}
             </p>
           </div>
@@ -310,7 +310,7 @@ export function KeysPage({
                     New key
                   </h3>
                   <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                    Create Ed25519/RSA/ECDSA keys, or import OpenSSH, PEM, SEC1, or PuTTY (.ppk) files.
+                    Create Ed25519, RSA, or ECDSA keys, or import OpenSSH, PEM, SEC1, or PuTTY (.ppk).
                   </p>
                 </div>
               </div>
@@ -429,7 +429,7 @@ export function KeysPage({
                     No keys yet
                   </p>
                   <p className="mt-1 max-w-sm text-sm" style={{ color: "var(--text-muted)" }}>
-                    Generate a new identity above, or import OpenSSH / PEM / SEC1 / PuTTY (.ppk).
+                    Generate a key above, or import OpenSSH, PEM, SEC1, or PuTTY (.ppk).
                   </p>
                 </div>
               ) : (
@@ -578,7 +578,7 @@ export function KeysPage({
       <ConfirmDialog
         open={Boolean(exportPrivateTarget)}
         title="Export private key?"
-        message={`This writes the private key for "${exportPrivateTarget?.name ?? "key"}" to disk unencrypted. Anyone with that file can access servers that trust it.`}
+        message={`Writes the private key for "${exportPrivateTarget?.name ?? "key"}" to disk unencrypted. Anyone with that file can reach servers that trust it.`}
         confirmLabel="Export private key"
         danger
         onConfirm={() => {
@@ -590,7 +590,7 @@ export function KeysPage({
       <SelectHostDialog
         open={Boolean(installKeyId)}
         title="Install public key on host"
-        message="Connects with the host's saved password or key, then appends this public key to ~/.ssh/authorized_keys if it isn't already there."
+        message="Connects with the host's saved password or key, then appends this public key to ~/.ssh/authorized_keys if it is not already there."
         hosts={hosts}
         busy={installBusy}
         result={installResult}

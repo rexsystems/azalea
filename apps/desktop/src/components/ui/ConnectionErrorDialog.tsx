@@ -52,7 +52,7 @@ export function ConnectionErrorDialog({
           </p>
           {canWake && (
             <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
-              Looks like the machine may be offline. You can send a Wake-on-LAN packet if WoL is
+              The machine may be offline. Send a Wake-on-LAN packet if WoL is
               enabled on the NIC.
             </p>
           )}

@@ -57,10 +57,10 @@ export function PostConnectSyncDialog({
 
   const subtitle = (() => {
     if (mode === "setup" && recoveryKey) {
-      return "This is the only way to recover the vault if you forget the master password. It is shown once.";
+      return "This is the only way to recover the vault if you forget the master password. Shown once.";
     }
     if (mode === "setup") {
-      return `Signed in${email ? ` as ${email}` : ""} on ${instanceLabel}. This encrypts hosts and keys before they leave this device.`;
+      return `Signed in${email ? ` as ${email}` : ""} on ${instanceLabel}. Hosts and keys are encrypted before they leave this device.`;
     }
     return `Signed in${email ? ` as ${email}` : ""}. This server already has a vault. Unlock it, then pull or push.`;
   })();

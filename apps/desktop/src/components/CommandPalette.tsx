@@ -85,7 +85,7 @@ export function CommandPalette({
       {
         id: "nav-home",
         label: "Home",
-        description: "Overview and quick actions",
+        description: "Home screen",
         group: "Navigate",
         icon: Home,
         keywords: "dashboard start",
@@ -93,7 +93,7 @@ export function CommandPalette({
       {
         id: "nav-hosts",
         label: "Hosts",
-        description: "Browse and connect to servers",
+        description: "SSH hosts list",
         group: "Navigate",
         icon: Server,
         keywords: "servers ssh",
@@ -101,7 +101,7 @@ export function CommandPalette({
       {
         id: "nav-keys",
         label: "Keychain",
-        description: "SSH keys and identities",
+        description: "SSH keys on this device",
         group: "Navigate",
         icon: KeyRound,
         keywords: "keys ssh identity",
@@ -109,7 +109,7 @@ export function CommandPalette({
       {
         id: "nav-settings",
         label: "Settings",
-        description: "Theme, terminal, sync, backup",
+        description: "Theme, sync, AI, backup",
         group: "Navigate",
         icon: Settings,
         keywords: "preferences account",

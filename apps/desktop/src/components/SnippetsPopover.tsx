@@ -114,7 +114,7 @@ export function SnippetsPopover({ onRun, onClose }: SnippetsPopoverProps) {
       <div className="max-h-64 overflow-y-auto p-1.5">
         {snippets.length === 0 && !adding && (
           <div className="px-2 py-2 text-xs" style={{ color: "var(--text-muted)" }}>
-            No snippets yet. Click + to add one.
+            No snippets yet. Use + to add one.
           </div>
         )}
         {snippets.map((snippet) => (

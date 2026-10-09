@@ -595,14 +595,14 @@ export function AccountSwitcher({
                   <ChoiceRow
                     icon={<Globe size={15} />}
                     title="Azalea Cloud"
-                    description="Hosted sync"
+                    description="Hosted sync from Rexsystems"
                     disabled={busy}
                     onClick={() => void addSimpleAccount("cloud")}
                   />
                   <ChoiceRow
                     icon={<Server size={15} />}
                     title="Self-hosted"
-                    description="Your own server"
+                    description="Your own azalea-server"
                     disabled={busy}
                     onClick={() => {
                       setError(null);
@@ -613,7 +613,7 @@ export function AccountSwitcher({
                   <ChoiceRow
                     icon={<SquareTerminal size={15} />}
                     title="Offline"
-                    description="Local only"
+                    description="This device only"
                     disabled={busy}
                     onClick={() => void addSimpleAccount("offline")}
                   />

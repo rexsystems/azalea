@@ -22,17 +22,18 @@ export function AiConsentDialog({ onChoice }: AiConsentDialogProps) {
           className="text-lg font-semibold"
           style={{ color: "var(--text)" }}
         >
-          Enable AI?
+          Use terminal AI?
         </h2>
         <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-          If you choose No, AI stays off and will not appear. You can turn it on later in Settings.
+          Off keeps the AI panel and tools hidden. Turn it on later in Settings → AI and add your
+          own provider key.
         </p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button variant="secondary" className="w-full sm:w-auto" onClick={() => onChoice(false)}>
-            No
+            Keep off
           </Button>
           <Button className="w-full sm:w-auto" onClick={() => onChoice(true)}>
-            Enable
+            Turn on AI
           </Button>
         </div>
       </div>

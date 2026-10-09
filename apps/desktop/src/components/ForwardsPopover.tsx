@@ -246,7 +246,7 @@ export function ForwardsPopover({
       <div className="max-h-64 overflow-y-auto p-1.5">
         {forwards.length === 0 && !adding && (
           <div className="px-2 py-2 text-xs" style={{ color: "var(--text-muted)" }}>
-            No forwards for this host. Click + to add one.
+            No forwards for this host. Use + to add one.
           </div>
         )}
         {forwards.map((forward) => {

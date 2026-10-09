@@ -287,7 +287,7 @@ export function HostsPage({
             </h2>
             <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
               {hosts.length === 0
-                ? "Connect to servers, organize groups, and open shells"
+                ? "Hosts, groups, and local sessions"
                 : `${hosts.length} host${hosts.length === 1 ? "" : "s"}${
                     groups.length > 0
                       ? ` · ${groups.length} group${groups.length === 1 ? "" : "s"}`
