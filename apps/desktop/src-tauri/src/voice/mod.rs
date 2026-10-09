@@ -1,4 +1,5 @@
 mod intent;
+mod tts;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use intent::Intent;
@@ -26,9 +27,10 @@ const MODEL_URL: &str =
 const MODEL_HASH: &str = "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898";
 const MODEL_BYTES: u64 = 59_707_625;
 const MODEL_FILE: &str = "ggml-base-q5_1.bin";
-const VOCABULARY: &str = "Hey Azalea. Voice commands: wake up server, open Azalea, status.";
+const VOCABULARY: &str =
+    "Hey Azalea. Voice commands: wake up server, open Azalea, status, ask ai.";
 const VOCABULARY_RO: &str =
-    "Hei Azalea. Comenzi vocale: pornește serverul, deschide Azalea, status.";
+    "Hei Azalea. Comenzi vocale: pornește serverul, deschide Azalea, status, întreabă.";
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -62,6 +64,8 @@ pub struct Status {
     message: String,
     model_ready: bool,
     download_percent: u8,
+    tts_ready: bool,
+    tts_download_percent: u8,
     speech_available: bool,
     tray_available: bool,
     last_command: Option<String>,
@@ -96,13 +100,16 @@ impl VoiceAssistant {
             .and_then(|data| serde_json::from_slice::<Preferences>(&data).ok())
             .unwrap_or_default();
         let ready = valid_model(&path.join(MODEL_FILE));
+        let tts_ready = tts::any_tts_ready(&path);
         let status = Status {
             preferences: preferences.clone(),
             phase: "off".into(),
             message: "Voice assistant is disabled.".into(),
             model_ready: ready,
             download_percent: 0,
-            speech_available: speech_command().is_some(),
+            tts_ready,
+            tts_download_percent: 0,
+            speech_available: speech_command().is_some() || tts_ready,
             tray_available: false,
             last_command: None,
             last_reply: None,
@@ -123,6 +130,8 @@ impl VoiceAssistant {
     pub fn snapshot(&self) -> Status {
         let mut status = self.0.status.lock().clone();
         status.preferences = self.0.preferences.lock().clone();
+        status.tts_ready = tts::any_tts_ready(&self.0.path);
+        status.speech_available = speech_command().is_some() || status.tts_ready;
         status
     }
 
@@ -332,13 +341,16 @@ impl VoiceAssistant {
                     if let Some(intent) = intent::parse(&text, armed) {
                         self.0.status.lock().last_command = Some(text.chars().take(256).collect());
                         let arm = intent == Intent::Arm;
+                        if matches!(intent, Intent::AskAi(_)) {
+                            self.publish(app, "thinking", "Asking AI…");
+                        }
                         let reply =
                             execute(app, intent, preferences.allow_wake_on_lan, &account_id);
                         self.0.status.lock().last_reply = Some(reply.clone());
                         if preferences.voice_replies {
                             self.publish(app, "speaking", &reply);
                             self.0.status.lock().reply_error = self
-                                .speak(&reply, stop)
+                                .speak(&reply, &preferences.language, stop)
                                 .err()
                                 .map(|error| error.to_string());
                         }
@@ -362,7 +374,7 @@ impl VoiceAssistant {
         Ok(())
     }
 
-    fn speak(&self, text: &str, stop: &AtomicBool) -> anyhow::Result<()> {
+    fn speak(&self, text: &str, language: &str, stop: &AtomicBool) -> anyhow::Result<()> {
         let text: String = text.chars().take(512).collect();
         if self.0.speaking.swap(true, Ordering::AcqRel) {
             anyhow::bail!("A voice reply is already playing.");
@@ -374,8 +386,21 @@ impl VoiceAssistant {
             }
         }
         let _speaking = Speaking(&self.0.speaking);
+        if tts::any_tts_ready(&self.0.path) {
+            match tts::speak_piper(&self.0.path, language, &text, stop) {
+                Ok(()) => {
+                    thread::sleep(Duration::from_millis(250));
+                    return Ok(());
+                }
+                Err(error) => {
+                    eprintln!("Piper TTS failed, falling back to system speech: {error}");
+                }
+            }
+        }
         let mut command = speech_command().ok_or_else(|| {
-            anyhow::anyhow!("Install espeak-ng to enable voice replies on Linux.")
+            anyhow::anyhow!(
+                "Download Piper in Voice settings, or install espeak-ng for system speech on Linux."
+            )
         })?;
         command
             .stdin(Stdio::piped())
@@ -566,7 +591,12 @@ fn execute(app: &tauri::AppHandle, intent: Intent, allow_wake: bool, account_id:
         }
         Intent::Status => "I'm here and listening locally.".into(),
         Intent::Help | Intent::Unknown => {
-            "I can wake a saved server, open Azalea, or tell you my status.".into()
+            "I can wake a saved server, open Azalea, tell you my status, or ask AI a question."
+                .into()
+        }
+        Intent::AskAi(question) => {
+            show_main(app);
+            crate::commands::ai::run_voice_chat(app, &question)
         }
         Intent::Wake(_) if !allow_wake => {
             "Wake-on-LAN voice commands are disabled in settings.".into()
@@ -728,15 +758,99 @@ pub async fn voice_restart(
 pub async fn voice_test_reply(voice: tauri::State<'_, VoiceAssistant>) -> Result<(), String> {
     let assistant = voice.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let language = assistant.0.preferences.lock().language.clone();
         assistant
             .speak(
                 "Azalea is ready. Voice replies are working.",
+                &language,
                 &AtomicBool::new(false),
             )
             .map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn voice_download_tts(
+    app: tauri::AppHandle,
+    voice: tauri::State<'_, VoiceAssistant>,
+) -> Result<Status, String> {
+    let assistant = voice.inner().clone();
+    if assistant.0.downloading.swap(true, Ordering::AcqRel) {
+        return Err("A model download is already in progress.".into());
+    }
+    struct Download(VoiceAssistant);
+    impl Drop for Download {
+        fn drop(&mut self) {
+            self.0 .0.downloading.store(false, Ordering::Release);
+        }
+    }
+    let _download = Download(assistant.clone());
+    assistant.0.status.lock().tts_download_percent = 0;
+    assistant.publish(
+        &app,
+        "downloading",
+        "Downloading Piper voice and runtime (~90 MB)…",
+    );
+    let language = assistant.0.preferences.lock().language.clone();
+    let spec = if language == "ro" {
+        &tts::RO_MIHAI
+    } else {
+        &tts::EN_LESSAC
+    };
+    let path = assistant.0.path.clone();
+    let result: anyhow::Result<()> = async {
+        tts::download_piper_runtime(&path, |percent| {
+            assistant.0.status.lock().tts_download_percent = percent.saturating_div(2);
+            let _ = app.emit("azalea-voice-status", assistant.snapshot());
+        })
+        .await?;
+        tts::download_voice_files(&path, spec, |percent| {
+            let mapped = 50 + percent.saturating_div(2);
+            assistant.0.status.lock().tts_download_percent = mapped;
+            let _ = app.emit("azalea-voice-status", assistant.snapshot());
+        })
+        .await?;
+        // Also ensure EN exists as fallback when downloading RO.
+        if spec.id == tts::RO_MIHAI.id && !tts::voice_ready(&path, &tts::EN_LESSAC) {
+            tts::download_voice_files(&path, &tts::EN_LESSAC, |_| {}).await?;
+        }
+        Ok(())
+    }
+    .await;
+    match result {
+        Ok(()) => {
+            let ready = tts::any_tts_ready(&assistant.0.path);
+            {
+                let mut status = assistant.0.status.lock();
+                status.tts_ready = ready;
+                status.tts_download_percent = 100;
+                status.speech_available = speech_command().is_some() || ready;
+            }
+            assistant.publish(
+                &app,
+                if assistant.0.preferences.lock().enabled {
+                    "listening"
+                } else {
+                    "off"
+                },
+                if ready {
+                    "Piper voice is ready."
+                } else {
+                    "Piper download finished, but files are incomplete."
+                },
+            );
+            if assistant.0.preferences.lock().enabled {
+                assistant.restart(app.clone());
+            }
+            Ok(assistant.snapshot())
+        }
+        Err(error) => {
+            assistant.publish(&app, "error", &error.to_string());
+            Err(error.to_string())
+        }
+    }
 }
 
 #[tauri::command]

@@ -1,5 +1,7 @@
 /** Opt-in terminal AI (BYOK). Off until the user accepts the first-run prompt. */
 
+import { invoke } from "@tauri-apps/api/core";
+
 export type AiMode = "ask" | "agent";
 export type AiAccess = "confirm" | "full";
 export type AiDialect = "openai" | "anthropic";
@@ -323,6 +325,7 @@ export function setAiEnabled(enabled: boolean) {
   window.dispatchEvent(
     new CustomEvent("azalea-ai-enabled", { detail: enabled }),
   );
+  syncVoiceAiConfig();
 }
 
 export function getAiPrefs(): AiPrefs {
@@ -388,6 +391,28 @@ export function setAiPrefs(patch: Partial<AiPrefs>) {
   }
   localStorage.setItem(PREFS_KEY, JSON.stringify(next));
   window.dispatchEvent(new CustomEvent("azalea-ai-prefs", { detail: next }));
+  syncVoiceAiConfig();
+}
+
+/** Push resolved AI prefs to the desktop voice worker. No-op on mobile. */
+export function syncVoiceAiConfig() {
+  if (typeof window === "undefined") return;
+  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "")) return;
+  const prefs = getAiPrefs();
+  const provider = getProvider(prefs.providerId);
+  void invoke("ai_sync_voice_config", {
+    config: {
+      enabled: isAiEnabled(),
+      providerId: prefs.providerId,
+      dialect: provider.dialect,
+      baseUrl: resolveProviderBaseUrl(
+        prefs.providerId,
+        prefs.region,
+        prefs.customBaseUrl,
+      ),
+      model: prefs.model,
+    },
+  }).catch(() => undefined);
 }
 
 function sanitizeCustomModels(value: unknown): AiPrefs["customModels"] {

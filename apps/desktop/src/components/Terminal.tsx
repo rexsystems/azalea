@@ -27,9 +27,23 @@ interface TerminalProps {
   active: boolean;
   settings: TerminalSettings;
   bootstrapLocal?: boolean;
+  /** Soft-keyboard helper keys for touch (Ctrl+C, Esc, arrows, …). */
+  showMobileKeys?: boolean;
   onResize: (sessionId: string, cols: number, rows: number) => void;
   onStatusChange?: (status: string, error?: string) => void;
 }
+
+const MOBILE_KEY_BUTTONS: { label: string; data: string; title: string }[] = [
+  { label: "Ctrl+C", data: "\x03", title: "Interrupt (Ctrl+C)" },
+  { label: "Ctrl+D", data: "\x04", title: "EOF (Ctrl+D)" },
+  { label: "Ctrl+Z", data: "\x1a", title: "Suspend (Ctrl+Z)" },
+  { label: "Esc", data: "\x1b", title: "Escape" },
+  { label: "Tab", data: "\t", title: "Tab" },
+  { label: "↑", data: "\x1b[A", title: "Up" },
+  { label: "↓", data: "\x1b[B", title: "Down" },
+  { label: "←", data: "\x1b[D", title: "Left" },
+  { label: "→", data: "\x1b[C", title: "Right" },
+];
 
 /**
  * Only allow safe URL schemes to escape the terminal into the user's browser.
@@ -601,6 +615,7 @@ export function TerminalView({
   active,
   settings,
   bootstrapLocal = false,
+  showMobileKeys = false,
   onStatusChange,
 }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -863,65 +878,111 @@ export function TerminalView({
     termRef.current?.focus();
   };
 
+  const sendRaw = (data: string) => {
+    void api
+      .writeTerminal(sessionId, encodeBytes(new TextEncoder().encode(data)))
+      .catch(() => undefined);
+    termRef.current?.focus();
+  };
+
   return (
-    <div className={`relative h-full w-full ${active ? "" : "hidden"}`}>
-      {searchOpen && (
+    <div
+      className={`relative flex h-full w-full flex-col ${active ? "" : "hidden"}`}
+    >
+      <div className="relative min-h-0 min-w-0 flex-1">
+        {searchOpen && (
+          <div
+            className="absolute right-3 top-2 z-10 flex items-center gap-1 rounded-lg border px-2 py-1.5 shadow-lg"
+            style={{
+              background: "var(--bg-panel)",
+              borderColor: "var(--border-subtle)",
+            }}
+          >
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                runSearch(e.target.value, "next", true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter")
+                  runSearch(searchQuery, e.shiftKey ? "previous" : "next");
+                if (e.key === "Escape") closeSearch();
+              }}
+              placeholder="Search..."
+              className="w-44 bg-transparent text-sm outline-none"
+              style={{ color: "var(--text)" }}
+            />
+            <button
+              onClick={() => runSearch(searchQuery, "previous")}
+              className="hover-subtle rounded p-1"
+              style={{ color: "var(--text-muted)" }}
+              title="Previous (Shift+Enter)"
+            >
+              <ChevronUp size={14} />
+            </button>
+            <button
+              onClick={() => runSearch(searchQuery, "next")}
+              className="hover-subtle rounded p-1"
+              style={{ color: "var(--text-muted)" }}
+              title="Next (Enter)"
+            >
+              <ChevronDown size={14} />
+            </button>
+            <button
+              onClick={closeSearch}
+              className="hover-subtle rounded p-1"
+              style={{ color: "var(--text-muted)" }}
+              title="Close (Esc)"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <div
-          className="absolute right-3 top-2 z-10 flex items-center gap-1 rounded-lg border px-2 py-1.5 shadow-lg"
+          ref={containerRef}
+          className="flex h-full w-full items-start overflow-hidden"
+          style={{ background: "var(--terminal-bg)" }}
+          onContextMenu={(e) => {
+            if (settings.rightClickToPaste) e.preventDefault();
+          }}
+        />
+      </div>
+      {showMobileKeys && (
+        <div
+          className="terminal-mobile-keys shrink-0 overflow-x-auto border-t"
           style={{
             background: "var(--bg-panel)",
             borderColor: "var(--border-subtle)",
+            paddingBottom: "max(6px, env(safe-area-inset-bottom))",
           }}
+          role="toolbar"
+          aria-label="Terminal keys"
         >
-          <input
-            ref={searchInputRef}
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              runSearch(e.target.value, "next", true);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") runSearch(searchQuery, e.shiftKey ? "previous" : "next");
-              if (e.key === "Escape") closeSearch();
-            }}
-            placeholder="Search..."
-            className="w-44 bg-transparent text-sm outline-none"
-            style={{ color: "var(--text)" }}
-          />
-          <button
-            onClick={() => runSearch(searchQuery, "previous")}
-            className="hover-subtle rounded p-1"
-            style={{ color: "var(--text-muted)" }}
-            title="Previous (Shift+Enter)"
-          >
-            <ChevronUp size={14} />
-          </button>
-          <button
-            onClick={() => runSearch(searchQuery, "next")}
-            className="hover-subtle rounded p-1"
-            style={{ color: "var(--text-muted)" }}
-            title="Next (Enter)"
-          >
-            <ChevronDown size={14} />
-          </button>
-          <button
-            onClick={closeSearch}
-            className="hover-subtle rounded p-1"
-            style={{ color: "var(--text-muted)" }}
-            title="Close (Esc)"
-          >
-            <X size={14} />
-          </button>
+          <div className="flex min-w-min gap-2 px-2 py-2">
+            {MOBILE_KEY_BUTTONS.map((key) => (
+              <button
+                key={key.label}
+                type="button"
+                title={key.title}
+                aria-label={key.title}
+                className="terminal-mobile-key shrink-0 rounded border px-3 text-xs font-medium"
+                style={{
+                  minHeight: 44,
+                  minWidth: 44,
+                  color: "var(--text)",
+                  background: "var(--bg)",
+                  borderColor: "var(--border-subtle)",
+                }}
+                onClick={() => sendRaw(key.data)}
+              >
+                {key.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
-      <div
-        ref={containerRef}
-        className="flex h-full w-full items-start overflow-hidden"
-        style={{ background: "var(--terminal-bg)" }}
-        onContextMenu={(e) => {
-          if (settings.rightClickToPaste) e.preventDefault();
-        }}
-      />
     </div>
   );
 }

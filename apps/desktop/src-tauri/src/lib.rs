@@ -129,6 +129,7 @@ pub fn run() {
             app.manage(init_local_terminal_manager());
             app.manage(sync_state);
             app.manage(ai::AiCancelMap::default());
+            app.manage(ai::SharedVoiceAiConfig::default());
             app.manage(sync_commands::BrowserLoginState::default());
             #[cfg(desktop)]
             {
@@ -144,16 +145,22 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             #[cfg(desktop)]
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main"
-                    && window
-                        .app_handle()
-                        .try_state::<voice::VoiceAssistant>()
-                        .is_some_and(|voice| voice.keep_in_tray())
-                {
-                    api.prevent_close();
-                    let _ = window.hide();
+            {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    if window.label() == "main"
+                        && window
+                            .app_handle()
+                            .try_state::<voice::VoiceAssistant>()
+                            .is_some_and(|voice| voice.keep_in_tray())
+                    {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
                 }
+            }
+            #[cfg(mobile)]
+            {
+                let _ = (window, event);
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -168,6 +175,8 @@ pub fn run() {
             voice::voice_restart,
             #[cfg(desktop)]
             voice::voice_test_reply,
+            #[cfg(desktop)]
+            voice::voice_download_tts,
             hosts::create_host,
             hosts::update_host,
             hosts::host_has_password,
@@ -254,6 +263,7 @@ pub fn run() {
             ai::ai_chat_cancel,
             ai::ai_server_config,
             ai::ai_web_search,
+            ai::ai_sync_voice_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

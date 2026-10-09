@@ -8,7 +8,7 @@ use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::ipc::Channel;
-use tauri::State;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::keys::{
     ai_api_key_present as key_present, delete_ai_api_key as key_delete, get_ai_api_key,
@@ -35,6 +35,124 @@ pub struct AiChatInput {
     pub base_url: String,
     pub model: String,
     pub messages: Vec<AiChatMessage>,
+}
+
+/// Frontend-pushed AI prefs for the desktop voice worker (localStorage lives in JS).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceAiSnapshot {
+    pub enabled: bool,
+    pub provider_id: String,
+    pub dialect: String,
+    pub base_url: String,
+    pub model: String,
+}
+
+#[derive(Default)]
+pub struct SharedVoiceAiConfig(pub Mutex<VoiceAiSnapshot>);
+
+#[tauri::command]
+pub fn ai_sync_voice_config(
+    config: VoiceAiSnapshot,
+    state: State<'_, SharedVoiceAiConfig>,
+) -> Result<(), String> {
+    let mut guard = state
+        .0
+        .lock()
+        .map_err(|_| "Voice AI config lock poisoned.".to_string())?;
+    *guard = config;
+    Ok(())
+}
+
+/// Blocking helper for the voice recognition thread. Speaks through the caller.
+pub fn run_voice_chat(app: &AppHandle, question: &str) -> String {
+    let question = question.trim();
+    if question.is_empty() {
+        return "What would you like to ask?".into();
+    }
+    let snapshot = match app.try_state::<SharedVoiceAiConfig>() {
+        Some(state) => state
+            .0
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default(),
+        None => VoiceAiSnapshot::default(),
+    };
+    if !snapshot.enabled {
+        let _ = app.emit("azalea-open-settings-ai", ());
+        return "AI is off. Open Settings, enable AI, and save a provider key.".into();
+    }
+    if snapshot.provider_id.trim().is_empty() || snapshot.model.trim().is_empty() {
+        let _ = app.emit("azalea-open-settings-ai", ());
+        return "Choose a provider and model in Settings → AI first.".into();
+    }
+    let question = question.chars().take(400).collect::<String>();
+    let Some(sync_state) = app.try_state::<SharedSyncState>() else {
+        return "AI is unavailable right now.".into();
+    };
+    let Some(registry_state) = app.try_state::<SharedAccountRegistry>() else {
+        return "AI is unavailable right now.".into();
+    };
+    let sync = sync_state.inner().clone();
+    let registry = registry_state.inner().clone();
+    let mut input = AiChatInput {
+        provider_id: snapshot.provider_id.clone(),
+        dialect: snapshot.dialect.clone(),
+        base_url: snapshot.base_url.clone(),
+        model: snapshot.model.clone(),
+        messages: vec![
+            AiChatMessage {
+                role: "system".into(),
+                content: "You are Azalea's spoken assistant. Answer in at most two short sentences. No markdown, lists, or code fences. Plain speech only.".into(),
+            },
+            AiChatMessage {
+                role: "user".into(),
+                content: question,
+            },
+        ],
+    };
+    let result = tauri::async_runtime::block_on(async {
+        let api_key = chat_credentials(&mut input, &sync, &registry).await?;
+        let base = normalize_base_url(&input.base_url);
+        validate_chat(&base, &input)?;
+        let dialect = input.dialect.to_lowercase();
+        let answer = match dialect.as_str() {
+            "anthropic" => {
+                chat_anthropic(
+                    &base,
+                    &api_key,
+                    &input.model,
+                    &input.messages,
+                    input.provider_id == "selfhost_server",
+                )
+                .await?
+            }
+            _ => chat_openai(&base, &api_key, &input.model, &input.messages).await?,
+        };
+        Ok::<String, String>(answer.content)
+    });
+    match result {
+        Ok(text) => {
+            let cleaned = text
+                .replace("**", "")
+                .replace('`', "")
+                .replace('#', "")
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ");
+            if cleaned.is_empty() {
+                "I did not get a useful answer.".into()
+            } else {
+                cleaned.chars().take(400).collect()
+            }
+        }
+        Err(error) => {
+            if error.contains("Settings → AI") || error.contains("No API key") {
+                let _ = app.emit("azalea-open-settings-ai", ());
+            }
+            error
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Clone)]

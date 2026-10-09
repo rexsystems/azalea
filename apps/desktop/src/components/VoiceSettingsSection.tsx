@@ -6,6 +6,14 @@ import { SettingToggle } from "./ui/SettingToggle";
 import { Select } from "./ui/Select";
 import { isMobileRuntime } from "../hooks/useIsMobile";
 
+const ACTIVE_PHASES = new Set([
+  "listening",
+  "recognizing",
+  "thinking",
+  "speaking",
+  "starting",
+]);
+
 export function VoiceSettingsSection() {
   const [status, setStatus] = useState<voice.VoiceStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,6 +69,7 @@ export function VoiceSettingsSection() {
       </p>
     );
   const controlsDisabled = busy || status.phase === "downloading";
+  const statusActive = ACTIVE_PHASES.has(status.phase);
   return (
     <div className="space-y-4">
       {(error || status.replyError) && (
@@ -68,16 +77,34 @@ export function VoiceSettingsSection() {
           {error ?? status.replyError}
         </p>
       )}
-      <p
-        className="text-sm"
-        role="status"
-        style={{
-          color:
-            status.phase === "error" ? "var(--danger)" : "var(--text-muted)",
-        }}
-      >
-        {status.message}
-      </p>
+      <div className="flex items-center gap-2">
+        <span
+          className={`voice-status-dot${statusActive ? " is-active" : ""}`}
+          aria-hidden
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: 999,
+            background:
+              status.phase === "error"
+                ? "var(--danger)"
+                : statusActive
+                  ? "var(--text)"
+                  : "var(--text-muted)",
+            opacity: statusActive ? 1 : 0.45,
+          }}
+        />
+        <p
+          className="text-sm"
+          role="status"
+          style={{
+            color:
+              status.phase === "error" ? "var(--danger)" : "var(--text-muted)",
+          }}
+        >
+          {status.message}
+        </p>
+      </div>
       {!status.modelReady && (
         <div className="space-y-2">
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
@@ -90,9 +117,27 @@ export function VoiceSettingsSection() {
               void run(async () => setStatus(await voice.downloadVoiceModel()))
             }
           >
-            {status.phase === "downloading"
-              ? `Downloading ${status.downloadPercent}%…`
+            {status.phase === "downloading" && status.downloadPercent > 0
+              ? `Downloading speech ${status.downloadPercent}%…`
               : "Download speech model"}
+          </Button>
+        </div>
+      )}
+      {!status.ttsReady && (
+        <div className="space-y-2">
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            Download Piper for clearer spoken replies (~90 MB with runtime).
+            System speech remains the fallback.
+          </p>
+          <Button
+            disabled={controlsDisabled}
+            onClick={() =>
+              void run(async () => setStatus(await voice.downloadVoiceTts()))
+            }
+          >
+            {status.phase === "downloading" && status.ttsDownloadPercent > 0
+              ? `Downloading Piper ${status.ttsDownloadPercent}%…`
+              : "Download Piper voice"}
           </Button>
         </div>
       )}
@@ -132,7 +177,7 @@ export function VoiceSettingsSection() {
         <SettingToggle
           disabled={controlsDisabled}
           label="Voice replies"
-          description="Speak command results using your system's speech output."
+          description="Speak results with Piper when downloaded, otherwise system speech."
           checked={status.preferences.voiceReplies}
           onChange={(voiceReplies) => save({ voiceReplies })}
         />
@@ -179,8 +224,8 @@ export function VoiceSettingsSection() {
       )}
       {!status.speechAvailable && (
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Install espeak-ng for Linux voice replies. Recognition and Wake-on-LAN
-          remain available.
+          Download Piper for voice replies, or install espeak-ng on Linux.
+          Recognition and Wake-on-LAN remain available.
         </p>
       )}
       <div className="flex flex-wrap gap-2">
@@ -205,10 +250,7 @@ export function VoiceSettingsSection() {
         <p>“Hey Azalea, wake up server [saved host name]”</p>
         <p>“Hei Azalea, pornește serverul [numele salvat]”</p>
         <p>“Hey Azalea, open Azalea” · “Hey Azalea, status”</p>
-        <p>
-          These built-in commands do not run terminal commands or use a cloud AI
-          provider.
-        </p>
+        <p>“Hey Azalea, ask ai [question]” (uses Settings → AI when configured)</p>
       </div>
       {status.lastCommand && (
         <div

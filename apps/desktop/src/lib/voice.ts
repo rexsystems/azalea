@@ -15,6 +15,8 @@ export interface VoiceStatus {
   message: string;
   modelReady: boolean;
   downloadPercent: number;
+  ttsReady: boolean;
+  ttsDownloadPercent: number;
   speechAvailable: boolean;
   trayAvailable: boolean;
   lastCommand: string | null;
@@ -28,5 +30,7 @@ export const saveVoicePreferences = (preferences: VoicePreferences) =>
   invoke<VoiceStatus>("voice_set_preferences", { preferences });
 export const downloadVoiceModel = () =>
   invoke<VoiceStatus>("voice_download_model");
+export const downloadVoiceTts = () =>
+  invoke<VoiceStatus>("voice_download_tts");
 export const restartVoice = () => invoke<VoiceStatus>("voice_restart");
 export const testVoiceReply = () => invoke<void>("voice_test_reply");

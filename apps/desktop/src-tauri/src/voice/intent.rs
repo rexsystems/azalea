@@ -5,6 +5,8 @@ pub enum Intent {
     Status,
     Help,
     Wake(String),
+    /// Spoken question for the configured AI provider. Prefix-gated only.
+    AskAi(String),
     Unknown,
 }
 
@@ -68,6 +70,25 @@ pub fn parse(text: &str, armed: bool) -> Option<Intent> {
         return Some(Intent::Help);
     }
     for prefix in [
+        "ask ai",
+        "ask",
+        "question",
+        "intreaba ai",
+        "intreaba",
+        "intrebare",
+    ] {
+        if command == prefix {
+            return Some(Intent::AskAi(String::new()));
+        }
+        if let Some(question) = command.strip_prefix(&format!("{prefix} ")) {
+            let question = question.trim();
+            if !question.is_empty() {
+                return Some(Intent::AskAi(question.to_owned()));
+            }
+            return Some(Intent::AskAi(String::new()));
+        }
+    }
+    for prefix in [
         "wake up server",
         "wake server",
         "start server",
@@ -105,6 +126,14 @@ mod tests {
             Some(Intent::Unknown)
         );
         assert_eq!(parse("hey azalea run rm -rf", false), Some(Intent::Unknown));
+        assert_eq!(
+            parse("Hey Azalea ask ai what is uptime", false),
+            Some(Intent::AskAi("what is uptime".into()))
+        );
+        assert_eq!(
+            parse("Hei Azalea intreaba cat e ora", false),
+            Some(Intent::AskAi("cat e ora".into()))
+        );
         assert_eq!(
             parse("wake server alpha", true),
             Some(Intent::Wake("alpha".into()))

@@ -36,7 +36,13 @@ import {
   maybeTelemetryPing,
   setTelemetryEnabled,
 } from "./lib/telemetry";
-import { applyAiSettings, getAiAsked, isAiEnabled, setAiEnabled } from "./lib/ai";
+import {
+  applyAiSettings,
+  getAiAsked,
+  isAiEnabled,
+  setAiEnabled,
+  syncVoiceAiConfig,
+} from "./lib/ai";
 import { AddServerDrawer } from "./components/AddServerDrawer";
 import { AutoSyncPrompt } from "./components/AutoSyncPrompt";
 import { PostConnectSyncDialog, type PostConnectMode } from "./components/PostConnectSyncDialog";
@@ -187,6 +193,7 @@ function App() {
   const [wakeBusy, setWakeBusy] = useState(false);
   const [focusSettingsSync, setFocusSettingsSync] = useState(false);
   const [focusSettingsImport, setFocusSettingsImport] = useState(false);
+  const [focusSettingsAi, setFocusSettingsAi] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [keyPickerHost, setKeyPickerHost] = useState<Host | null>(null);
   const keyPickerResolver = useRef<((keyId: string | null) => void) | null>(null);
@@ -235,6 +242,26 @@ function App() {
         );
       }
     });
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (isMobile) return;
+    syncVoiceAiConfig();
+  }, [isMobile, aiEnabled]);
+
+  useEffect(() => {
+    if (isMobile) return;
+    let cancelled = false;
+    const sub = listen("azalea-open-settings-ai", () => {
+      if (cancelled) return;
+      setViewingTerminal(false);
+      setNavPage("settings");
+      setFocusSettingsAi(true);
+    });
+    return () => {
+      cancelled = true;
+      void sub.then((remove) => remove());
+    };
   }, [isMobile]);
 
   useEffect(() => {
@@ -2119,6 +2146,8 @@ function App() {
             onFocusSyncHandled={() => setFocusSettingsSync(false)}
             focusImport={focusSettingsImport}
             onFocusImportHandled={() => setFocusSettingsImport(false)}
+            focusAi={focusSettingsAi}
+            onFocusAiHandled={() => setFocusSettingsAi(false)}
           />
         );
       default:
@@ -2229,6 +2258,7 @@ function App() {
                     sessionId={tab.id}
                     settings={terminalSettings}
                     bootstrapLocal={isLocalConnecting}
+                    showMobileKeys={isMobile && viewingTerminal && isActive}
                     active={
                       viewingTerminal &&
                       (isActive || isSplitPane) &&

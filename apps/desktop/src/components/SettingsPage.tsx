@@ -34,6 +34,7 @@ import { AiSettingsSection } from "./AiSettingsSection";
 import { VoiceSettingsSection } from "./VoiceSettingsSection";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { isTelemetryEnabled, setTelemetryEnabled } from "../lib/telemetry";
+import { isMobileRuntime } from "../hooks/useIsMobile";
 
 type SettingsTab =
   | "appearance"
@@ -70,6 +71,8 @@ interface SettingsPageProps {
   onFocusSyncHandled?: () => void;
   focusImport?: boolean;
   onFocusImportHandled?: () => void;
+  focusAi?: boolean;
+  onFocusAiHandled?: () => void;
 }
 
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -173,6 +176,8 @@ export function SettingsPage({
   onFocusSyncHandled,
   focusImport = false,
   onFocusImportHandled,
+  focusAi = false,
+  onFocusAiHandled,
 }: SettingsPageProps) {
   const { iconPack, changeIconPack } = useIconPack();
   const [tab, setTab] = useState<SettingsTab>("appearance");
@@ -241,6 +246,16 @@ export function SettingsPage({
     onFocusImportHandled?.();
   }, [focusImport, onFocusImportHandled]);
 
+  useEffect(() => {
+    if (!focusAi) return;
+    selectTab("ai");
+    onFocusAiHandled?.();
+  }, [focusAi, onFocusAiHandled]);
+
+  const visibleTabs = TABS.filter(
+    (item) => !(item.id === "voice" && isMobileRuntime()),
+  );
+
   return (
     <div
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -270,7 +285,7 @@ export function SettingsPage({
           role="tablist"
           aria-label="Settings sections"
         >
-          {TABS.map((item) => {
+          {visibleTabs.map((item) => {
             const active = tab === item.id;
             return (
               <button
