@@ -695,7 +695,7 @@ export function SettingsPage({
                   title="Voice assistant"
                   description="Local speech recognition and spoken replies. Off by default."
                 />
-                <SettingRow label="Hey Azalea">
+                <SettingRow label="Setup">
                   <VoiceSettingsSection />
                 </SettingRow>
               </>

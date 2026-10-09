@@ -70,41 +70,48 @@ export function VoiceSettingsSection() {
     );
   const controlsDisabled = busy || status.phase === "downloading";
   const statusActive = ACTIVE_PHASES.has(status.phase);
+  const alertText = error ?? status.replyError ?? null;
+  const showStatus =
+    Boolean(status.message) && status.message !== alertText;
   return (
     <div className="space-y-4">
-      {(error || status.replyError) && (
+      {alertText && (
         <p className="text-sm" role="alert" style={{ color: "var(--danger)" }}>
-          {error ?? status.replyError}
+          {alertText}
         </p>
       )}
-      <div className="flex items-center gap-2">
-        <span
-          className={`voice-status-dot${statusActive ? " is-active" : ""}`}
-          aria-hidden
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: 999,
-            background:
-              status.phase === "error"
-                ? "var(--danger)"
-                : statusActive
-                  ? "var(--text)"
+      {showStatus && (
+        <div className="flex items-center gap-2">
+          <span
+            className={`voice-status-dot${statusActive ? " is-active" : ""}`}
+            aria-hidden
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 999,
+              background:
+                status.phase === "error"
+                  ? "var(--danger)"
+                  : statusActive
+                    ? "var(--text)"
+                    : "var(--text-muted)",
+              opacity: statusActive ? 1 : 0.45,
+            }}
+          />
+          <p
+            className="text-sm"
+            role="status"
+            style={{
+              color:
+                status.phase === "error"
+                  ? "var(--danger)"
                   : "var(--text-muted)",
-            opacity: statusActive ? 1 : 0.45,
-          }}
-        />
-        <p
-          className="text-sm"
-          role="status"
-          style={{
-            color:
-              status.phase === "error" ? "var(--danger)" : "var(--text-muted)",
-          }}
-        >
-          {status.message}
-        </p>
-      </div>
+            }}
+          >
+            {status.message}
+          </p>
+        </div>
+      )}
       {!status.modelReady && (
         <div className="space-y-2">
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
@@ -126,8 +133,8 @@ export function VoiceSettingsSection() {
       {!status.ttsReady && (
         <div className="space-y-2">
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            Optional: download Piper for spoken replies (~90 MB with runtime).
-            System speech is the fallback.
+            Optional Piper download for spoken replies (~90 MB). Without it,
+            Azalea uses system speech.
           </p>
           <Button
             disabled={controlsDisabled}
@@ -224,8 +231,8 @@ export function VoiceSettingsSection() {
       )}
       {!status.speechAvailable && (
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Download Piper for voice replies, or install espeak-ng on Linux.
-          Recognition and Wake-on-LAN remain available.
+          Download Piper for spoken replies, or install espeak-ng on Linux.
+          Recognition and Wake-on-LAN still work.
         </p>
       )}
       <div className="flex flex-wrap gap-2">

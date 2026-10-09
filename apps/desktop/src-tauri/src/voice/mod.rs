@@ -838,7 +838,7 @@ pub async fn voice_download_tts(
                 if ready {
                     "Piper voice is ready."
                 } else {
-                    "Piper download finished, but files are incomplete."
+                    "Piper download finished, but files are missing. Download it again."
                 },
             );
             if assistant.0.preferences.lock().enabled {

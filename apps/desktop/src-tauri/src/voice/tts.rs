@@ -245,6 +245,61 @@ pub async fn download_voice_files(
     Ok(())
 }
 
+fn piper_binary_name() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "piper.exe"
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        "piper"
+    }
+}
+
+/// Official archives ship `piper/piper` (+ libs). Find that binary under `dir`.
+fn find_piper_binary(dir: &Path) -> Option<PathBuf> {
+    let name = piper_binary_name();
+    fn walk(dir: &Path, name: &str) -> Option<PathBuf> {
+        let entries = fs::read_dir(dir).ok()?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(found) = walk(&path, name) {
+                    return Some(found);
+                }
+            } else if entry.file_name() == name {
+                return Some(path);
+            }
+        }
+        None
+    }
+    walk(dir, name)
+}
+
+/// Move the folder that contains the Piper binary to `dest` (`…/tts/piper`).
+fn install_piper_tree(staging: &Path, dest: &Path) -> anyhow::Result<()> {
+    let bin = find_piper_binary(staging).ok_or_else(|| {
+        anyhow::anyhow!("Piper did not install correctly. Download it again.")
+    })?;
+    let source_root = bin
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Piper did not install correctly. Download it again."))?
+        .to_path_buf();
+    let _ = fs::remove_dir_all(dest);
+    if source_root == staging {
+        fs::create_dir_all(dest)?;
+        for entry in fs::read_dir(staging)?.flatten() {
+            fs::rename(entry.path(), dest.join(entry.file_name()))?;
+        }
+    } else {
+        fs::rename(&source_root, dest)?;
+    }
+    if !dest.join(piper_binary_name()).is_file() {
+        anyhow::bail!("Piper did not install correctly. Download it again.");
+    }
+    Ok(())
+}
+
 pub async fn download_piper_runtime(
     voice_path: &Path,
     mut on_progress: impl FnMut(u8),
@@ -259,23 +314,19 @@ pub async fn download_piper_runtime(
     let archive = root.join(archive_name);
     let url = format!("{PIPER_RELEASE}/{archive_name}");
     download_bytes(&url, &archive, None, None, &mut on_progress).await?;
+    // Extract to a staging dir, then place `piper/` where piper_bin() expects it.
+    // Official tarballs already contain a top-level `piper/` folder; extracting
+    // directly into `tts/piper` used to nest as `tts/piper/piper/piper` and the
+    // old flatten step deleted the binary.
+    let staging = root.join(".piper-extract");
     let extract_dir = root.join("piper");
+    let _ = fs::remove_dir_all(&staging);
     let _ = fs::remove_dir_all(&extract_dir);
-    fs::create_dir_all(&extract_dir)?;
-    extract_archive(&archive, &extract_dir)?;
+    fs::create_dir_all(&staging)?;
+    extract_archive(&archive, &staging)?;
     let _ = fs::remove_file(&archive);
-    // Piper archives unpack a nested `piper/` folder or flat binaries.
-    let nested = extract_dir.join("piper");
-    if nested.is_dir() {
-        // Move nested contents up one level when present.
-        if let Ok(entries) = fs::read_dir(&nested) {
-            for entry in entries.flatten() {
-                let target = extract_dir.join(entry.file_name());
-                let _ = fs::rename(entry.path(), &target);
-            }
-        }
-        let _ = fs::remove_dir_all(&nested);
-    }
+    install_piper_tree(&staging, &extract_dir)?;
+    let _ = fs::remove_dir_all(&staging);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -287,7 +338,7 @@ pub async fn download_piper_runtime(
         }
     }
     if !piper_ready(voice_path) {
-        anyhow::bail!("Piper binary missing after extract.");
+        anyhow::bail!("Piper did not install correctly. Download it again.");
     }
     on_progress(100);
     Ok(())
@@ -309,7 +360,7 @@ fn extract_archive(archive: &Path, dest: &Path) -> anyhow::Result<()> {
             ])
             .status()?;
         if !status.success() {
-            anyhow::bail!("Failed to extract Piper archive.");
+            anyhow::bail!("Could not unpack the Piper download.");
         }
         return Ok(());
     }
@@ -319,7 +370,7 @@ fn extract_archive(archive: &Path, dest: &Path) -> anyhow::Result<()> {
             .args(["-xzf", &archive.to_string_lossy(), "-C", &dest.to_string_lossy()])
             .status()?;
         if !status.success() {
-            anyhow::bail!("Failed to extract Piper archive.");
+            anyhow::bail!("Could not unpack the Piper download.");
         }
         Ok(())
     }
@@ -401,10 +452,10 @@ pub fn speak_piper(
     stop: &AtomicBool,
 ) -> anyhow::Result<()> {
     let spec = pick_voice(voice_path, language)
-        .ok_or_else(|| anyhow::anyhow!("Download a Piper voice before using neural replies."))?;
+        .ok_or_else(|| anyhow::anyhow!("Download Piper in Voice settings before spoken replies."))?;
     let bin = piper_bin(voice_path);
     if !bin.is_file() {
-        anyhow::bail!("Download Piper before using neural replies.");
+        anyhow::bail!("Download Piper in Voice settings before spoken replies.");
     }
     let dir = voice_dir(voice_path, spec.id);
     let model = dir.join(format!("{}.onnx", spec.id));
@@ -433,10 +484,10 @@ pub fn speak_piper(
     }
     let status = process.wait()?;
     if !status.success() {
-        anyhow::bail!("Piper synthesis failed.");
+        anyhow::bail!("Piper could not generate speech.");
     }
     if !wav.is_file() {
-        anyhow::bail!("Piper did not write audio output.");
+        anyhow::bail!("Piper produced no audio.");
     }
     let result = play_wav(&wav, stop);
     let _ = fs::remove_file(&wav);
