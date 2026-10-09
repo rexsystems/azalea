@@ -170,8 +170,8 @@ export function VoiceSettingsSection() {
       >
         <SettingToggle
           disabled={controlsDisabled}
-          label="Keep Azalea in the system tray"
-          description="Closing the window keeps the assistant running. Quit Azalea from the tray to stop it."
+          label="Keep listening in the tray"
+          description="When voice is on, closing the window keeps listening. Separate from Settings → Appearance → Close to system tray."
           checked={status.preferences.keepInTray}
           onChange={(keepInTray) => save({ keepInTray })}
         />

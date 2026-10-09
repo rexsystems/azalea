@@ -6,6 +6,8 @@ mod sessions;
 mod store;
 mod sync;
 #[cfg(desktop)]
+mod desktop_prefs;
+#[cfg(desktop)]
 mod voice;
 
 use crate::commands::{
@@ -133,6 +135,8 @@ pub fn run() {
             app.manage(sync_commands::BrowserLoginState::default());
             #[cfg(desktop)]
             {
+                let desktop = desktop_prefs::DesktopPrefs::new(&app.handle())?;
+                app.manage(desktop);
                 let voice = voice::VoiceAssistant::new(&app.handle())?;
                 app.manage(voice.clone());
                 if let Err(error) = voice::setup_tray(&app.handle(), &voice) {
@@ -148,10 +152,7 @@ pub fn run() {
             {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     if window.label() == "main"
-                        && window
-                            .app_handle()
-                            .try_state::<voice::VoiceAssistant>()
-                            .is_some_and(|voice| voice.keep_in_tray())
+                        && voice::VoiceAssistant::should_close_to_tray(window.app_handle())
                     {
                         api.prevent_close();
                         let _ = window.hide();
@@ -177,6 +178,10 @@ pub fn run() {
             voice::voice_test_reply,
             #[cfg(desktop)]
             voice::voice_download_tts,
+            #[cfg(desktop)]
+            desktop_prefs::desktop_prefs_get,
+            #[cfg(desktop)]
+            desktop_prefs::desktop_prefs_set,
             hosts::create_host,
             hosts::update_host,
             hosts::host_has_password,

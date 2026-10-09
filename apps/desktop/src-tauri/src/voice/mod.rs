@@ -164,6 +164,48 @@ impl VoiceAssistant {
         prefs.enabled && prefs.keep_in_tray && self.0.status.lock().tray_available
     }
 
+    /// Show the tray icon when close-to-tray is on and/or the voice assistant is on.
+    pub fn tray_should_be_visible(app: &tauri::AppHandle) -> bool {
+        let voice_on = app
+            .try_state::<VoiceAssistant>()
+            .is_some_and(|voice| voice.0.preferences.lock().enabled);
+        let close_to_tray = app
+            .try_state::<crate::desktop_prefs::DesktopPrefs>()
+            .is_some_and(|prefs| prefs.snapshot().preferences.close_to_tray);
+        voice_on || close_to_tray
+    }
+
+    pub fn sync_tray_visibility(app: &tauri::AppHandle) {
+        let visible = Self::tray_should_be_visible(app);
+        if let Some(tray) = app.tray_by_id("azalea-voice") {
+            let _ = tray.set_visible(visible);
+            let _ = tray.set_tooltip(Some(if visible {
+                if app
+                    .try_state::<VoiceAssistant>()
+                    .is_some_and(|voice| voice.0.preferences.lock().enabled)
+                {
+                    "Azalea voice assistant"
+                } else {
+                    "Azalea"
+                }
+            } else {
+                "Azalea"
+            }));
+        }
+    }
+
+    /// Hide to tray instead of quitting when either desktop close-to-tray or
+    /// voice keep-in-tray is enabled.
+    pub fn should_close_to_tray(app: &tauri::AppHandle) -> bool {
+        let desktop = app
+            .try_state::<crate::desktop_prefs::DesktopPrefs>()
+            .is_some_and(|prefs| prefs.close_to_tray());
+        let voice = app
+            .try_state::<VoiceAssistant>()
+            .is_some_and(|voice| voice.keep_in_tray());
+        desktop || voice
+    }
+
     pub fn signal_stop(&self) {
         if let Some(worker) = self.0.worker.lock().as_ref() {
             worker.stop.store(true, Ordering::Release);
@@ -237,10 +279,12 @@ impl VoiceAssistant {
             .map_err(|error| error.to_string())?;
         *self.0.preferences.lock() = preferences.clone();
         self.0.status.lock().reply_error = None;
-        if let Some(tray) = app.tray_by_id("azalea-voice") {
-            let _ = tray.set_visible(preferences.enabled);
-        }
-        if !preferences.enabled {
+        Self::sync_tray_visibility(&app);
+        if !preferences.enabled
+            && !app
+                .try_state::<crate::desktop_prefs::DesktopPrefs>()
+                .is_some_and(|prefs| prefs.snapshot().preferences.close_to_tray)
+        {
             show_main(&app);
         }
         self.start(app);
@@ -1003,8 +1047,16 @@ pub fn setup_tray(app: &tauri::AppHandle, voice: &VoiceAssistant) -> anyhow::Res
         builder = builder.icon(icon.clone());
     }
     let tray = builder.build(app)?;
-    tray.set_visible(voice.0.preferences.lock().enabled)?;
     voice.0.status.lock().tray_available = true;
+    if let Some(desktop) = app.try_state::<crate::desktop_prefs::DesktopPrefs>() {
+        desktop.set_tray_available(true);
+    }
+    tray.set_visible(VoiceAssistant::tray_should_be_visible(app))?;
+    let _ = tray.set_tooltip(Some(if voice.0.preferences.lock().enabled {
+        "Azalea voice assistant"
+    } else {
+        "Azalea"
+    }));
     Ok(())
 }
 

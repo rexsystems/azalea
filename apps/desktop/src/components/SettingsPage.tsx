@@ -35,6 +35,11 @@ import { VoiceSettingsSection } from "./VoiceSettingsSection";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { isTelemetryEnabled, setTelemetryEnabled } from "../lib/telemetry";
 import { isMobileRuntime } from "../hooks/useIsMobile";
+import {
+  getDesktopPrefs,
+  setDesktopPrefs,
+  type DesktopPrefsStatus,
+} from "../lib/desktopPrefs";
 
 type SettingsTab =
   | "appearance"
@@ -194,12 +199,26 @@ export function SettingsPage({
     () => getStoredCustomCss().css,
   );
   const [customCssSaved, setCustomCssSaved] = useState(false);
+  const [desktopPrefs, setDesktopPrefsState] =
+    useState<DesktopPrefsStatus | null>(null);
   const contentScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void getVersion()
       .then(setAppVersion)
       .catch(() => setAppVersion("-"));
+  }, []);
+
+  useEffect(() => {
+    if (isMobileRuntime()) return;
+    void getDesktopPrefs()
+      .then(setDesktopPrefsState)
+      .catch(() =>
+        setDesktopPrefsState({
+          preferences: { closeToTray: false },
+          trayAvailable: false,
+        }),
+      );
   }, []);
 
   useEffect(() => {
@@ -321,8 +340,36 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="Appearance"
-                  description="Theme, icons, and optional custom CSS."
+                  description="Theme, icons, desktop, and optional custom CSS."
                 />
+                {!isMobileRuntime() && desktopPrefs && (
+                  <SettingRow
+                    label="Desktop"
+                    description="What happens when you close the main window."
+                  >
+                    <div className="space-y-2">
+                      <SettingToggle
+                        label="Close to system tray"
+                        description="Hide Azalea in the tray instead of quitting. Open it again from the tray icon, or Quit Azalea there."
+                        checked={desktopPrefs.preferences.closeToTray}
+                        onChange={(closeToTray) => {
+                          void setDesktopPrefs({ closeToTray })
+                            .then(setDesktopPrefsState)
+                            .catch(() => undefined);
+                        }}
+                      />
+                      {!desktopPrefs.trayAvailable && (
+                        <p
+                          className="text-xs"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          The system tray is unavailable in this desktop
+                          session. Closing the window will quit Azalea.
+                        </p>
+                      )}
+                    </div>
+                  </SettingRow>
+                )}
                 <SettingRow
                   label="Theme"
                   description="Color scheme for the whole UI."
