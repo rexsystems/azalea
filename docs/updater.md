@@ -1,8 +1,10 @@
 # Azalea auto-updater
 
-The desktop app uses [Tauri updater](https://v2.tauri.app/plugin/updater/) with signed releases on **Windows**, **Linux (AppImage)**, and **macOS**.
+The desktop app uses [Tauri updater](https://v2.tauri.app/plugin/updater/) with
+signed releases on **Windows**, **Linux (AppImage)**, and **macOS**.
 
-Installer binaries and `latest.json` are published to **Cloudflare R2** (`azalea-updates` bucket) behind the custom domain:
+Installer binaries and `latest.json` are published to **Cloudflare R2**
+(`azalea-updates` bucket) behind the custom domain:
 
 `https://updates.azalea.rexsystems.me`
 
@@ -19,7 +21,9 @@ builds/v0.1.2-build.72/
   Azalea_0.1.2+72_aarch64.dmg
 ```
 
-Each release lands in `builds/<git-tag>/`. CI keeps only the live folder (plus `latest.json`) so free-tier storage does not accumulate history. Manual prune: Actions → **Cleanup R2**.
+Each release lands in `builds/<git-tag>/`. CI keeps only the live folder (plus
+`latest.json`) so free-tier storage does not accumulate history. Manual prune:
+Actions → **Cleanup R2**.
 
 ## Endpoints (in order)
 
@@ -27,7 +31,8 @@ Each release lands in `builds/<git-tag>/`. CI keeps only the live folder (plus `
 2. `https://azalea.rexsystems.me/updates/latest.json` (site fallback)
 3. `https://github.com/rexsystems/azalea/releases/latest/download/latest.json` (GitHub fallback)
 
-Download URLs inside the manifest point at `updates.azalea.rexsystems.me/builds/<tag>/<artifact>`.
+Download URLs inside the manifest point at
+`updates.azalea.rexsystems.me/builds/<tag>/<artifact>`.
 
 ## Platforms in `latest.json`
 
@@ -46,9 +51,9 @@ Download URLs inside the manifest point at `updates.azalea.rexsystems.me/builds/
 Linux x64 and ARM64 use separate native Blacksmith runners, architecture-specific
 Rust caches and release artifacts. Both publish signed AppImage, DEB and RPM
 updater entries in the same release manifest. macOS includes Apple Silicon and
-Intel builds; Windows currently builds x64.
-ARM64 desktop packages use an Ubuntu 22.04 build baseline for compatibility
-with Debian 12 / Raspberry Pi OS 64-bit. Existing x64 builds remain on Ubuntu 24.04.
+Intel builds; Windows currently builds x64. ARM64 desktop packages use an
+Ubuntu 22.04 build baseline for compatibility with Debian 12 / Raspberry Pi OS
+64-bit. Existing x64 builds remain on Ubuntu 24.04.
 
 ## GitHub Actions secrets
 
@@ -61,7 +66,8 @@ Add these repository secrets on `rexsystems/azalea`:
 | `R2_ACCESS_KEY_ID` | Cloudflare R2 API token access key id |
 | `R2_SECRET_ACCESS_KEY` | Cloudflare R2 API token secret access key |
 
-R2 API tokens: Cloudflare dashboard → R2 → Manage R2 API Tokens → create token with **Object Read & Write** on bucket `azalea-updates`.
+R2 API tokens: Cloudflare dashboard → R2 → Manage R2 API Tokens → create token
+with **Object Read & Write** on bucket `azalea-updates`.
 
 Generate a new Tauri keypair locally:
 
@@ -69,19 +75,24 @@ Generate a new Tauri keypair locally:
 npx tauri signer generate -w ~/.azalea/tauri-signing.key -p "your-password" -f
 ```
 
-The **public** key is already in `apps/desktop/src-tauri/tauri.conf.json`. If you rotate keys, update it there.
+The **public** key is already in `apps/desktop/src-tauri/tauri.conf.json`. If
+you rotate keys, update it there.
 
-macOS builds from CI are **not** Apple Developer ID signed (Gatekeeper may warn). Users can right-click → Open the first time, or clear quarantine. Auto-update still works via Tauri’s own signatures.
+macOS builds from CI are **not** Apple Developer ID signed (Gatekeeper may
+warn). Users can right-click → Open the first time, or clear quarantine.
+Auto-update still works via Tauri's own signatures.
 
-CI builds macOS with `--bundles app` (signed `.app.tar.gz` for the updater), then packs a DMG via `.github/create-macos-dmg.sh` (plain `hdiutil`, no Finder AppleScript - that step is what usually breaks on GitHub Actions).
+CI builds macOS with `--bundles app` (signed `.app.tar.gz` for the updater),
+then packs a DMG via `.github/create-macos-dmg.sh` (plain `hdiutil`, no Finder
+AppleScript; that step is what usually breaks on GitHub Actions).
 
 ## Version + build number
 
 Repo keeps a normal semver core in `tauri.conf.json` (e.g. `0.1.2`).
 
-Each CI release stamps it to `core+N` before building, e.g. `0.1.2+70` or `0.1.3+1`.
-`N` is per base version: CI looks at existing tags `v{base}-build.*` and uses max+1.
-When you bump the core (`0.1.2` → `0.1.3`), `N` resets to `1`.
+Each CI release stamps it to `core+N` before building, e.g. `0.1.2+70` or
+`0.1.3+1`. `N` is per base version: CI looks at existing tags `v{base}-build.*`
+and uses max+1. When you bump the core (`0.1.2` → `0.1.3`), `N` resets to `1`.
 
 That stamped value is what the app reports and what `latest.json` publishes.
 Git tags stay URL-safe as `v0.1.3-build.1` (no `+`).
@@ -92,11 +103,15 @@ Artifact URLs encode `+` as `%2B`.
 
 ## After each master release
 
-1. CI resolves `0.x.y+N`, then builds Windows, Linux (deb/rpm/AppImage), and macOS.
-2. CI merges platform fragments into `latest.json` with download URLs under `https://updates.azalea.rexsystems.me/builds/<tag>/…`.
-3. CI uploads installers into `builds/<tag>/` and writes `latest.json` at the bucket root, then prunes older build folders.
+1. CI resolves `0.x.y+N`, then builds Windows, Linux (deb/rpm/AppImage), and
+   macOS.
+2. CI merges platform fragments into `latest.json` with download URLs under
+   `https://updates.azalea.rexsystems.me/builds/<tag>/…`.
+3. CI uploads installers into `builds/<tag>/` and writes `latest.json` at the
+   bucket root, then prunes older build folders.
 4. CI also attaches the same files to the GitHub Release (archive / fallback).
-5. Optionally copy `latest.json` into **azalea-web** `public/updates/` so the marketing site fallback stays in sync:
+5. Optionally copy `latest.json` into **azalea-web** `public/updates/` so the
+   marketing site fallback stays in sync:
 
 ```bash
 cp artifacts/latest.json ../azalea-web/public/updates/latest.json
@@ -104,7 +119,8 @@ cp artifacts/latest.json ../azalea-web/public/updates/latest.json
 
 ## Manual seed (first time / before next CI run)
 
-Until the next master release uploads automatically, put the current release assets and manifest on R2:
+Until the next master release uploads automatically, put the current release
+assets and manifest on R2:
 
 ```bash
 export AWS_ACCESS_KEY_ID=...
@@ -129,4 +145,5 @@ Confirm: `https://updates.azalea.rexsystems.me/latest.json`
 
 Settings → **Updates** → Check for updates.
 
-Updates only work in **release builds** (signed installer / AppImage / app bundle), not in `tauri dev`.
+Updates only work in **release builds** (signed installer / AppImage / app
+bundle), not in `tauri dev`.

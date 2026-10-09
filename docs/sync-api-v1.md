@@ -1,13 +1,15 @@
 # Azalea Sync API v1
 
-Self-hostable zero-knowledge vault sync. Desktop and `azalea-server-web` talk to this HTTP API.
+Self-hostable zero-knowledge vault sync. Desktop and `azalea-server-web` talk
+to this HTTP API.
 
 Base URL examples:
 
 - Azalea Cloud: `https://api.azalea.rexsystems.me` (TBD at cutover)
 - Self-host: `https://sync.example.com` or `http://host:9482`
 
-All JSON. Errors: `{ "error": "code", "message": "..." }` with suitable HTTP status.
+All JSON. Errors: `{ "error": "code", "message": "..." }` with a suitable HTTP
+status.
 
 ## Auth
 
@@ -52,7 +54,8 @@ Bearer access token. Revokes current refresh session.
 
 ### `POST /v1/auth/forgot-password`
 
-Requires Resend (`RESEND_API_KEY`). Always returns ok if mail is configured (no email enumeration). Without mail config → `400`.
+Requires Resend (`RESEND_API_KEY`). Always returns ok if mail is configured (no
+email enumeration). Without mail config → `400`.
 
 ```json
 { "email": "..." }
@@ -68,8 +71,8 @@ Invalid/expired token → `400`. Success revokes all sessions for that user.
 
 ### Desktop authorize handoff
 
-Web `/authorize` still POSTs `{ refresh_token, state }` to `http://127.0.0.1:<port>/callback`.
-Desktop exchanges via `/v1/auth/refresh`.
+Web `/authorize` still POSTs `{ refresh_token, state }` to
+`http://127.0.0.1:<port>/callback`. Desktop exchanges via `/v1/auth/refresh`.
 
 ## Vault (Bearer required)
 
@@ -174,7 +177,8 @@ Disable/enable, role, plan.
 { "ok": true, "version": "0.1.0", "mail_configured": true }
 ```
 
-Mail is configured via env: `RESEND_API_KEY`, `AZALEA_MAIL_FROM`, `AZALEA_PUBLIC_WEB_URL`.
+Mail is configured via env: `RESEND_API_KEY`, `AZALEA_MAIL_FROM`,
+`AZALEA_PUBLIC_WEB_URL`.
 
 ## Desktop account model (client)
 
@@ -194,4 +198,5 @@ Each account has its own local SQLite + keyring tokens + vault unlock state.
 
 ## Crypto (unchanged from current client)
 
-Argon2id + AES-256-GCM vault, verifier, recovery envelope. Server stores text/base64 blobs only.
+Argon2id + AES-256-GCM vault, verifier, recovery envelope. Server stores
+text/base64 blobs only.

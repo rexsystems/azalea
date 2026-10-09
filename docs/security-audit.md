@@ -1,10 +1,9 @@
-# Azalea Security Audit - Findings & Exceptions
+# Azalea security audit: findings and exceptions
 
-This document tracks known third-party dependency vulnerabilities that Azalea
-carries at the time of the last security review. Every entry either has an
-acceptance rationale below or an in-progress upgrade tracked as a task.
+Known third-party dependency vulnerabilities at the last security review.
+Every entry has an acceptance rationale below or a tracked upgrade.
 
-Run these to reproduce the sweep:
+Reproduce the sweep:
 
 ```bash
 cd services/azalea-server && cargo audit
@@ -13,7 +12,7 @@ cd apps/desktop && npm audit --omit=dev
 cd apps/azalea-server-web && npm audit --omit=dev
 ```
 
-`cargo audit` reads from https://github.com/RustSec/advisory-db; run
+`cargo audit` reads from https://github.com/RustSec/advisory-db. Install with
 `cargo install cargo-audit` if it is not on your PATH.
 
 ## Server (`services/azalea-server`)
@@ -31,22 +30,21 @@ Currently clean. Re-run `cargo audit` before every release.
 | [RUSTSEC-2026-0153](https://rustsec.org/advisories/RUSTSEC-2026-0153) | `russh-cryptovec` 0.48.0 | high 7.5 | 0.60.3+ | Planned upgrade (with russh) |
 
 **RUSTSEC-2023-0071 (rsa Marvin attack).** Timing side-channel on PKCS#1 v1.5
-RSA decrypt. Exploitation requires many precise timing measurements of RSA
-operations. Azalea uses RSA only during SSH host-key verification and when
-the user chooses to export/import an RSA private key locally. The attacker
-model is a remote network adversary; they cannot make repeated timing
-measurements of local disk-level operations. No fixed release upstream yet.
-We will pick up the fix as soon as the `rsa` crate publishes one.
+RSA decrypt. Exploitation needs many precise timing measurements of RSA
+operations. Azalea uses RSA only during SSH host-key verification and when the
+user exports or imports an RSA private key locally. The attacker model is a
+remote network adversary; they cannot make repeated timing measurements of
+local disk-level operations. No fixed release upstream yet. We will pick up the
+fix when the `rsa` crate publishes one.
 
-**RUSTSEC-2026-015{3,4} (russh unbounded allocations).** Both are DoS-only:
-a malicious SSH server can force the client to allocate an oversized buffer
+**RUSTSEC-2026-015{3,4} (russh unbounded allocations).** Both are DoS-only: a
+malicious SSH server can force the client to allocate an oversized buffer
 during KEX. Impact is a client-side crash. Azalea's threat model already
-assumes the SSH server the user connects to can be malicious (the shell
-output is executed by the user's terminal). Migrating russh 0.48 -> 0.63
-requires touching the SSH session code paths; scheduled as a follow-up.
-Meanwhile, the desktop app pins strict KEX/cipher/MAC lists to reduce the
-attack surface (see `apps/desktop/src-tauri/src/sessions/manager.rs`
-`strict_ssh_preferences`).
+assumes the SSH server the user connects to can be malicious (the shell output
+is executed by the user's terminal). Migrating russh 0.48 to 0.63 requires
+touching the SSH session code paths; scheduled as a follow-up. Meanwhile, the
+desktop app pins strict KEX/cipher/MAC lists to shrink the attack surface (see
+`apps/desktop/src-tauri/src/sessions/manager.rs` `strict_ssh_preferences`).
 
 ### Warnings (unmaintained / unsound / yanked)
 
@@ -63,20 +61,20 @@ attack surface (see `apps/desktop/src-tauri/src/sessions/manager.rs`
 | yanked | `chacha20` 0.10.1 | yanked (transitive from `aes-gcm` chain) |
 | yanked | `spin` 0.9.8 | yanked (transitive) |
 
-None of these are directly imported by Azalea. They come in via `tauri`,
-`russh`, and the WebKit-GTK bindings. We will refresh them whenever the
-upstream crates publish supported versions.
+Azalea does not import these directly. They arrive through `tauri`, `russh`,
+and the WebKit-GTK bindings. We refresh them when upstream crates publish
+supported versions.
 
 ## npm
 
-Both `apps/desktop` and `apps/azalea-server-web` report **0 production vulnerabilities**
-as of the last audit run.
+Both `apps/desktop` and `apps/azalea-server-web` report **0 production
+vulnerabilities** as of the last audit run.
 
 ## How to add an exception
 
-1. Confirm the vulnerability really is not exploitable in Azalea's threat
-   model. Do not paper over an actively exploitable finding.
-2. Add a row to the table above with the RustSec / CVE ID, the crate + pinned
+1. Confirm the vulnerability is not exploitable under Azalea's threat model.
+   Do not paper over an actively exploitable finding.
+2. Add a row to the table above with the RustSec / CVE ID, the crate and pinned
    version, severity, and either the tracked upgrade or the acceptance
    rationale.
 3. If the finding is a transitive dep, note the immediate parent crate.

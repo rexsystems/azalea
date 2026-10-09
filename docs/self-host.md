@@ -2,9 +2,9 @@
 
 ## Fresh VPS (recommended): one script
 
-No git clone. Asks questions, writes compose/.env, **pulls published Docker
-images**, starts the server, creates the admin. Web front is optional.
-Falls back to a local source build only if GHCR pull fails.
+No git clone. Asks questions, writes compose/.env, pulls published Docker
+images, starts the server, creates the admin. Web front is optional. Falls
+back to a local source build only if GHCR pull fails.
 
 ```bash
 curl -fsSL https://azalea.rexsystems.me/script.sh | bash
@@ -16,7 +16,8 @@ Or straight from GitHub:
 curl -fsSL https://raw.githubusercontent.com/rexsystems/azalea/master/services/azalea-server/install.sh | bash
 ```
 
-Prompts read from your terminal (works with `curl | bash`). If that fails on a weird host:
+Prompts read from your terminal (works with `curl | bash`). If that fails on a
+weird host:
 
 ```bash
 curl -fsSL -o install.sh \
@@ -26,6 +27,7 @@ chmod +x install.sh
 ```
 
 The script asks for:
+
 - whether to include the optional dashboard or use only the API/admin CLI
 - access mode: local/LAN, Cloudflare Tunnel, or your HTTPS reverse proxy
 - public hostname for HTTPS modes
@@ -35,21 +37,22 @@ The script asks for:
 - optional host update manager on Linux/systemd
 
 Default install dir: `~/azalea` (or `/root/azalea` when run as root).
-Published server and dashboard images support **Linux AMD64 and ARM64** under
-the same tags. Docker selects the host architecture automatically, including
-ARM64 VPS hosts and Raspberry Pi with a 64-bit OS. The source-build fallback
-also builds natively for the host. ARMv7/32-bit ARM images are not provided.
+Published server and dashboard images support Linux AMD64 and ARM64 under the
+same tags. Docker selects the host architecture automatically, including ARM64
+VPS hosts and Raspberry Pi with a 64-bit OS. The source-build fallback also
+builds natively for the host. ARMv7/32-bit ARM images are not provided.
 Administrator creation is mandatory: the installer verifies the configured email
-is an active admin in the running server's `/data/azalea.db` and stops on failure.
-Rerunning the installer on a running installation without an active administrator
-offers to repair that account setup while preserving the existing configuration.
-To recover a previous incomplete install without deleting its volume, run
+is an active admin in the running server's `/data/azalea.db` and stops on
+failure. Rerunning the installer on a running installation without an active
+administrator offers to repair that account setup while preserving the existing
+configuration. To recover a previous incomplete install without deleting its
+volume, run
 `docker compose exec azalea-server azalea-server bootstrap --email=you@example.com --instance=Azalea`
-with `AZALEA_BOOTSTRAP_PASSWORD` supplied to that exec process, or use the documented
-bootstrap password option below. Existing active admin credentials are never reset
-by bootstrap; repeating it succeeds only with the same verified account/password.
-An existing installation is not overwritten. Use update commands to upgrade it,
-or `AZALEA_INSTALL_DIR` to create a separate instance.
+with `AZALEA_BOOTSTRAP_PASSWORD` supplied to that exec process, or use the
+documented bootstrap password option below. Existing active admin credentials
+are never reset by bootstrap; repeating it succeeds only with the same verified
+account/password. An existing installation is not overwritten. Use update
+commands to upgrade it, or `AZALEA_INSTALL_DIR` to create a separate instance.
 
 Local/LAN mode exposes the selected dashboard port, or the API port for a
 CLI-only setup. The desktop app accepts HTTP on localhost/private network
@@ -57,16 +60,16 @@ addresses. Public connections use HTTPS. The installer enables HTTP browser
 cookies only for local/LAN dashboard mode; HTTPS modes retain secure cookies.
 
 Cloudflare/HTTPS modes bind host ports to localhost. With a dashboard, route
-the hostname to `http://127.0.0.1:9843` (or your selected dashboard port).
-With API/CLI only, route it to `http://127.0.0.1:9482` (or your API host port).
-The generated `cloudflared.example.yml` uses the hostname and port you chose.
-For a tunnel running in Docker, join the Compose network and use
+the hostname to `http://127.0.0.1:9843` (or your selected dashboard port). With
+API/CLI only, route it to `http://127.0.0.1:9482` (or your API host port). The
+generated `cloudflared.example.yml` uses the hostname and port you chose. For a
+tunnel running in Docker, join the Compose network and use
 `http://azalea-server-web:80` or `http://azalea-server:9482` instead.
 
 In both HTTPS modes the desktop server address is `https://your-hostname`.
 API-only installations use email/password sign-in; browser authorization and
-password-reset pages require a dashboard. A CLI-only install can configure
-mail only if you supply an existing compatible password-reset web host.
+password-reset pages require a dashboard. A CLI-only install can configure mail
+only if you supply an existing compatible password-reset web host.
 
 ## Wipe and reinstall from zero
 
@@ -80,7 +83,8 @@ rm -rf ~/azalea   # or /root/azalea
 curl -fsSL https://azalea.rexsystems.me/script.sh | bash
 ```
 
-`down -v` deletes the SQLite volume (users / vaults). Skip `-v` if you want to keep data.
+`down -v` deletes the SQLite volume (users / vaults). Skip `-v` if you want to
+keep data.
 
 ## Shared AI in the dashboard
 
@@ -91,9 +95,9 @@ compatible catalog, including Bedrock Runtime, accept exact model IDs.
 
 In the desktop app, sign in to this self-hosted account and select
 **Self-hosted server** in AI settings. The app loads the server's models and
-default automatically. Requests use the current account session; provider
-keys stay on the server. Conversation and terminal context sent to AI pass
-through this server to the chosen provider.
+default automatically. Requests use the current account session; provider keys
+stay on the server. Conversation and terminal context sent to AI pass through
+this server to the chosen provider.
 
 Provider keys are encrypted at rest. By default the encryption key is derived
 from `AZALEA_JWT_SECRET`; retain that secret with your database backup.
@@ -173,17 +177,21 @@ Images must be **Public** on GHCR for anonymous pull:
 3. **Package settings** → **Danger Zone** → **Change visibility** → Public.
 
 Notes:
-- Org packages start **private** on first publish. CI usually cannot flip that.
-- Rebuilding / pushing new tags does **not** flip a Public package back to private.
-- If it looks private again, you probably got a **new** package name (e.g. first
-  `azalea-server-web` publish) or the package was deleted and recreated.
 
-Until Public, `docker pull` stays unauthorized and the installer falls back to building from source.
+- Org packages start **private** on first publish. CI usually cannot flip that.
+- Rebuilding / pushing new tags does **not** flip a Public package back to
+  private.
+- If it looks private again, you probably got a **new** package name (for
+  example first `azalea-server-web` publish) or the package was deleted and
+  recreated.
+
+Until Public, `docker pull` stays unauthorized and the installer falls back to
+building from source.
 
 ### 3. HTTPS / Cloudflare
 
-API routes are `/v1/...`. Desktop self-host with `https://yourdomain.com` expects
-API at `https://yourdomain.com/api` (proxy strips `/api`).
+API routes are `/v1/...`. Desktop self-host with `https://yourdomain.com`
+expects API at `https://yourdomain.com/api` (proxy strips `/api`).
 
 **Caddy**
 
@@ -204,8 +212,8 @@ location /api/ {
   proxy_set_header Host $host;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
   proxy_set_header X-Forwarded-Proto $scheme;
-  # Older builds set Path=/v1/auth; browsers hit /api/v1/auth/* — rewrite or
-  # the refresh cookie never gets sent (401 on /api/v1/auth/refresh).
+  # Older builds set Path=/v1/auth; browsers hit /api/v1/auth/*.
+  # Rewrite or the refresh cookie never gets sent (401 on /api/v1/auth/refresh).
   proxy_cookie_path /v1/auth /api/v1/auth;
 }
 ```
@@ -215,16 +223,17 @@ API URL in the app (no `/api` strip). Or tunnel into Caddy with `/api`.
 
 ### 4. Desktop
 
-Add account -> Self-hosted -> `https://yourdomain.com` (or `http://IP:9482`).
+Add account → Self-hosted → `https://yourdomain.com` (or `http://IP:9482`).
 
 ## Optional web front (monorepo `apps/azalea-server-web`)
 
-Installer can pull `ghcr.io/rexsystems/azalea-server-web:latest` on host port **9843**
-(maps to container `:80`). Put Cloudflare Tunnel or host nginx on `:80` if you want
-that. Nginx in the web image proxies `/api` to `azalea-server`. Sync itself does
-not need the web container.
+Installer can pull `ghcr.io/rexsystems/azalea-server-web:latest` on host port
+**9843** (maps to container `:80`). Put Cloudflare Tunnel or host nginx on `:80`
+if you want that. Nginx in the web image proxies `/api` to `azalea-server`. Sync
+itself does not need the web container.
 
-Public product site (landing, download): **https://azalea.rexsystems.me** (separate repo).
+Public product site (landing, download): **https://azalea.rexsystems.me**
+(separate repo).
 
 ## Updates
 
@@ -235,21 +244,22 @@ docker compose up -d
 ```
 
 These commands preserve the data volume, but do not make a backup or provide
-automatic rollback. Source-built installations must refresh their source
-build contexts and run `docker compose up -d --build` instead. Pinned image
-digests must be changed explicitly before a manual update.
+automatic rollback. Source-built installations must refresh their source build
+contexts and run `docker compose up -d --build` instead. Pinned image digests
+must be changed explicitly before a manual update.
 
 ### Managed updates
 
-The optional host manager supports **API/CLI-only and dashboard installations**.
-It runs on Linux with Docker Compose and systemd. The server exchanges bounded
-update requests through a shared directory; it has no Docker socket mount.
-The manager checks tagged public GHCR images every six hours and applies updates
+The optional host manager supports API/CLI-only and dashboard installations. It
+runs on Linux with Docker Compose and systemd. The server exchanges bounded
+update requests through a shared directory; it has no Docker socket mount. The
+manager checks tagged public GHCR images every six hours and applies updates
 only when requested. Custom registries, digest-pinned and source-built images
 retain their manual update workflow.
 
 Fresh installs offer to enable the manager. For an existing installation, first
-upgrade to a server image that includes the update commands, then run on its host:
+upgrade to a server image that includes the update commands, then run on its
+host:
 
 ```bash
 cd /path/to/your/azalea-installation
@@ -261,9 +271,9 @@ Setup attaches the shared request directory, restarts the API, and enables a
 per-installation systemd service.
 
 For a custom Compose setup, add `--compose-file /path/to/base.yaml`, repeat
-`--extra-compose-file /path/to/override.yaml` for additional configuration,
-and supply `--project-name` if you used `docker compose -p`. Setup refuses to
-drop Compose files that were used by the existing server container.
+`--extra-compose-file /path/to/override.yaml` for additional configuration, and
+supply `--project-name` if you used `docker compose -p`. Setup refuses to drop
+Compose files that were used by the existing server container.
 
 Follow progress in **Admin → Updates**, or use the CLI:
 
@@ -276,16 +286,16 @@ docker compose exec azalea-server azalea-server update rollback
 ```
 
 Commands queue an operation; use `status` again to see its result. Host CLI
-equivalents are `sudo python3 update-manager.py --directory "$PWD" status`
-and `check`, `apply`, `rollback`. Dashboard access through Cloudflare uses the
-same authenticated `/api` calls; the manager has no public endpoint.
+equivalents are `sudo python3 update-manager.py --directory "$PWD" status` and
+`check`, `apply`, `rollback`. Dashboard access through Cloudflare uses the same
+authenticated `/api` calls; the manager has no public endpoint.
 
-An update downloads exact checked image digests before stopping the API. It
-then saves an integrity-checked SQLite snapshot, Compose configuration, `.env`
-and local rollback image tags. Server and installed dashboard are recreated
-and health-checked. A failed restart triggers recovery of the previous images,
-database and configuration. The manager also resumes interrupted recovery
-after a host/service restart.
+An update downloads exact checked image digests before stopping the API. It then
+saves an integrity-checked SQLite snapshot, Compose configuration, `.env` and
+local rollback image tags. Server and installed dashboard are recreated and
+health-checked. A failed restart triggers recovery of the previous images,
+database and configuration. The manager also resumes interrupted recovery after
+a host/service restart.
 
 Rollback restores the **pre-update database and configuration**, replacing later
 changes. Replaced database/configuration files are retained alongside the backup
@@ -294,8 +304,8 @@ for recovery. Backups and secrets are stored in the root-only
 Keep off-host backups as well.
 
 The manager stores image overrides separately. For host maintenance commands
-that recreate containers, include those files so you keep the managed image
-and request directory:
+that recreate containers, include those files so you keep the managed image and
+request directory:
 
 ```bash
 sudo docker compose -f docker-compose.yml \
