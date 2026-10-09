@@ -317,15 +317,23 @@ pub async fn download_piper_runtime(
     // Extract to a staging dir, then place `piper/` where piper_bin() expects it.
     // Official tarballs already contain a top-level `piper/` folder; extracting
     // directly into `tts/piper` used to nest as `tts/piper/piper/piper` and the
-    // old flatten step deleted the binary.
+    // old flatten step deleted the binary while leaving the shared libs behind.
     let staging = root.join(".piper-extract");
     let extract_dir = root.join("piper");
     let _ = fs::remove_dir_all(&staging);
     let _ = fs::remove_dir_all(&extract_dir);
     fs::create_dir_all(&staging)?;
-    extract_archive(&archive, &staging)?;
+    if let Err(error) = extract_archive(&archive, &staging) {
+        let _ = fs::remove_file(&archive);
+        let _ = fs::remove_dir_all(&staging);
+        return Err(error);
+    }
     let _ = fs::remove_file(&archive);
-    install_piper_tree(&staging, &extract_dir)?;
+    if let Err(error) = install_piper_tree(&staging, &extract_dir) {
+        let _ = fs::remove_dir_all(&staging);
+        let _ = fs::remove_dir_all(&extract_dir);
+        return Err(error);
+    }
     let _ = fs::remove_dir_all(&staging);
     #[cfg(unix)]
     {
@@ -338,6 +346,7 @@ pub async fn download_piper_runtime(
         }
     }
     if !piper_ready(voice_path) {
+        let _ = fs::remove_dir_all(&extract_dir);
         anyhow::bail!("Piper did not install correctly. Download it again.");
     }
     on_progress(100);

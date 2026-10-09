@@ -35,7 +35,15 @@ export function VoiceSettingsSection() {
     const subscription = listen<voice.VoiceStatus>(
       "azalea-voice-status",
       ({ payload }) => {
-        if (!cancelled) setStatus(payload);
+        if (cancelled) return;
+        setStatus(payload);
+        // Drop the React-side copy when the backend already carries the same error
+        // (or has left the error phase), so the red line is not rendered twice.
+        if (payload.phase !== "error") setError(null);
+        else
+          setError((prev) =>
+            prev && prev === payload.message ? null : prev,
+          );
       },
     );
     return () => {
@@ -70,9 +78,11 @@ export function VoiceSettingsSection() {
     );
   const controlsDisabled = busy || status.phase === "downloading";
   const statusActive = ACTIVE_PHASES.has(status.phase);
-  const alertText = error ?? status.replyError ?? null;
-  const showStatus =
-    Boolean(status.message) && status.message !== alertText;
+  const isError = status.phase === "error";
+  // One red line only: prefer React catch → replyError → status message.
+  const alertText =
+    error ?? status.replyError ?? (isError ? status.message : null);
+  const showStatus = Boolean(status.message) && !isError && !alertText;
   return (
     <div className="space-y-4">
       {alertText && (
@@ -89,24 +99,14 @@ export function VoiceSettingsSection() {
               width: 8,
               height: 8,
               borderRadius: 999,
-              background:
-                status.phase === "error"
-                  ? "var(--danger)"
-                  : statusActive
-                    ? "var(--text)"
-                    : "var(--text-muted)",
+              background: statusActive ? "var(--text)" : "var(--text-muted)",
               opacity: statusActive ? 1 : 0.45,
             }}
           />
           <p
             className="text-sm"
             role="status"
-            style={{
-              color:
-                status.phase === "error"
-                  ? "var(--danger)"
-                  : "var(--text-muted)",
-            }}
+            style={{ color: "var(--text-muted)" }}
           >
             {status.message}
           </p>

@@ -128,10 +128,25 @@ impl VoiceAssistant {
     }
 
     pub fn snapshot(&self) -> Status {
+        {
+            let mut status = self.0.status.lock();
+            status.tts_ready = tts::any_tts_ready(&self.0.path);
+            status.speech_available = speech_command().is_some() || status.tts_ready;
+            // Clear sticky Piper install errors once the binary is actually on disk
+            // (e.g. after a fixed reinstall while the process kept the old phase).
+            if status.phase == "error" && tts::piper_ready(&self.0.path) {
+                let enabled = self.0.preferences.lock().enabled;
+                status.phase = if enabled { "listening" } else { "off" }.into();
+                status.message = if status.tts_ready {
+                    "Piper voice is ready.".into()
+                } else {
+                    "Piper is installed. Download again to finish the voice files.".into()
+                };
+                status.reply_error = None;
+            }
+        }
         let mut status = self.0.status.lock().clone();
         status.preferences = self.0.preferences.lock().clone();
-        status.tts_ready = tts::any_tts_ready(&self.0.path);
-        status.speech_available = speech_command().is_some() || status.tts_ready;
         status
     }
 
@@ -847,8 +862,11 @@ pub async fn voice_download_tts(
             Ok(assistant.snapshot())
         }
         Err(error) => {
-            assistant.publish(&app, "error", &error.to_string());
-            Err(error.to_string())
+            // Publish once; the UI should not also treat the invoke Err as a
+            // second independent alert when the status event already carries it.
+            let message = error.to_string();
+            assistant.publish(&app, "error", &message);
+            Err(message)
         }
     }
 }
