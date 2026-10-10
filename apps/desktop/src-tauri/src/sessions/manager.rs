@@ -721,6 +721,101 @@ pub async fn sftp_download_file(
     Ok(bytes)
 }
 
+fn join_remote_path(base: &str, rel: &str) -> String {
+    if rel.is_empty() {
+        return base.to_string();
+    }
+    let base = base.trim_end_matches('/');
+    if base.is_empty() || base == "/" {
+        format!("/{rel}")
+    } else {
+        format!("{base}/{rel}")
+    }
+}
+
+/// Walk a local directory for SFTP upload. Skips symlinks so junctions / links
+/// cannot pull in paths outside the dropped folder. Relative paths use `/` for
+/// the remote side (SFTP always wants POSIX separators).
+async fn plan_local_dir_upload(
+    root: &std::path::Path,
+) -> anyhow::Result<(Vec<String>, Vec<(std::path::PathBuf, String, u64)>)> {
+    let mut dirs: Vec<String> = vec![String::new()];
+    let mut files: Vec<(std::path::PathBuf, String, u64)> = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        let mut entries = tokio::fs::read_dir(&dir).await.map_err(|err| {
+            anyhow::anyhow!("Cannot read {}: {err}", dir.display())
+        })?;
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            let file_type = entry.file_type().await?;
+            if file_type.is_symlink() {
+                continue;
+            }
+            let rel = path
+                .strip_prefix(root)
+                .map_err(|_| anyhow::anyhow!("Path escaped upload root: {}", path.display()))?
+                .to_string_lossy()
+                .replace('\\', "/");
+            if file_type.is_dir() {
+                dirs.push(rel);
+                stack.push(path);
+            } else if file_type.is_file() {
+                let len = entry.metadata().await?.len();
+                files.push((path, rel, len));
+            }
+        }
+    }
+
+    // Parents before children so create_dir succeeds in order.
+    dirs.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
+    Ok((dirs, files))
+}
+
+async fn ensure_remote_dir(sftp: &SftpSession, remote_dir: &str) -> anyhow::Result<()> {
+    if sftp.try_exists(remote_dir).await.unwrap_or(false) {
+        return Ok(());
+    }
+    sftp.create_dir(remote_dir)
+        .await
+        .map_err(|err| anyhow::anyhow!("Could not create remote directory {remote_dir}: {err}"))
+}
+
+async fn stream_local_file_to_sftp(
+    sftp: &SftpSession,
+    local_path: &std::path::Path,
+    remote_path: &str,
+    cancel: &AtomicBool,
+    mut on_chunk: impl FnMut(u64) -> anyhow::Result<()>,
+) -> anyhow::Result<u64> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut local = tokio::fs::File::open(local_path).await?;
+    let mut remote = sftp.create(remote_path).await?;
+    let mut buf = vec![0u8; 64 * 1024];
+    let mut written = 0u64;
+
+    loop {
+        if cancel.load(Ordering::SeqCst) {
+            drop(remote);
+            let _ = sftp.remove_file(remote_path).await;
+            anyhow::bail!("Upload cancelled.");
+        }
+
+        let n = local.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        remote.write_all(&buf[..n]).await?;
+        written += n as u64;
+        on_chunk(written)?;
+    }
+
+    remote.shutdown().await?;
+    Ok(written)
+}
+
 pub async fn sftp_upload_file(
     app: &AppHandle,
     manager: &SharedSshSessionManager,
@@ -729,72 +824,130 @@ pub async fn sftp_upload_file(
     remote_path: &str,
     transfer_id: &str,
 ) -> anyhow::Result<u64> {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
     let cancel = register_transfer_cancel(transfer_id);
-    let filename = std::path::Path::new(local_path)
+    let local = std::path::Path::new(local_path);
+    let display_name = local
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or(local_path)
         .to_string();
 
     let result = async {
+        let meta = tokio::fs::metadata(local).await.map_err(|err| {
+            anyhow::anyhow!("Cannot access {}: {err}", local.display())
+        })?;
+
         let sftp = open_sftp(manager, session_id).await?;
-        let mut local = tokio::fs::File::open(local_path).await?;
-        let total = local.metadata().await?.len();
-        let mut remote = sftp.create(remote_path).await?;
 
-        let mut buf = vec![0u8; 64 * 1024];
-        let mut done = 0u64;
-        let mut last_emit = 0u64;
+        if meta.is_dir() {
+            let (dirs, files) = plan_local_dir_upload(local).await?;
+            let total: u64 = files.iter().map(|(_, _, len)| *len).sum();
+            let mut done = 0u64;
+            let mut last_emit = 0u64;
+            let mut current_name = display_name.clone();
 
-        emit_transfer_progress(
-            app,
-            &SftpTransferProgress {
-                transfer_id: transfer_id.to_string(),
-                session_id: session_id.to_string(),
-                filename: filename.clone(),
-                bytes_done: 0,
-                bytes_total: total,
-                done: false,
-                cancelled: false,
-            },
-        );
+            emit_transfer_progress(
+                app,
+                &SftpTransferProgress {
+                    transfer_id: transfer_id.to_string(),
+                    session_id: session_id.to_string(),
+                    filename: current_name.clone(),
+                    bytes_done: 0,
+                    bytes_total: total,
+                    done: false,
+                    cancelled: false,
+                },
+            );
 
-        loop {
-            if cancel.load(Ordering::SeqCst) {
-                drop(remote);
-                let _ = sftp.remove_file(remote_path).await;
-                anyhow::bail!("Upload cancelled.");
+            for rel in &dirs {
+                if cancel.load(Ordering::SeqCst) {
+                    anyhow::bail!("Upload cancelled.");
+                }
+                let remote_dir = join_remote_path(remote_path, rel);
+                ensure_remote_dir(&sftp, &remote_dir).await?;
             }
 
-            let n = local.read(&mut buf).await?;
-            if n == 0 {
-                break;
-            }
-            remote.write_all(&buf[..n]).await?;
-            done += n as u64;
-
-            // Throttle UI events; always emit near the end.
-            if done == total || done.saturating_sub(last_emit) >= 256 * 1024 {
-                last_emit = done;
-                emit_transfer_progress(
-                    app,
-                    &SftpTransferProgress {
-                        transfer_id: transfer_id.to_string(),
-                        session_id: session_id.to_string(),
-                        filename: filename.clone(),
-                        bytes_done: done,
-                        bytes_total: total,
-                        done: false,
-                        cancelled: false,
+            for (path, rel, _len) in &files {
+                if cancel.load(Ordering::SeqCst) {
+                    anyhow::bail!("Upload cancelled.");
+                }
+                current_name = rel.clone();
+                let remote_file = join_remote_path(remote_path, rel);
+                let file_start = done;
+                let written = stream_local_file_to_sftp(
+                    sftp.as_ref(),
+                    path,
+                    &remote_file,
+                    cancel.as_ref(),
+                    |file_done| {
+                        done = file_start + file_done;
+                        if done == total || done.saturating_sub(last_emit) >= 256 * 1024 {
+                            last_emit = done;
+                            emit_transfer_progress(
+                                app,
+                                &SftpTransferProgress {
+                                    transfer_id: transfer_id.to_string(),
+                                    session_id: session_id.to_string(),
+                                    filename: current_name.clone(),
+                                    bytes_done: done,
+                                    bytes_total: total,
+                                    done: false,
+                                    cancelled: false,
+                                },
+                            );
+                        }
+                        Ok(())
                     },
-                );
+                )
+                .await?;
+                done = file_start + written;
             }
-        }
 
-        remote.shutdown().await?;
-        Ok(done)
+            Ok(done)
+        } else {
+            let total = meta.len();
+            let mut last_emit = 0u64;
+
+            emit_transfer_progress(
+                app,
+                &SftpTransferProgress {
+                    transfer_id: transfer_id.to_string(),
+                    session_id: session_id.to_string(),
+                    filename: display_name.clone(),
+                    bytes_done: 0,
+                    bytes_total: total,
+                    done: false,
+                    cancelled: false,
+                },
+            );
+
+            let done = stream_local_file_to_sftp(
+                sftp.as_ref(),
+                local,
+                remote_path,
+                cancel.as_ref(),
+                |written| {
+                    if written == total || written.saturating_sub(last_emit) >= 256 * 1024 {
+                        last_emit = written;
+                        emit_transfer_progress(
+                            app,
+                            &SftpTransferProgress {
+                                transfer_id: transfer_id.to_string(),
+                                session_id: session_id.to_string(),
+                                filename: display_name.clone(),
+                                bytes_done: written,
+                                bytes_total: total,
+                                done: false,
+                                cancelled: false,
+                            },
+                        );
+                    }
+                    Ok(())
+                },
+            )
+            .await?;
+            Ok(done)
+        }
     }
     .await;
 
@@ -810,7 +963,7 @@ pub async fn sftp_upload_file(
         &SftpTransferProgress {
             transfer_id: transfer_id.to_string(),
             session_id: session_id.to_string(),
-            filename,
+            filename: display_name,
             bytes_done: if is_err { 0 } else { bytes_done },
             bytes_total: if is_err { 0 } else { bytes_total },
             done: true,
