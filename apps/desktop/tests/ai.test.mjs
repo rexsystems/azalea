@@ -249,6 +249,27 @@ test("action parsing preserves heredoc contents, comments and blank lines", () =
   assert.deepEqual(ai.parseSuggestedActions("```bash\necho unfinished"), []);
 });
 
+test("only explicit shell fences become actions; snippet is display-only", () => {
+  assert.deepEqual(
+    ai.parseSuggestedActions("```\necho should not run\n```"),
+    [],
+  );
+  assert.deepEqual(
+    ai.parseSuggestedActions("```snippet\nphp-fpm pool config\n```"),
+    [],
+  );
+  assert.deepEqual(
+    ai.parseSuggestedActions("```snippet php\n<?php echo 1;\n```"),
+    [],
+  );
+  assert.equal(
+    ai.parseSuggestedActions("```bash\necho ok\n```")[0]?.command,
+    "echo ok",
+  );
+  assert.match(ai.buildSystemPrompt("agent", "confirm"), /```snippet/);
+  assert.match(ai.buildSystemPrompt("agent", "confirm"), /```bash only/);
+});
+
 test("custom model IDs persist per provider and empty values stay empty", () => {
   const store = new Map();
   globalThis.localStorage = {

@@ -192,6 +192,10 @@ export function AiMarkdown({
               action &&
               pendingApprove?.find((p) => pendingActionsEqual(p, action));
             const writePath = action?.type === "write" ? action.path : null;
+            const isSnippet = /^snippet(?:\s|$)/i.test(lang);
+            const snippetLabel = isSnippet
+              ? lang.replace(/^snippet\s*/i, "").trim() || "snippet"
+              : null;
             return (
               <div
                 className="overflow-hidden rounded-xl border"
@@ -208,7 +212,11 @@ export function AiMarkdown({
                   }}
                 >
                   <span className="min-w-0 truncate">
-                    {writePath ? `write ${writePath}` : lang || "code"}
+                    {writePath
+                      ? `write ${writePath}`
+                      : snippetLabel
+                        ? `snippet${snippetLabel === "snippet" ? "" : ` · ${snippetLabel}`}`
+                        : lang || "code"}
                   </span>
                   <div className="flex shrink-0 flex-wrap justify-end gap-1">
                     <CopyCode code={code} />

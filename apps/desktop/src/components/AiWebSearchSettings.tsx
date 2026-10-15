@@ -130,8 +130,8 @@ export function AiWebSearchSettings({
         value={prefs.webSearchProvider}
         disabled={busy}
         options={[
-          { value: "mwmbl", label: "Mwmbl (no key required)" },
           { value: "duckduckgo", label: "DuckDuckGo (no key required)" },
+          { value: "mwmbl", label: "Mwmbl (no key, sparse index)" },
           { value: "tavily", label: "Tavily" },
           { value: "brave", label: "Brave Search" },
           { value: "searxng", label: "SearXNG (your own instance)" },

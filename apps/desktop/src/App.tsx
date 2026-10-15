@@ -203,7 +203,8 @@ function App() {
   const reconnectPhaseTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>[]>());
   const reconnectAttemptsRef = useRef(new Map<string, number>());
   const [reconnectUi, setReconnectUi] = useState<Record<string, ReconnectInfo>>({});
-  const [filesPanelTabs, setFilesPanelTabs] = useState<Set<string>>(() => new Set());
+  /** At most one SFTP panel. null = closed. Survives only for the active tab. */
+  const [filesPanelSessionId, setFilesPanelSessionId] = useState<string | null>(null);
   const [snippetsOpen, setSnippetsOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [forwardsOpen, setForwardsOpen] = useState(false);
@@ -622,12 +623,7 @@ function App() {
   }, [tabs, activeTabId]);
 
   const removeTab = useCallback((tabId: string) => {
-    setFilesPanelTabs((prev) => {
-      if (!prev.has(tabId)) return prev;
-      const next = new Set(prev);
-      next.delete(tabId);
-      return next;
-    });
+    setFilesPanelSessionId((current) => (current === tabId ? null : current));
     reconnectAttemptsRef.current.delete(tabId);
     setReconnectUi((prev) => {
       if (!(tabId in prev)) return prev;
@@ -1953,28 +1949,25 @@ function App() {
         (s) => s.state === "listening" || s.state === "connected",
       ).length
     : 0;
-  const filesPanelOpen = Boolean(activeTabId && filesPanelTabs.has(activeTabId));
+  const filesPanelOpen = Boolean(
+    activeTabId && filesPanelSessionId === activeTabId,
+  );
 
-  const setFilesPanelOpenForActive = (open: boolean) => {
-    if (!activeTabId) return;
-    setFilesPanelTabs((prev) => {
-      const has = prev.has(activeTabId);
-      if (open === has) return prev;
-      const next = new Set(prev);
-      if (open) next.add(activeTabId);
-      else next.delete(activeTabId);
-      return next;
+  // Only one file browser, tied to the active session. Switching tabs or
+  // leaving the terminal closes it so it cannot reopen as a second panel.
+  useEffect(() => {
+    setFilesPanelSessionId((current) => {
+      if (!current) return current;
+      if (!viewingTerminal || !activeTabId || current !== activeTabId) return null;
+      return current;
     });
-  };
+  }, [activeTabId, viewingTerminal]);
 
   const toggleFilesPanelForActive = () => {
     if (!activeTabId) return;
-    setFilesPanelTabs((prev) => {
-      const next = new Set(prev);
-      if (next.has(activeTabId)) next.delete(activeTabId);
-      else next.add(activeTabId);
-      return next;
-    });
+    setFilesPanelSessionId((current) =>
+      current === activeTabId ? null : activeTabId,
+    );
   };
 
   const displayTabs = useMemo(() => {
@@ -2339,13 +2332,19 @@ function App() {
             )}
           </div>
 
-          {viewingTerminal && filesPanelOpen && activeTab && (
+          {viewingTerminal &&
+            filesPanelSessionId &&
+            activeTab &&
+            filesPanelSessionId === activeTab.id && (
             <FileBrowserPanel
-              key={activeTab.id}
-              sessionId={activeTab.id}
-              onClose={() => setFilesPanelOpenForActive(false)}
+              key={filesPanelSessionId}
+              sessionId={filesPanelSessionId}
+              onClose={() => setFilesPanelSessionId(null)}
               onCdTerminal={(path) =>
-                sendCommandToTerminal(activeTab.id, `cd '${path.replace(/'/g, "'\\''")}'`)
+                sendCommandToTerminal(
+                  filesPanelSessionId,
+                  `cd '${path.replace(/'/g, "'\\''")}'`,
+                )
               }
             />
           )}
@@ -2438,7 +2437,7 @@ function App() {
               isMobile
                 ? () => {
                     setViewingTerminal(false);
-                    setFilesPanelOpenForActive(false);
+                    setFilesPanelSessionId(null);
                     setNavPage("hosts");
                   }
                 : undefined

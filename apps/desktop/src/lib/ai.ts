@@ -301,7 +301,8 @@ const DEFAULT_PREFS: AiPrefs = {
   access: "confirm",
   includeTerminalContext: true,
   webSearchEnabled: true,
-  webSearchProvider: "mwmbl",
+  // DuckDuckGo covers niche product docs better than Mwmbl's sparse index.
+  webSearchProvider: "duckduckgo",
   webSearchUrl: "",
   customModels: {},
   providerSettings: {},
@@ -895,6 +896,10 @@ export function parseSuggestedFileWrites(text: string): AiFileWrite[] {
     .map((a) => ({ path: a.path, content: a.content }));
 }
 
+/** Languages that mean "run this in the terminal", never display-only snippets. */
+const SHELL_FENCE_LANG =
+  /^(bash|sh|shell|zsh|powershell|pwsh|ps1|cmd|console|terminal)$/i;
+
 /** Ordered shell + write actions from an assistant reply. */
 export function parseSuggestedActions(text: string): AiPendingAction[] {
   const out: AiPendingAction[] = [];
@@ -909,7 +914,8 @@ export function parseSuggestedActions(text: string): AiPendingAction[] {
       if (path) out.push({ type: "write", path, content: body });
       continue;
     }
-    if (/^(bash|sh|shell|zsh|powershell|pwsh|ps1)?$/i.test(header)) {
+    // Only explicit shell languages run. ```snippet (and everything else) is display-only.
+    if (SHELL_FENCE_LANG.test(header)) {
       const command = body.trim();
       if (
         command &&
@@ -954,38 +960,36 @@ export function buildSystemPrompt(
   osHint?: string | null,
 ): string {
   const os = osHint?.trim() || "unknown Linux/Unix";
-  const memoryHints = [
-    "You may save durable facts with a fenced ```memory block (one fact per line).",
-    "To drop outdated memory, use a fenced ```forget-memory block with matching text.",
-    "Only store useful durable notes (host OS quirks, preferred tools, project paths). Never store passwords or API keys.",
+  const shared = [
+    `Remote OS hint: ${os}.`,
+    "Write short and direct. No filler, no ceremony, no long disclaimers.",
+    "Match the user's language when they write in it.",
+    "Tools (fences). Use exactly these; do not invent others:",
+    "- Show-only code/config the user can copy: ```snippet (optional language after it, e.g. ```snippet php). Never needs approval. Prefer this when you are not running anything.",
+    "- Run in the terminal: ```bash only (also sh/zsh/powershell). One command per fence. Needs approval unless FULL access.",
+    "- Write a remote file via SFTP: ```write path=/absolute/or/relative/file then contents. Never put secrets in the file.",
+    "- Web search (when enabled): ```search with one public query.",
+    "- Memory: ```memory / ```forget-memory (one fact per line). Never store passwords or API keys.",
+    "Never use a bare ``` fence for commands or snippets. Never put show-only content in ```bash.",
+    "Never ask for passwords or API keys in chat.",
   ];
-  const writeHint =
-    "To write a remote file via SFTP, use a fenced block like ```write path=/absolute/or/relative/file\\n...contents...``` (never put secrets or keys in file contents).";
   if (mode === "ask") {
     return [
-      "You are Azalea Ask, a capable assistant inside an SSH/local terminal client.",
-      `Remote OS hint: ${os}.`,
-      "Be concrete and helpful. Use markdown. Put runnable shell commands in fenced ```bash blocks.",
-      writeHint,
-      "Do not claim you executed anything. The user Inserts, Runs, or Writes.",
-      "Never ask for passwords or API keys.",
-      "You can use local memory and prior chat snippets when provided.",
-      ...memoryHints,
+      "You are Azalea Ask inside an SSH/local terminal client.",
+      ...shared,
+      "You do not execute anything. Prefer ```snippet. Use ```bash only when the user should run that command themselves.",
     ].join("\n");
   }
   return [
     "You are Azalea Agent inside an SSH/local terminal client.",
-    `Remote OS hint: ${os}.`,
+    ...shared,
     access === "full"
-      ? "Access mode is FULL: ```bash and ```write blocks run automatically. Prefer safe, reversible steps."
-      : "Access mode is CONFIRM: the user approves each ```bash / ```write before it runs.",
-    "Put each executable command in its own ```bash fence. Explain briefly before/after.",
-    writeHint,
-    "After a command or write runs you will receive its result. Use that to decide the next step.",
-    "When the task is finished, reply with a short summary and no bash/write fences.",
-    "Never ask for passwords or API keys in chat.",
-    "You can use local memory and prior chat snippets when provided.",
-    ...memoryHints,
+      ? "Access mode is FULL: ```bash and ```write run automatically. Prefer safe, reversible steps."
+      : "Access mode is CONFIRM: each ```bash / ```write needs Approve. Do not spam approve prompts with show-only content.",
+    "One small step at a time. No long diagnostic pipelines to stall.",
+    "If you only need to show something, emit ```snippet. Do not use ```bash for that.",
+    "After a command or write runs you get the result. Use that for the next step.",
+    "When done, short summary with no bash/write fences.",
   ].join("\n");
 }
 

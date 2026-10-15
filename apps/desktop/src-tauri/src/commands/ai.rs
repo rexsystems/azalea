@@ -380,12 +380,12 @@ pub async fn ai_web_search(
                 .text()
                 .await
                 .map_err(|err| format!("Could not read search results: {err}"))?;
-            return parse_duckduckgo_sources(&html);
+            return parse_duckduckgo_sources(query, &html);
         }
         let parsed: Value = response.json().await.map_err(|_| {
             "Invalid web search response. SearXNG must allow JSON output.".to_string()
         })?;
-        parse_web_sources(&provider, &parsed)
+        parse_web_sources(&provider, query, &parsed)
     };
     let result = cancellable(&signal, work)
         .await
@@ -396,7 +396,25 @@ pub async fn ai_web_search(
     result
 }
 
-fn parse_web_sources(provider: &str, parsed: &Value) -> Result<Vec<AiWebSource>, String> {
+/// Prefer hits that mention the query's distinctive term (longest word ≥ 5 chars).
+fn query_term_match(query: &str, title: &str, url: &str) -> bool {
+    let longest = query
+        .split_whitespace()
+        .filter(|term| term.chars().count() >= 5)
+        .max_by_key(|term| term.chars().count());
+    let Some(term) = longest else {
+        return true;
+    };
+    let needle = term.to_lowercase();
+    let hay = format!("{title} {url}").to_lowercase();
+    hay.contains(&needle)
+}
+
+fn parse_web_sources(
+    provider: &str,
+    query: &str,
+    parsed: &Value,
+) -> Result<Vec<AiWebSource>, String> {
     let rows = if provider == "brave" {
         parsed.pointer("/web/results")
     } else {
@@ -409,6 +427,7 @@ fn parse_web_sources(provider: &str, parsed: &Value) -> Result<Vec<AiWebSource>,
         return Err("Search provider returned an invalid result list.".into());
     };
     let mut sources = Vec::<AiWebSource>::new();
+    let mut weak = Vec::<AiWebSource>::new();
     for row in rows {
         let Some(url) = row.get("url").and_then(Value::as_str) else {
             continue;
@@ -422,35 +441,50 @@ fn parse_web_sources(provider: &str, parsed: &Value) -> Result<Vec<AiWebSource>,
         {
             continue;
         }
-        if sources.iter().any(|source| source.url == url) {
+        if sources
+            .iter()
+            .chain(weak.iter())
+            .any(|source| source.url == url)
+        {
             continue;
         }
-        sources.push(AiWebSource {
-            title: row
-                .get("title")
-                .and_then(Value::as_str)
-                .unwrap_or(url)
-                .chars()
-                .take(300)
-                .collect(),
+        let title: String = row
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or(url)
+            .chars()
+            .take(300)
+            .collect();
+        let snippet: String = row
+            .get("content")
+            .or_else(|| row.get("description"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .chars()
+            .take(2400)
+            .collect();
+        let source = AiWebSource {
+            title: title.clone(),
             url: url.to_string(),
-            snippet: row
-                .get("content")
-                .or_else(|| row.get("description"))
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .chars()
-                .take(2400)
-                .collect(),
-        });
+            snippet,
+        };
+        if query_term_match(query, &title, url) {
+            sources.push(source);
+        } else {
+            weak.push(source);
+        }
         if sources.len() == 6 {
             break;
         }
     }
+    // Fall back to weaker hits only when nothing matched the product name.
+    if sources.is_empty() {
+        sources.extend(weak.into_iter().take(6));
+    }
     Ok(sources)
 }
 
-fn parse_duckduckgo_sources(html: &str) -> Result<Vec<AiWebSource>, String> {
+fn parse_duckduckgo_sources(query: &str, html: &str) -> Result<Vec<AiWebSource>, String> {
     use scraper::{Html, Selector};
     let document = Html::parse_document(html);
     let challenge =
@@ -508,7 +542,7 @@ fn parse_duckduckgo_sources(html: &str) -> Result<Vec<AiWebSource>, String> {
     {
         return Err("DuckDuckGo did not return readable results. The service may be unavailable or may have changed its response.".into());
     }
-    parse_web_sources("duckduckgo", &json!({ "results": rows }))
+    parse_web_sources("duckduckgo", query, &json!({ "results": rows }))
 }
 
 fn normalize_base_url(url: &str) -> String {
@@ -1129,7 +1163,7 @@ mod tests {
             } else {
                 json!({"results":rows})
             };
-            let sources = parse_web_sources(provider, &response).unwrap();
+            let sources = parse_web_sources(provider, "docs", &response).unwrap();
             assert_eq!(sources.len(), 1);
             assert_eq!(sources[0].title, "Docs");
             assert_eq!(sources[0].url, "https://example.com/docs");
@@ -1138,16 +1172,29 @@ mod tests {
     }
 
     #[test]
+    fn search_prefers_results_matching_product_name() {
+        let rows = json!([
+            {"title":"Overhaul Windows install docs", "url":"https://github.com/ocaml/ocaml/pull/536", "content":"install"},
+            {"title":"Paymenter Docs", "url":"https://paymenter.org/docs", "content":"Install Paymenter"}
+        ]);
+        let sources =
+            parse_web_sources("mwmbl", "Paymenter install docs", &json!({"results": rows}))
+                .unwrap();
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].url, "https://paymenter.org/docs");
+    }
+
+    #[test]
     fn search_result_count_and_excerpts_are_bounded() {
         let rows: Vec<Value> = (0..30)
             .map(|i| json!({"url":format!("https://example.com/{i}"), "content":"x".repeat(10000)}))
             .collect();
-        let sources = parse_web_sources("tavily", &json!({"results":rows})).unwrap();
+        let sources = parse_web_sources("tavily", "example", &json!({"results":rows})).unwrap();
         assert_eq!(sources.len(), 6);
         assert_eq!(sources[0].snippet.len(), 2400);
-        assert!(parse_web_sources("tavily", &json!({"error":"bad"})).is_err());
+        assert!(parse_web_sources("tavily", "q", &json!({"error":"bad"})).is_err());
         assert!(
-            parse_web_sources("brave", &json!({"query":{"original":"no matches"}}))
+            parse_web_sources("brave", "q", &json!({"query":{"original":"no matches"}}))
                 .unwrap()
                 .is_empty()
         );
@@ -1158,15 +1205,15 @@ mod tests {
         let html = r#"<div class="result"><a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Ftauri.app%2F">Tauri &amp; Docs</a><a class="result__snippet">Build <b>apps</b> safely.</a></div>
             <div class="result result--ad"><a class="result__a" href="https://ad.example.com">Ad</a></div>
             <div class="result"><a class="result__a" href="javascript:alert(1)">Unsafe</a></div>"#;
-        let sources = parse_duckduckgo_sources(html).unwrap();
+        let sources = parse_duckduckgo_sources("Tauri docs", html).unwrap();
         assert_eq!(sources.len(), 1);
         assert_eq!(sources[0].url, "https://tauri.app/");
         assert_eq!(sources[0].title, "Tauri & Docs");
         assert_eq!(sources[0].snippet, "Build apps safely.");
-        assert!(parse_duckduckgo_sources("<form id='challenge-form'></form>").is_err());
-        assert!(parse_duckduckgo_sources("<p>Unavailable</p>").is_err());
+        assert!(parse_duckduckgo_sources("q", "<form id='challenge-form'></form>").is_err());
+        assert!(parse_duckduckgo_sources("q", "<p>Unavailable</p>").is_err());
         assert!(
-            parse_duckduckgo_sources("<div class='no-results'>No matches</div>")
+            parse_duckduckgo_sources("q", "<div class='no-results'>No matches</div>")
                 .unwrap()
                 .is_empty()
         );
