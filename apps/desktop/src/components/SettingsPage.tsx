@@ -187,6 +187,9 @@ export function SettingsPage({
   const { iconPack, changeIconPack } = useIconPack();
   const [tab, setTab] = useState<SettingsTab>("appearance");
   const [importVisited, setImportVisited] = useState(false);
+  const [accountVisited, setAccountVisited] = useState(false);
+  const [aiVisited, setAiVisited] = useState(false);
+  const [voiceVisited, setVoiceVisited] = useState(false);
   const [appVersion, setAppVersion] = useState("…");
   const [telemetryOn, setTelemetryOn] = useState(() => isTelemetryEnabled());
   const [hideHostAddresses, setHideHostAddresses] = useState(() =>
@@ -247,6 +250,9 @@ export function SettingsPage({
 
   useEffect(() => {
     if (tab === "import") setImportVisited(true);
+    if (tab === "account") setAccountVisited(true);
+    if (tab === "ai") setAiVisited(true);
+    if (tab === "voice") setVoiceVisited(true);
   }, [tab]);
 
   const selectTab = (next: SettingsTab) => {
@@ -651,8 +657,11 @@ export function SettingsPage({
               </>
             )}
 
-            {tab === "account" && (
-              <>
+            {(tab === "account" || accountVisited) && (
+              <div
+                className={tab === "account" ? undefined : "hidden"}
+                aria-hidden={tab !== "account"}
+              >
                 <PanelHeader
                   title="Account"
                   description={
@@ -673,7 +682,7 @@ export function SettingsPage({
                   accountKind={accountKind}
                   account={activeAccount}
                 />
-              </>
+              </div>
             )}
 
             {(tab === "import" || importVisited) && (
@@ -721,8 +730,11 @@ export function SettingsPage({
               </>
             )}
 
-            {tab === "ai" && (
-              <>
+            {(tab === "ai" || aiVisited) && (
+              <div
+                className={tab === "ai" ? undefined : "hidden"}
+                aria-hidden={tab !== "ai"}
+              >
                 <PanelHeader
                   title="AI"
                   description="Your API keys, your provider. Off by default."
@@ -733,11 +745,14 @@ export function SettingsPage({
                 >
                   <AiSettingsSection />
                 </SettingRow>
-              </>
+              </div>
             )}
 
-            {tab === "voice" && (
-              <>
+            {(tab === "voice" || voiceVisited) && (
+              <div
+                className={tab === "voice" ? undefined : "hidden"}
+                aria-hidden={tab !== "voice"}
+              >
                 <PanelHeader
                   title="Voice assistant"
                   description="Local speech recognition and spoken replies. Off by default."
@@ -745,7 +760,7 @@ export function SettingsPage({
                 <SettingRow label="Setup">
                   <VoiceSettingsSection />
                 </SettingRow>
-              </>
+              </div>
             )}
 
             {tab === "privacy" && (

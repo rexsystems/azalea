@@ -348,8 +348,16 @@ export function AiSettingsSection() {
               onChange={(model) => patchPrefs({ model })}
             />
             {modelsError && (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                {modelsError}
+              <p
+                className="break-words text-xs leading-snug"
+                style={{ color: "#f87171" }}
+                title={modelsError}
+              >
+                {/invalid_api_key|401/i.test(modelsError)
+                  ? "Invalid API key. Check the key above."
+                  : modelsError.length > 140
+                    ? `${modelsError.slice(0, 137)}…`
+                    : modelsError}
               </p>
             )}
             {provider.id === "selfhost_server" ? <div className="space-y-2">

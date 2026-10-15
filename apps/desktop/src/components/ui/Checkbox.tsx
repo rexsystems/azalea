@@ -6,6 +6,8 @@ interface CheckboxProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
+  /** Compact control for dense panels (AI chat settings, etc.). */
+  size?: "md" | "sm";
   className?: string;
 }
 
@@ -16,8 +18,10 @@ export function Checkbox({
   checked,
   onChange,
   disabled = false,
+  size = "md",
   className = "",
 }: CheckboxProps) {
+  const compact = size === "sm";
   return (
     <button
       type="button"
@@ -27,24 +31,38 @@ export function Checkbox({
       onClick={() => {
         if (!disabled) onChange(!checked);
       }}
-      className={`flex w-full cursor-pointer items-start gap-3 text-left transition-ui disabled:cursor-not-allowed disabled:opacity-55 ${className}`}
+      className={`flex w-full cursor-pointer items-center text-left transition-ui disabled:cursor-not-allowed disabled:opacity-55 ${
+        compact ? "gap-2" : "items-start gap-3"
+      } ${className}`}
     >
       <span
-        className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-ui"
+        className={`flex shrink-0 items-center justify-center border transition-ui ${
+          compact
+            ? "h-3.5 w-3.5 rounded"
+            : "mt-0.5 h-5 w-5 rounded-md"
+        }`}
         style={{
           background: checked ? "var(--accent)" : "var(--bg-input)",
           borderColor: checked ? "var(--accent)" : "var(--border)",
           color: "var(--accent-fg)",
         }}
       >
-        {checked ? <Tick size={12} strokeWidth={2.5} /> : null}
+        {checked ? (
+          <Tick size={compact ? 9 : 12} strokeWidth={2.5} />
+        ) : null}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-medium" style={{ color: "var(--text)" }}>
+        <span
+          className={`block font-medium ${compact ? "text-[12px] leading-tight" : "text-sm"}`}
+          style={{ color: "var(--text)" }}
+        >
           {label}
         </span>
         {description ? (
-          <span className="mt-0.5 block truncate text-xs" style={{ color: "var(--text-muted)" }}>
+          <span
+            className={`mt-0.5 block truncate ${compact ? "text-[11px]" : "text-xs"}`}
+            style={{ color: "var(--text-muted)" }}
+          >
             {description}
           </span>
         ) : null}

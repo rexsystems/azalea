@@ -105,6 +105,32 @@ const MAX_WIDTH = 560;
 const DEFAULT_WIDTH = 400;
 const MAX_AGENT_STEPS = 8;
 
+function shortAiError(raw: string): string {
+  const text = raw.replace(/^Error:\s*/i, "").trim();
+  if (/invalid_api_key|permission_denied|401/i.test(text)) {
+    return "Invalid API key. Check Settings → AI.";
+  }
+  if (/403|forbidden/i.test(text)) {
+    return "Provider refused the request (403).";
+  }
+  if (/429|rate.?limit/i.test(text)) {
+    return "Rate limited. Try again in a moment.";
+  }
+  const jsonMsg = text.match(/"message"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (jsonMsg?.[1]) {
+    try {
+      const decoded = JSON.parse(`"${jsonMsg[1]}"`) as string;
+      if (decoded.length <= 140) return decoded;
+      return `${decoded.slice(0, 137)}…`;
+    } catch {
+      /* fall through */
+    }
+  }
+  const withoutJson = text.replace(/\{[\s\S]*\}$/, "").trim();
+  const compact = (withoutJson || text).replace(/\s+/g, " ");
+  return compact.length > 140 ? `${compact.slice(0, 137)}…` : compact;
+}
+
 export function AiPanel({
   sessionId,
   hostLabel,
@@ -152,6 +178,7 @@ export function AiPanel({
   const [busy, setBusy] = useState(false);
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stepLimitPaused, setStepLimitPaused] = useState(false);
   const [streamingId, setStreamingId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const requestIdRef = useRef<string | null>(null);
@@ -377,9 +404,17 @@ export function AiPanel({
   useEffect(() => {
     if (!settingsOpen) return;
     const close = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (
+        target instanceof Element &&
+        target.closest("[data-azalea-select-menu]")
+      ) {
+        return;
+      }
       if (
         composerRef.current &&
-        !composerRef.current.contains(e.target as Node)
+        target &&
+        !composerRef.current.contains(target)
       ) {
         setSettingsOpen(false);
       }
@@ -400,6 +435,7 @@ export function AiPanel({
     setCommandOutput(null);
     setPendingApprove([]);
     setError(null);
+    setStepLimitPaused(false);
     setAgentStatus(null);
     setPanelView("chat");
   };
@@ -416,6 +452,7 @@ export function AiPanel({
     setCommandOutput(null);
     setPendingApprove([]);
     setError(null);
+    setStepLimitPaused(false);
     setAgentStatus(null);
     setSettingsOpen(false);
     setPanelView("chat");
@@ -790,20 +827,20 @@ export function AiPanel({
       nextObservation = await runActionsObserving(actions);
       setPendingApprove([]);
     }
-    setError(
-      `Agent paused after ${MAX_AGENT_STEPS} steps. Review the results before continuing.`,
-    );
-    workPhase("error");
+    // Soft checkpoint — not a failure. User can hit Continue.
+    setStepLimitPaused(true);
+    workPhase("stopped");
     return "done";
   };
 
-  const send = async () => {
-    const text = input.trim();
+  const send = async (presetText?: string) => {
+    const text = (presetText ?? input).trim();
     if (!text || operationRef.current) return;
     if (workRef.current?.status === "waiting") workPhase("stopped");
     operationRef.current = true;
-    setInput("");
+    if (!presetText) setInput("");
     setError(null);
+    setStepLimitPaused(false);
     setPendingApprove([]);
     setCommandOutput(null);
     abortAgentRef.current = false;
@@ -1575,9 +1612,38 @@ export function AiPanel({
               {snippetStatus}
             </p>
           )}
+          {stepLimitPaused && !busy && (
+            <div
+              className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2"
+              style={{
+                borderColor: "var(--border-subtle)",
+                background: "var(--bg-card)",
+              }}
+            >
+              <span
+                className="min-w-0 flex-1 text-[12px] leading-snug"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Paused after {MAX_AGENT_STEPS} steps.
+              </span>
+              <Button
+                size="xs"
+                disabled={busy}
+                onClick={() =>
+                  void send("Continue from where you left off.")
+                }
+              >
+                Continue
+              </Button>
+            </div>
+          )}
           {error && (
-            <p className="text-[13px]" style={{ color: "#f87171" }}>
-              {error}
+            <p
+              className="select-text break-words text-[12px] leading-snug"
+              style={{ color: "#f87171" }}
+              title={error}
+            >
+              {shortAiError(error)}
             </p>
           )}
         </div>
@@ -1660,141 +1726,148 @@ export function AiPanel({
                 </button>
                 {settingsOpen && (
                   <div
-                    className="absolute bottom-full right-0 z-20 mb-1 w-[280px] space-y-3 rounded-xl border p-3 shadow-lg"
+                    className="absolute bottom-full right-0 z-20 mb-1 flex w-[260px] max-h-[min(320px,55vh)] flex-col overflow-hidden rounded-xl border shadow-lg"
                     style={{
                       background: "var(--bg-panel)",
                       borderColor: "var(--border-subtle)",
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                   >
-                    <Select
-                      label="Provider"
-                      disabled={busy}
-                      value={prefs.providerId}
-                      menuPlacement="top"
-                      options={AI_PROVIDERS.map((p) => ({
-                        value: p.id,
-                        label: p.name,
-                      }))}
-                      onChange={(id) => {
-                        patchPrefs({
-                          providerId: id as AiProviderId,
-                        });
-                      }}
-                    />
-                    {regionOptions.length > 0 && (
+                    <div className="min-h-0 space-y-2 overflow-y-auto p-2.5">
                       <Select
-                        label="Region"
+                        label="Provider"
+                        size="sm"
                         disabled={busy}
-                        value={prefs.region}
-                        menuPlacement="top"
-                        options={regionOptions}
-                        onChange={(region) => patchPrefs({ region })}
+                        value={prefs.providerId}
+                        options={AI_PROVIDERS.map((p) => ({
+                          value: p.id,
+                          label: p.name,
+                        }))}
+                        onChange={(id) => {
+                          patchPrefs({
+                            providerId: id as AiProviderId,
+                          });
+                        }}
                       />
-                    )}
-                    {prefs.mode === "agent" && (
-                      <div className="space-y-1.5">
+                      {regionOptions.length > 0 && (
                         <Select
-                          label="Access"
+                          label="Region"
+                          size="sm"
                           disabled={busy}
-                          value={prefs.access}
-                          menuPlacement="top"
-                          options={[
-                            { value: "confirm", label: "Confirm each command" },
-                            { value: "full", label: "Full access" },
-                          ]}
-                          onChange={(access) =>
-                            patchPrefs({ access: access as AiAccess })
-                          }
+                          value={prefs.region}
+                          options={regionOptions}
+                          onChange={(region) => patchPrefs({ region })}
                         />
-                        {prefs.access === "full" && (
-                          <p
-                            className="text-[11px] leading-relaxed"
-                            style={{ color: "#fca5a5" }}
-                          >
-                            Full access runs commands and file writes without
-                            asking.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    <Checkbox
-                      label="Web search"
-                      checked={prefs.webSearchEnabled}
-                      disabled={busy}
-                      onChange={(webSearchEnabled) =>
-                        patchPrefs({ webSearchEnabled })
-                      }
-                    />
-                    <Checkbox
-                      label="Include terminal context"
-                      checked={prefs.includeTerminalContext}
-                      onChange={(checked) =>
-                        patchPrefs({ includeTerminalContext: checked })
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px]"
-                      style={{ color: "var(--text-secondary)" }}
-                      onClick={() => {
-                        const current = getAiThread(threadId);
-                        void exportThread(current);
-                        setSettingsOpen(false);
-                      }}
-                    >
-                      <Download size={13} />
-                      Export this chat
-                    </button>
-                    <button
-                      type="button"
-                      className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px]"
-                      style={{ color: "var(--text-secondary)" }}
-                      onClick={() => {
-                        void exportThread(null, true);
-                        setSettingsOpen(false);
-                      }}
-                    >
-                      <Download size={13} />
-                      Export all chats
-                    </button>
-                    {provider.supportsModelList && (
+                      )}
+                      {prefs.mode === "agent" && (
+                        <div className="space-y-1">
+                          <Select
+                            label="Access"
+                            size="sm"
+                            disabled={busy}
+                            value={prefs.access}
+                            options={[
+                              {
+                                value: "confirm",
+                                label: "Confirm each command",
+                              },
+                              { value: "full", label: "Full access" },
+                            ]}
+                            onChange={(access) =>
+                              patchPrefs({ access: access as AiAccess })
+                            }
+                          />
+                          {prefs.access === "full" && (
+                            <p
+                              className="text-[11px] leading-snug"
+                              style={{ color: "#fca5a5" }}
+                            >
+                              Runs commands and file writes without asking.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      <Checkbox
+                        size="sm"
+                        label="Web search"
+                        checked={prefs.webSearchEnabled}
+                        disabled={busy}
+                        onChange={(webSearchEnabled) =>
+                          patchPrefs({ webSearchEnabled })
+                        }
+                      />
+                      <Checkbox
+                        size="sm"
+                        label="Include terminal context"
+                        checked={prefs.includeTerminalContext}
+                        onChange={(checked) =>
+                          patchPrefs({ includeTerminalContext: checked })
+                        }
+                      />
                       <button
                         type="button"
-                        className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-[12px]"
+                        className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
                         style={{ color: "var(--text-secondary)" }}
-                        disabled={loadingModels}
-                        onClick={refreshModels}
-                      >
-                        {loadingModels ? (
-                          <Loader2 size={13} className="animate-spin" />
-                        ) : (
-                          <RefreshCw size={13} />
-                        )}
-                        Refresh models
-                      </button>
-                    )}
-                    {modelsError && (
-                      <p
-                        className="text-[11px]"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        {modelsError}
-                      </p>
-                    )}
-                    {threads.some((t) => t.id === threadId) && (
-                      <button
-                        type="button"
-                        className="text-[11px]"
-                        style={{ color: "var(--text-muted)" }}
                         onClick={() => {
-                          removeThread(threadId);
+                          const current = getAiThread(threadId);
+                          void exportThread(current);
                           setSettingsOpen(false);
                         }}
                       >
-                        Delete this chat
+                        <Download size={13} />
+                        Export this chat
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
+                        style={{ color: "var(--text-secondary)" }}
+                        onClick={() => {
+                          void exportThread(null, true);
+                          setSettingsOpen(false);
+                        }}
+                      >
+                        <Download size={13} />
+                        Export all chats
+                      </button>
+                      {provider.supportsModelList && (
+                        <button
+                          type="button"
+                          className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
+                          style={{ color: "var(--text-secondary)" }}
+                          disabled={loadingModels}
+                          onClick={refreshModels}
+                        >
+                          {loadingModels ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <RefreshCw size={13} />
+                          )}
+                          Refresh models
+                        </button>
+                      )}
+                      {modelsError && (
+                        <p
+                          className="break-words text-[11px] leading-snug"
+                          style={{ color: "#f87171" }}
+                          title={modelsError}
+                        >
+                          {shortAiError(modelsError)}
+                        </p>
+                      )}
+                      {threads.some((t) => t.id === threadId) && (
+                        <button
+                          type="button"
+                          className="text-[11px]"
+                          style={{ color: "var(--text-muted)" }}
+                          onClick={() => {
+                            removeThread(threadId);
+                            setSettingsOpen(false);
+                          }}
+                        >
+                          Delete this chat
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type {
   Host,
   HostGroup,
@@ -157,6 +157,7 @@ function App() {
   const [statusMessage, setStatusMessage] = useState("Ready");
 
   const [navPage, setNavPage] = useState<NavPage>("home");
+  const [settingsMounted, setSettingsMounted] = useState(false);
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [accounts, setAccounts] = useState<api.AccountRecord[]>([]);
   const [activeAccount, setActiveAccount] = useState<api.AccountRecord | null>(null);
@@ -206,7 +207,8 @@ function App() {
   /** At most one SFTP panel. null = closed. Survives only for the active tab. */
   const [filesPanelSessionId, setFilesPanelSessionId] = useState<string | null>(null);
   const [snippetsOpen, setSnippetsOpen] = useState(false);
-  const [aiOpen, setAiOpen] = useState(false);
+  /** AI chat open for at most one session; null = closed. */
+  const [aiPanelSessionId, setAiPanelSessionId] = useState<string | null>(null);
   const [forwardsOpen, setForwardsOpen] = useState(false);
   const terminalContextRef = useRef<Record<string, string>>({});
   const [forwardStatuses, setForwardStatuses] = useState<
@@ -255,9 +257,12 @@ function App() {
     let cancelled = false;
     const sub = listen("azalea-open-settings-ai", () => {
       if (cancelled) return;
-      setViewingTerminal(false);
-      setNavPage("settings");
-      setFocusSettingsAi(true);
+      startTransition(() => {
+        setSettingsMounted(true);
+        setViewingTerminal(false);
+        setNavPage("settings");
+        setFocusSettingsAi(true);
+      });
     });
     return () => {
       cancelled = true;
@@ -284,7 +289,7 @@ function App() {
       const detail = (event as CustomEvent<boolean>).detail;
       const on = Boolean(detail);
       setAiEnabledState(on);
-      if (!on) setAiOpen(false);
+      if (!on) setAiPanelSessionId(null);
     };
     window.addEventListener("azalea-ai-enabled", onAi);
     return () => window.removeEventListener("azalea-ai-enabled", onAi);
@@ -624,6 +629,7 @@ function App() {
 
   const removeTab = useCallback((tabId: string) => {
     setFilesPanelSessionId((current) => (current === tabId ? null : current));
+    setAiPanelSessionId((current) => (current === tabId ? null : current));
     reconnectAttemptsRef.current.delete(tabId);
     setReconnectUi((prev) => {
       if (!(tabId in prev)) return prev;
@@ -1157,22 +1163,31 @@ function App() {
     if (drawerOpen && drawerPage !== null && page !== drawerPage) {
       closeDrawer();
     }
-    setNavPage(page);
-    setViewingTerminal(false);
+    startTransition(() => {
+      if (page === "settings") setSettingsMounted(true);
+      setNavPage(page);
+      setViewingTerminal(false);
+    });
   };
 
   const handleOpenAccount = useCallback(() => {
     closeDrawer();
-    setNavPage("settings");
-    setViewingTerminal(false);
-    setFocusSettingsSync(true);
+    startTransition(() => {
+      setSettingsMounted(true);
+      setNavPage("settings");
+      setViewingTerminal(false);
+      setFocusSettingsSync(true);
+    });
   }, []);
 
   const handleOpenImportFromSsh = useCallback(() => {
     closeDrawer();
-    setNavPage("settings");
-    setViewingTerminal(false);
-    setFocusSettingsImport(true);
+    startTransition(() => {
+      setSettingsMounted(true);
+      setNavPage("settings");
+      setViewingTerminal(false);
+      setFocusSettingsImport(true);
+    });
   }, []);
 
   const handleSwitchAccount = useCallback(
@@ -1514,10 +1529,30 @@ function App() {
     setStatusMessage(`Account on ${label} was disconnected. Reconnect again.`);
   }, [syncStatus?.auth_disconnected, activeAccount?.label]);
   const handleSelectTab = (tabId: string) => {
-    setActiveTabId(tabId);
-    setViewingTerminal(true);
     setConnectionError(null);
+    startTransition(() => {
+      setActiveTabId(tabId);
+      setViewingTerminal(true);
+    });
   };
+
+  const handleTerminalStatusChange = useCallback(
+    (sessionId: string, status: string, error?: string) => {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === sessionId
+            ? {
+                ...item,
+                status: status as TabSession["status"],
+                error,
+                hadConnected: status === "connected" ? true : item.hadConnected,
+              }
+            : item,
+        ),
+      );
+    },
+    [],
+  );
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1540,8 +1575,10 @@ function App() {
         const step = e.shiftKey ? -1 : 1;
         const next = cycle[(index + step + cycle.length) % cycle.length];
         if (next) {
-          setActiveTabId(next.id);
-          setViewingTerminal(true);
+          startTransition(() => {
+            setActiveTabId(next.id);
+            setViewingTerminal(true);
+          });
         }
         return;
       }
@@ -1952,11 +1989,16 @@ function App() {
   const filesPanelOpen = Boolean(
     activeTabId && filesPanelSessionId === activeTabId,
   );
+  const aiOpen = Boolean(activeTabId && aiPanelSessionId === activeTabId);
 
-  // Only one file browser, tied to the active session. Switching tabs or
-  // leaving the terminal closes it so it cannot reopen as a second panel.
+  // File browser and AI chat stay tied to the active session only.
   useEffect(() => {
     setFilesPanelSessionId((current) => {
+      if (!current) return current;
+      if (!viewingTerminal || !activeTabId || current !== activeTabId) return null;
+      return current;
+    });
+    setAiPanelSessionId((current) => {
       if (!current) return current;
       if (!viewingTerminal || !activeTabId || current !== activeTabId) return null;
       return current;
@@ -1966,6 +2008,13 @@ function App() {
   const toggleFilesPanelForActive = () => {
     if (!activeTabId) return;
     setFilesPanelSessionId((current) =>
+      current === activeTabId ? null : activeTabId,
+    );
+  };
+
+  const toggleAiPanelForActive = () => {
+    if (!activeTabId) return;
+    setAiPanelSessionId((current) =>
       current === activeTabId ? null : activeTabId,
     );
   };
@@ -2112,41 +2161,53 @@ function App() {
           />
         );
       case "settings":
-        return (
-          <SettingsPage
-            theme={theme}
-            onThemeChange={changeTheme}
-            connectScreen={connectScreen}
-            onConnectScreenChange={changeConnectScreen}
-            terminalSettings={terminalSettings}
-            onTerminalSettingsChange={updateTerminalSettings}
-            backupBusy={backupBusy}
-            onExportBackup={() => void handleExportBackup()}
-            onImportBackup={handleImportBackup}
-            onImportBackupReplace={handleImportBackupReplace}
-            onImportDataRefresh={refreshSyncData}
-            syncGetSettings={collectAppSettings}
-            syncStatus={syncStatus}
-            onSyncStatusChange={setSyncStatus}
-            onSyncVaultApplied={(settings) => {
-              void refreshSyncData();
-              applyImportedSettings((settings ?? undefined) as Record<string, unknown> | undefined);
-            }}
-            onSyncDataRefresh={refreshSyncData}
-            accountKind={activeAccount?.kind ?? null}
-            activeAccount={activeAccount}
-            focusSync={focusSettingsSync}
-            onFocusSyncHandled={() => setFocusSettingsSync(false)}
-            focusImport={focusSettingsImport}
-            onFocusImportHandled={() => setFocusSettingsImport(false)}
-            focusAi={focusSettingsAi}
-            onFocusAiHandled={() => setFocusSettingsAi(false)}
-          />
-        );
+        return null;
       default:
         return null;
     }
   };
+
+  const showSettings = settingsMounted && navPage === "settings" && !viewingTerminal;
+  const settingsPane = settingsMounted ? (
+    <div
+      className={
+        showSettings
+          ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+          : "hidden"
+      }
+      aria-hidden={!showSettings}
+    >
+      <SettingsPage
+        theme={theme}
+        onThemeChange={changeTheme}
+        connectScreen={connectScreen}
+        onConnectScreenChange={changeConnectScreen}
+        terminalSettings={terminalSettings}
+        onTerminalSettingsChange={updateTerminalSettings}
+        backupBusy={backupBusy}
+        onExportBackup={() => void handleExportBackup()}
+        onImportBackup={handleImportBackup}
+        onImportBackupReplace={handleImportBackupReplace}
+        onImportDataRefresh={refreshSyncData}
+        syncGetSettings={collectAppSettings}
+        syncStatus={syncStatus}
+        onSyncStatusChange={setSyncStatus}
+        onSyncVaultApplied={(settings) => {
+          void refreshSyncData();
+          applyImportedSettings((settings ?? undefined) as Record<string, unknown> | undefined);
+        }}
+        onSyncDataRefresh={refreshSyncData}
+        accountKind={activeAccount?.kind ?? null}
+        activeAccount={activeAccount}
+        focusSync={focusSettingsSync}
+        onFocusSyncHandled={() => setFocusSettingsSync(false)}
+        focusImport={focusSettingsImport}
+        onFocusImportHandled={() => setFocusSettingsImport(false)}
+        focusAi={focusSettingsAi}
+        onFocusAiHandled={() => setFocusSettingsAi(false)}
+      />
+    </div>
+  ) : null;
 
   const renderMain = () => (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -2261,20 +2322,9 @@ function App() {
                         isLocalConnecting)
                     }
                     onResize={handleTerminalResize}
-                    onStatusChange={(status, error) => {
-                      setTabs((prev) =>
-                        prev.map((item) =>
-                          item.id === tab.id
-                            ? {
-                                ...item,
-                                status: status as TabSession["status"],
-                                error,
-                                hadConnected: status === "connected" ? true : item.hadConnected,
-                              }
-                            : item,
-                        ),
-                      );
-                    }}
+                    onStatusChange={(status, error) =>
+                      handleTerminalStatusChange(tab.id, status, error)
+                    }
                   />
                   {midSessionReconnect && (
                     <ReconnectOverlay
@@ -2349,33 +2399,49 @@ function App() {
             />
           )}
 
-          {viewingTerminal && aiEnabled && aiOpen && activeTab && (
+          {viewingTerminal &&
+            aiEnabled &&
+            aiPanelSessionId &&
+            activeTab &&
+            aiPanelSessionId === activeTab.id && (
             <AiPanel
-              key={activeTab.id}
-              sessionId={activeTab.id}
+              key={aiPanelSessionId}
+              sessionId={aiPanelSessionId}
               hostLabel={activeTab.title}
               osId={hosts.find((h) => h.id === activeTab.hostId)?.os_id}
-              onInsertCommand={(command) => insertTextToTerminal(activeTab.id, command)}
-              onRunCommand={(command) => sendCommandToTerminal(activeTab.id, command)}
+              onInsertCommand={(command) =>
+                insertTextToTerminal(aiPanelSessionId, command)
+              }
+              onRunCommand={(command) =>
+                sendCommandToTerminal(aiPanelSessionId, command)
+              }
               onWriteFile={
-                api.isLocalSession(activeTab.id)
+                api.isLocalSession(aiPanelSessionId)
                   ? undefined
                   : async (path, contents) => {
-                      await api.sftpWriteText(activeTab.id, path, contents);
+                      await api.sftpWriteText(aiPanelSessionId, path, contents);
                     }
               }
-              onClose={() => setAiOpen(false)}
-              getTerminalContext={() => terminalContextRef.current[activeTab.id] ?? ""}
+              onClose={() => setAiPanelSessionId(null)}
+              getTerminalContext={() =>
+                terminalContextRef.current[aiPanelSessionId] ?? ""
+              }
             />
           )}
         </div>
       )}
 
-      {!viewingTerminal && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {renderNavPage()}
-        </div>
-      )}
+      <div
+        className={
+          !viewingTerminal && navPage !== "settings"
+            ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+            : "hidden"
+        }
+        aria-hidden={viewingTerminal || navPage === "settings"}
+      >
+        {navPage !== "settings" ? renderNavPage() : null}
+      </div>
+      {settingsPane}
     </div>
   );
 
@@ -2438,6 +2504,7 @@ function App() {
                 ? () => {
                     setViewingTerminal(false);
                     setFilesPanelSessionId(null);
+                    setAiPanelSessionId(null);
                     setNavPage("hosts");
                   }
                 : undefined
@@ -2474,7 +2541,7 @@ function App() {
                                   active: forwardsOpen || activeForwardCount > 0,
                                   onClick: () => {
                                     setSnippetsOpen(false);
-                                    setAiOpen(false);
+                                    setAiPanelSessionId(null);
                                     setForwardsOpen((v) => !v);
                                   },
                                 },
@@ -2490,7 +2557,7 @@ function App() {
                             active: snippetsOpen,
                             onClick: () => {
                               setForwardsOpen(false);
-                              setAiOpen(false);
+                              setAiPanelSessionId(null);
                               setSnippetsOpen((v) => !v);
                             },
                           },
@@ -2503,7 +2570,7 @@ function App() {
                                   onClick: () => {
                                     setForwardsOpen(false);
                                     setSnippetsOpen(false);
-                                    setAiOpen((v) => !v);
+                                    toggleAiPanelForActive();
                                   },
                                 },
                               ]

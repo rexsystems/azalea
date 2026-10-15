@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { readText as readClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -610,7 +610,17 @@ async function attachBackend(
   }
 }
 
-export function TerminalView({
+function terminalPropsEqual(prev: TerminalProps, next: TerminalProps) {
+  return (
+    prev.sessionId === next.sessionId &&
+    prev.active === next.active &&
+    prev.bootstrapLocal === next.bootstrapLocal &&
+    prev.showMobileKeys === next.showMobileKeys &&
+    prev.settings === next.settings
+  );
+}
+
+export const TerminalView = memo(function TerminalView({
   sessionId,
   active,
   settings,
@@ -985,4 +995,4 @@ export function TerminalView({
       )}
     </div>
   );
-}
+}, terminalPropsEqual);
