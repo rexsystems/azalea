@@ -22,5 +22,14 @@
     "dev:dashboard": "npm run dev --prefix apps/azalea-server-web",
     "build:dashboard": "npm run build --prefix apps/azalea-server-web",
     "test:dashboard": "npm test --prefix apps/azalea-server-web"
+  },
+  "overrides": {
+    "next": "16.3.8",
+    "sharp": "0.35.5",
+    "source-map-js": "1.2.2",
+    "nanoid": "3.3.18",
+    "postcss": "8.5.28",
+    "browserslist": "4.28.7",
+    "baseline-browser-mapping": "2.11.0"
   }
 }
