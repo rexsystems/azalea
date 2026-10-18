@@ -16,9 +16,9 @@ type HmacSha256 = Hmac<Sha256>;
 
 type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 
-fn mpint_to_biguint(bytes: &[u8]) -> rsa::BigUint {
+fn mpint_to_uint(bytes: &[u8]) -> rsa::BoxedUint {
     let trimmed = bytes.strip_prefix(&[0]).unwrap_or(bytes);
-    rsa::BigUint::from_bytes_be(trimmed)
+    rsa::BoxedUint::from_be_slice_vartime(trimmed)
 }
 
 fn read_string<'a>(buf: &'a [u8], off: &mut usize) -> anyhow::Result<&'a [u8]> {
@@ -35,8 +35,8 @@ fn read_string<'a>(buf: &'a [u8], off: &mut usize) -> anyhow::Result<&'a [u8]> {
     Ok(s)
 }
 
-fn read_mpint(buf: &[u8], off: &mut usize) -> anyhow::Result<rsa::BigUint> {
-    Ok(mpint_to_biguint(read_string(buf, off)?))
+fn read_mpint(buf: &[u8], off: &mut usize) -> anyhow::Result<rsa::BoxedUint> {
+    Ok(mpint_to_uint(read_string(buf, off)?))
 }
 
 fn b64_body(lines: &[String]) -> anyhow::Result<Vec<u8>> {
@@ -414,8 +414,11 @@ pub fn parse_ppk(text: &str, passphrase: Option<&str>) -> anyhow::Result<Private
     if encoded.as_slice() != file.public.as_slice() {
         anyhow::bail!("PPK private key does not match its public blob (wrong passphrase?)");
     }
-    // Prove the key can sign (same path russh uses for SSH auth).
-    russh_keys::helpers::sign_workaround(&key, b"azalea-ppk-check")
-        .map_err(|e| anyhow::anyhow!("PPK key failed sign check: {e}"))?;
+    // Prove the key can sign (same capability SSH publickey auth needs).
+    {
+        use russh::keys::signature::Signer;
+        key.try_sign(b"azalea-ppk-check")
+            .map_err(|e| anyhow::anyhow!("PPK key failed sign check: {e}"))?;
+    }
     Ok(key)
 }
