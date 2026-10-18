@@ -1952,7 +1952,7 @@ function App() {
     }
   };
 
-  const handleExportBackup = async () => {
+  const runExportBackup = async () => {
     setBackupBusy(true);
     try {
       const path = await exportBackupToFile(collectAppSettings());
@@ -1962,6 +1962,16 @@ function App() {
     } finally {
       setBackupBusy(false);
     }
+  };
+
+  const handleExportBackup = () => {
+    setPendingConfirm({
+      title: "Export an unencrypted backup?",
+      message:
+        "The file contains your private keys and host passwords in plain text. Anyone who can read it can log in to your servers. Keep it on an encrypted drive or delete it after restoring.",
+      confirmLabel: "Export",
+      onConfirm: () => void runExportBackup(),
+    });
   };
 
   const handleImportBackup = () => {
@@ -2185,7 +2195,7 @@ function App() {
         terminalSettings={terminalSettings}
         onTerminalSettingsChange={updateTerminalSettings}
         backupBusy={backupBusy}
-        onExportBackup={() => void handleExportBackup()}
+        onExportBackup={handleExportBackup}
         onImportBackup={handleImportBackup}
         onImportBackupReplace={handleImportBackupReplace}
         onImportDataRefresh={refreshSyncData}
