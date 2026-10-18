@@ -232,8 +232,8 @@ fn run_user(dir: &Path, cmd: UserCommand) -> anyhow::Result<()> {
                 return Ok(());
             }
             println!(
-                "{:<36}  {:<28}  {:<6}  {:<5}  {:<8}  {}",
-                "id", "email", "role", "plan", "status", "created"
+                "{:<36}  {:<28}  {:<6}  {:<5}  {:<8}  created",
+                "id", "email", "role", "plan", "status"
             );
             for (id, email, role, plan, disabled, created) in rows {
                 let status = if disabled != 0 { "disabled" } else { "active" };
