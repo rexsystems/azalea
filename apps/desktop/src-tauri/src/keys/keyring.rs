@@ -175,15 +175,10 @@ fn store_secret(
     legacy_path: &Path,
     secret: &str,
 ) -> anyhow::Result<()> {
-    if keyring_persists() {
-        match keyring_set(account, secret) {
-            Ok(()) => {
-                remove_if_present(encrypted_path);
-                remove_if_present(legacy_path);
-                return Ok(());
-            }
-            Err(_) => {}
-        }
+    if keyring_persists() && keyring_set(account, secret).is_ok() {
+        remove_if_present(encrypted_path);
+        remove_if_present(legacy_path);
+        return Ok(());
     }
 
     write_encrypted(encrypted_path, secret)?;

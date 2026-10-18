@@ -50,28 +50,6 @@ fn version_with_build_is_newer(current: &semver::Version, remote: &semver::Versi
     }
 }
 
-#[cfg(test)]
-mod version_compare_tests {
-    use super::*;
-    use semver::Version;
-
-    #[test]
-    fn build_metadata_compares() {
-        let a = Version::parse("0.1.1+66").unwrap();
-        let b = Version::parse("0.1.1+67").unwrap();
-        assert!(version_with_build_is_newer(&a, &b));
-        assert!(!version_with_build_is_newer(&b, &a));
-        assert!(!version_with_build_is_newer(&b, &b));
-    }
-
-    #[test]
-    fn unstamped_loses_to_stamped() {
-        let local = Version::parse("0.1.1").unwrap();
-        let remote = Version::parse("0.1.1+67").unwrap();
-        assert!(version_with_build_is_newer(&local, &remote));
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "linux")]
@@ -112,14 +90,14 @@ pub fn run() {
         )
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            let registry = accounts::init_accounts(&app.handle())?;
+            let registry = accounts::init_accounts(app.handle())?;
             let active = registry.lock().active().cloned();
             let active_id = active
                 .as_ref()
                 .map(|a| a.id.clone())
                 .ok_or_else(|| anyhow::anyhow!("No active account"))?;
-            let db = init_database(&app.handle(), &active_id)?;
-            keys::keyring::init_storage(&app.handle())?;
+            let db = init_database(app.handle(), &active_id)?;
+            keys::keyring::init_storage(app.handle())?;
             let sync_state = init_sync_state();
             if let Some(account) = active {
                 let mut sync = sync_state.blocking_lock();
@@ -135,11 +113,11 @@ pub fn run() {
             app.manage(sync_commands::BrowserLoginState::default());
             #[cfg(desktop)]
             {
-                let desktop = desktop_prefs::DesktopPrefs::new(&app.handle())?;
+                let desktop = desktop_prefs::DesktopPrefs::new(app.handle())?;
                 app.manage(desktop);
-                let voice = voice::VoiceAssistant::new(&app.handle())?;
+                let voice = voice::VoiceAssistant::new(app.handle())?;
                 app.manage(voice.clone());
-                if let Err(error) = voice::setup_tray(&app.handle(), &voice) {
+                if let Err(error) = voice::setup_tray(app.handle(), &voice) {
                     eprintln!("Could not initialize the system tray: {error}");
                 }
                 let app = app.handle().clone();
@@ -272,4 +250,26 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod version_compare_tests {
+    use super::*;
+    use semver::Version;
+
+    #[test]
+    fn build_metadata_compares() {
+        let a = Version::parse("0.1.1+66").unwrap();
+        let b = Version::parse("0.1.1+67").unwrap();
+        assert!(version_with_build_is_newer(&a, &b));
+        assert!(!version_with_build_is_newer(&b, &a));
+        assert!(!version_with_build_is_newer(&b, &b));
+    }
+
+    #[test]
+    fn unstamped_loses_to_stamped() {
+        let local = Version::parse("0.1.1").unwrap();
+        let remote = Version::parse("0.1.1+67").unwrap();
+        assert!(version_with_build_is_newer(&local, &remote));
+    }
 }

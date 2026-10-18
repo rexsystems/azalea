@@ -386,7 +386,7 @@ impl SshSessionManager {
             .ok_or_else(|| anyhow::anyhow!("Session not prepared"))?;
 
         self.session_hosts.insert(session_id.clone(), host.clone());
-        self.spawn_session(app, db, manager, session_id, host, cols, rows)
+        self.spawn_session(app, db, manager, session_id, host, (cols, rows))
     }
 
     pub async fn reconnect(
@@ -406,7 +406,7 @@ impl SshSessionManager {
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Session not found"))?;
 
-        self.spawn_session(app, db, manager, session_id, host, cols, rows)
+        self.spawn_session(app, db, manager, session_id, host, (cols, rows))
     }
 
     fn spawn_session(
@@ -416,8 +416,7 @@ impl SshSessionManager {
         manager: SharedSshSessionManager,
         session_id: String,
         host: Host,
-        cols: u32,
-        rows: u32,
+        (cols, rows): (u32, u32),
     ) -> anyhow::Result<()> {
         emit_status(&app, &session_id, "connecting", None);
 

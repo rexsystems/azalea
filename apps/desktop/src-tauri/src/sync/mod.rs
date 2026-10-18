@@ -321,8 +321,6 @@ fn delete_keyring(name: &str) {
 struct AuthUser {
     id: String,
     email: String,
-    #[serde(default)]
-    role: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1153,6 +1151,9 @@ async fn remote_backup(
     parse_backup_json(&json)
 }
 
+// Built once per sync check and serialized straight to the frontend, so the
+// size gap between variants costs nothing worth a Box.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case", tag = "status")]
 pub enum SyncPreview {

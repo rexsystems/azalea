@@ -4,19 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, sync::Mutex};
 use tauri::{AppHandle, Manager, State};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct DesktopPreferences {
     /// When true, closing the main window hides to the tray instead of quitting.
     pub close_to_tray: bool,
-}
-
-impl Default for DesktopPreferences {
-    fn default() -> Self {
-        Self {
-            close_to_tray: false,
-        }
-    }
 }
 
 #[derive(Clone, Serialize)]

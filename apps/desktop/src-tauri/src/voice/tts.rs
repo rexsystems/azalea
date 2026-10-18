@@ -191,8 +191,8 @@ pub async fn download_bytes(
             }
         }
         file.write_all(&chunk)?;
-        if total_hint > 0 {
-            let percent = ((total * 100) / total_hint).min(100) as u8;
+        if let Some(ratio) = (total * 100).checked_div(total_hint) {
+            let percent = ratio.min(100) as u8;
             if percent != last {
                 last = percent;
                 on_progress(percent);

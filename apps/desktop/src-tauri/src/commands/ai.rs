@@ -135,8 +135,7 @@ pub fn run_voice_chat(app: &AppHandle, question: &str) -> String {
         Ok(text) => {
             let cleaned = text
                 .replace("**", "")
-                .replace('`', "")
-                .replace('#', "")
+                .replace(['`', '#'], "")
                 .split_whitespace()
                 .collect::<Vec<_>>()
                 .join(" ");
@@ -675,7 +674,7 @@ pub async fn ai_list_models(
         }
         cursor = next.to_string();
     }
-    out.sort_by(|a, b| a.label.to_lowercase().cmp(&b.label.to_lowercase()));
+    out.sort_by_key(|a| a.label.to_lowercase());
     Ok(out)
 }
 

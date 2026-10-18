@@ -1105,8 +1105,10 @@ mod tests {
                 }
                 b"data" => {
                     samples = chunk
-                        .chunks_exact(2)
-                        .map(|bytes| i16::from_le_bytes(bytes.try_into().unwrap()) as f32 / 32768.0)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|bytes| i16::from_le_bytes(*bytes) as f32 / 32768.0)
                         .collect();
                 }
                 _ => {}

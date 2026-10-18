@@ -189,7 +189,7 @@ fn diff_groups(local: &[HostGroup], remote: &[HostGroup]) -> ItemDiff {
     diff_by_identity(
         local,
         remote,
-        |g| group_identity(g),
+        group_identity,
         |g| format!("Group: {}", g.name),
         |a, b| a.name == b.name,
     )

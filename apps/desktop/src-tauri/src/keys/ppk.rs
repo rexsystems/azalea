@@ -286,7 +286,7 @@ fn decrypt_private(file: &PpkFile, passphrase: Option<&str>) -> anyhow::Result<V
         .ok_or_else(|| anyhow::anyhow!("KEY_NEEDS_PASSPHRASE"))?;
     let (key, iv) = derive_aes_key_iv(file, phrase)?;
     let mut buf = file.private.clone();
-    if buf.len() % 16 != 0 {
+    if !buf.len().is_multiple_of(16) {
         anyhow::bail!("encrypted PPK private blob has invalid length");
     }
     let decryptor = Aes256CbcDec::new_from_slices(&key, &iv)

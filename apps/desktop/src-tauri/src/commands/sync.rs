@@ -22,16 +22,15 @@ pub async fn sync_status(
 
 const BROWSER_LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
 
-#[derive(Default)]
-pub struct BrowserLoginState(
-    parking_lot::Mutex<
-        Option<(
-            String,
-            std::sync::Arc<tokio::sync::Notify>,
-            tokio::sync::mpsc::Sender<String>,
-        )>,
-    >,
+/// Request id, cancel signal and callback sender for the browser login in flight.
+type PendingBrowserLogin = (
+    String,
+    std::sync::Arc<tokio::sync::Notify>,
+    tokio::sync::mpsc::Sender<String>,
 );
+
+#[derive(Default)]
+pub struct BrowserLoginState(parking_lot::Mutex<Option<PendingBrowserLogin>>);
 
 impl BrowserLoginState {
     fn start(

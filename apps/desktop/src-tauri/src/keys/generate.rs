@@ -442,10 +442,8 @@ pub(crate) fn parse_private_key(pem: &str, passphrase: Option<&str>) -> anyhow::
 
     // 3) russh multi-format decoder (OpenSSH / PKCS#1 / PKCS#8 / encrypted).
     match decode_secret_key(&normalized, passphrase) {
-        Ok(key) => return Ok(key),
-        Err(russh::keys::Error::KeyIsEncrypted) => {
-            return Err(anyhow::anyhow!("KEY_NEEDS_PASSPHRASE"));
-        }
+        Ok(key) => Ok(key),
+        Err(russh::keys::Error::KeyIsEncrypted) => Err(anyhow::anyhow!("KEY_NEEDS_PASSPHRASE")),
         Err(primary) => {
             // 4) Direct PKCS#1 / PKCS#8 RSA fallbacks for mangled id_rsa files.
             if let Ok(key) = parse_via_pkcs1_pem(&normalized) {
@@ -462,7 +460,7 @@ pub(crate) fn parse_private_key(pem: &str, passphrase: Option<&str>) -> anyhow::
                     return Ok(key);
                 }
             }
-            return Err(format_import_error(primary, passphrase.is_some()));
+            Err(format_import_error(primary, passphrase.is_some()))
         }
     }
 }
@@ -541,18 +539,6 @@ pub fn peek_private_key_meta(
     let fingerprint = public_key.fingerprint(HashAlg::Sha256).to_string();
     let key_type = algorithm_label(&private_key.algorithm());
     Ok((key_type, fingerprint))
-}
-
-pub fn private_key_needs_passphrase(pem: &str) -> bool {
-    match parse_private_key(pem, None) {
-        Ok(_) => false,
-        Err(err) => {
-            let msg = err.to_string();
-            msg.contains("KEY_NEEDS_PASSPHRASE")
-                || msg.to_lowercase().contains("passphrase")
-                || msg.to_lowercase().contains("encrypted")
-        }
-    }
 }
 
 fn store_private_key_material(

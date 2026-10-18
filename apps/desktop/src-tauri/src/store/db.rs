@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use rusqlite::{params, Connection};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use uuid::Uuid;
 
 use crate::models::{Host, HostGroup, KnownHostRecord, PortForward, Snippet, SshKeyRecord};
@@ -79,10 +79,6 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(app: &AppHandle) -> anyhow::Result<Self> {
-        Self::open_path(db_path(app)?)
-    }
-
     pub fn open_path(db_path: PathBuf) -> anyhow::Result<Self> {
         if let Some(parent) = db_path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -644,15 +640,6 @@ impl Database {
             .execute("DELETE FROM sync_meta WHERE key = ?1", params![key])?;
         Ok(())
     }
-}
-
-fn db_path(app: &AppHandle) -> anyhow::Result<PathBuf> {
-    // Legacy single-file path (migration handled by AccountRegistry).
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    Ok(dir.join("azalea.db"))
 }
 
 pub type SharedDatabase = Arc<parking_lot::Mutex<Database>>;

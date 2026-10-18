@@ -159,15 +159,6 @@ impl AccountRegistry {
             .ok_or_else(|| anyhow::anyhow!("Account not found"))
     }
 
-    pub fn upsert(&mut self, account: AccountRecord) -> anyhow::Result<()> {
-        if let Some(existing) = self.data.accounts.iter_mut().find(|a| a.id == account.id) {
-            *existing = account;
-        } else {
-            self.data.accounts.push(account);
-        }
-        self.save()
-    }
-
     pub fn add(
         &mut self,
         kind: AccountKind,
