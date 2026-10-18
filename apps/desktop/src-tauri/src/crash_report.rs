@@ -42,15 +42,18 @@ fn redact(text: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ");
     for marker in ["/home/", "/Users/", "/root/"] {
-        while let Some(idx) = out.find(marker) {
+        let replacement = format!("{marker}[user]");
+        let mut from = 0;
+        while let Some(rel) = out[from..].find(marker) {
+            let idx = from + rel;
             let after = idx + marker.len();
             let rest = &out[after..];
             let end = rest
                 .find(|c: char| c == '/' || c == '\\' || c.is_whitespace() || c == '"' || c == '\'')
                 .map(|i| after + i)
                 .unwrap_or(out.len());
-            out.replace_range(idx..end, &format!("{marker}[user]"));
-            break;
+            out.replace_range(idx..end, &replacement);
+            from = idx + replacement.len();
         }
     }
     out.chars()
@@ -136,4 +139,18 @@ pub fn report_client_error(input: ClientErrorInput) {
             sentry::capture_message(&message, Level::Error);
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redact;
+
+    #[test]
+    fn redact_replaces_every_home_path() {
+        let out = redact("at /home/alice/a.rs and /home/bob/b.rs from /Users/carol/c");
+        assert!(!out.contains("alice"), "{out}");
+        assert!(!out.contains("bob"), "{out}");
+        assert!(!out.contains("carol"), "{out}");
+        assert_eq!(out.matches("/home/[user]").count(), 2, "{out}");
+    }
 }
