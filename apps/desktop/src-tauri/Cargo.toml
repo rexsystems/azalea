@@ -5,6 +5,7 @@ description = "A modern open-source SSH terminal client"
 authors = ["RexSystems"]
 license = "AGPL-3.0-or-later"
 edition = "2021"
+rust-version = "1.89"
 
 [lib]
 name = "azalea_lib"

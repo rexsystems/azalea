@@ -28,7 +28,7 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) 22+ (the desktop tests need it; CI uses 22)
-- [Rust](https://rustup.rs/) 1.88+
+- [Rust](https://rustup.rs/) 1.89+
 - **Linux (Fedora / Nobara / RHEL):**
   ```bash
   sudo dnf install webkit2gtk4.1-devel openssl-devel dbus-devel curl wget squashfs-tools librsvg2-devel rpm-build alsa-lib-devel cmake clang-devel espeak-ng

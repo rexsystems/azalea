@@ -6,7 +6,7 @@ Thanks for your interest in contributing!
 
 1. Fork the repository
 2. Clone your fork
-3. Install the prerequisites listed in the [README](README.md#prerequisites) (Node.js 22+, Rust 1.88+, platform libraries)
+3. Install the prerequisites listed in the [README](README.md#prerequisites) (Node.js 22+, Rust 1.89+, platform libraries)
 4. Run `npm install` from the repo root
 5. Run `npm run dev` to start the desktop app in development mode
 
