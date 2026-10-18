@@ -12,6 +12,11 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build every platform but skip the R2 upload and GitHub Release"
+        type: boolean
+        default: false
 
 # One release at a time so per-base build numbers stay unique.
 concurrency:
@@ -194,7 +199,8 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             rpm \
-            libfuse2
+            libfuse2 \
+            xdg-utils
 
       - name: Upgrade npm (optional native binding install fix)
         # npm < 11.3 can skip platform optionalDeps (npm/cli#4828), which breaks
@@ -401,6 +407,7 @@ jobs:
 
   publish:
     needs: [version, build-windows, build-linux, build-macos]
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-24.04
     env:
       VITE_AZALEA_BUILD: ${{ needs.version.outputs.build }}
