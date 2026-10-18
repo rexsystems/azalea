@@ -24,6 +24,9 @@ AGENTS.md
 azalea-updater.compose.json
 __pycache__/
 
+# Local azalea-server SQLite data from `cargo run` (holds accounts and vaults)
+services/azalea-server/data/
+
 # Secret material - never commit. Belt-and-suspenders in case someone drops
 # an SSH key, TLS cert, or Tauri signing key into the repo by accident.
 *.pem
