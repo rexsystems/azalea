@@ -107,10 +107,9 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: cargo fmt --check
 
-      # The desktop crate still has clippy warnings; they are reported, not fatal.
       - name: cargo clippy
         working-directory: apps/desktop/src-tauri
-        run: cargo clippy --all-targets
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: cargo test
         working-directory: apps/desktop/src-tauri
