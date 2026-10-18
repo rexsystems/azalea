@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { lazy, startTransition, Suspense, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type {
   Host,
   HostGroup,
@@ -51,7 +51,6 @@ import { SyncResolutionDialog } from "./components/SyncResolutionDialog";
 import { AppShell, type NavPage } from "./components/AppShell";
 import { ConnectionScreen } from "./components/ConnectionScreen";
 import { ReconnectOverlay, type ReconnectInfo, type ReconnectPhase } from "./components/ReconnectOverlay";
-import { FileBrowserPanel } from "./components/FileBrowserPanel";
 import { FirstRunWizard } from "./components/FirstRunWizard";
 import { AiConsentDialog } from "./components/AiConsentDialog";
 import { TelemetryConsentDialog } from "./components/TelemetryConsentDialog";
@@ -59,8 +58,6 @@ import { ForwardsPopover } from "./components/ForwardsPopover";
 import { HomePage } from "./components/HomePage";
 import { HostsPage } from "./components/HostsPage";
 import { KeysPage } from "./components/KeysPage";
-import { SettingsPage } from "./components/SettingsPage";
-import { AiPanel } from "./components/AiPanel";
 import { SnippetsPopover } from "./components/SnippetsPopover";
 import { TabBar } from "./components/TabBar";
 import { TerminalView } from "./components/Terminal";
@@ -79,6 +76,15 @@ import { setStoredCustomCss } from "./lib/customCss";
 import { checkForUpdateSilent } from "./lib/updater";
 import { getStoredAutoSync, setStoredAutoSync } from "./lib/settings";
 import { useIsMobile } from "./hooks/useIsMobile";
+
+// Loaded on first open to keep them (and react-markdown) out of the startup bundle.
+const SettingsPage = lazy(() =>
+  import("./components/SettingsPage").then((m) => ({ default: m.SettingsPage })),
+);
+const FileBrowserPanel = lazy(() =>
+  import("./components/FileBrowserPanel").then((m) => ({ default: m.FileBrowserPanel })),
+);
+const AiPanel = lazy(() => import("./components/AiPanel").then((m) => ({ default: m.AiPanel })));
 
 interface TabSession {
   id: string;
@@ -2187,35 +2193,37 @@ function App() {
       }
       aria-hidden={!showSettings}
     >
-      <SettingsPage
-        theme={theme}
-        onThemeChange={changeTheme}
-        connectScreen={connectScreen}
-        onConnectScreenChange={changeConnectScreen}
-        terminalSettings={terminalSettings}
-        onTerminalSettingsChange={updateTerminalSettings}
-        backupBusy={backupBusy}
-        onExportBackup={handleExportBackup}
-        onImportBackup={handleImportBackup}
-        onImportBackupReplace={handleImportBackupReplace}
-        onImportDataRefresh={refreshSyncData}
-        syncGetSettings={collectAppSettings}
-        syncStatus={syncStatus}
-        onSyncStatusChange={setSyncStatus}
-        onSyncVaultApplied={(settings) => {
-          void refreshSyncData();
-          applyImportedSettings((settings ?? undefined) as Record<string, unknown> | undefined);
-        }}
-        onSyncDataRefresh={refreshSyncData}
-        accountKind={activeAccount?.kind ?? null}
-        activeAccount={activeAccount}
-        focusSync={focusSettingsSync}
-        onFocusSyncHandled={() => setFocusSettingsSync(false)}
-        focusImport={focusSettingsImport}
-        onFocusImportHandled={() => setFocusSettingsImport(false)}
-        focusAi={focusSettingsAi}
-        onFocusAiHandled={() => setFocusSettingsAi(false)}
-      />
+      <Suspense fallback={null}>
+        <SettingsPage
+          theme={theme}
+          onThemeChange={changeTheme}
+          connectScreen={connectScreen}
+          onConnectScreenChange={changeConnectScreen}
+          terminalSettings={terminalSettings}
+          onTerminalSettingsChange={updateTerminalSettings}
+          backupBusy={backupBusy}
+          onExportBackup={handleExportBackup}
+          onImportBackup={handleImportBackup}
+          onImportBackupReplace={handleImportBackupReplace}
+          onImportDataRefresh={refreshSyncData}
+          syncGetSettings={collectAppSettings}
+          syncStatus={syncStatus}
+          onSyncStatusChange={setSyncStatus}
+          onSyncVaultApplied={(settings) => {
+            void refreshSyncData();
+            applyImportedSettings((settings ?? undefined) as Record<string, unknown> | undefined);
+          }}
+          onSyncDataRefresh={refreshSyncData}
+          accountKind={activeAccount?.kind ?? null}
+          activeAccount={activeAccount}
+          focusSync={focusSettingsSync}
+          onFocusSyncHandled={() => setFocusSettingsSync(false)}
+          focusImport={focusSettingsImport}
+          onFocusImportHandled={() => setFocusSettingsImport(false)}
+          focusAi={focusSettingsAi}
+          onFocusAiHandled={() => setFocusSettingsAi(false)}
+        />
+      </Suspense>
     </div>
   ) : null;
 
@@ -2396,17 +2404,19 @@ function App() {
             filesPanelSessionId &&
             activeTab &&
             filesPanelSessionId === activeTab.id && (
-            <FileBrowserPanel
-              key={filesPanelSessionId}
-              sessionId={filesPanelSessionId}
-              onClose={() => setFilesPanelSessionId(null)}
-              onCdTerminal={(path) =>
-                sendCommandToTerminal(
-                  filesPanelSessionId,
-                  `cd '${path.replace(/'/g, "'\\''")}'`,
-                )
-              }
-            />
+            <Suspense fallback={null}>
+              <FileBrowserPanel
+                key={filesPanelSessionId}
+                sessionId={filesPanelSessionId}
+                onClose={() => setFilesPanelSessionId(null)}
+                onCdTerminal={(path) =>
+                  sendCommandToTerminal(
+                    filesPanelSessionId,
+                    `cd '${path.replace(/'/g, "'\\''")}'`,
+                  )
+                }
+              />
+            </Suspense>
           )}
 
           {viewingTerminal &&
@@ -2414,29 +2424,31 @@ function App() {
             aiPanelSessionId &&
             activeTab &&
             aiPanelSessionId === activeTab.id && (
-            <AiPanel
-              key={aiPanelSessionId}
-              sessionId={aiPanelSessionId}
-              hostLabel={activeTab.title}
-              osId={hosts.find((h) => h.id === activeTab.hostId)?.os_id}
-              onInsertCommand={(command) =>
-                insertTextToTerminal(aiPanelSessionId, command)
-              }
-              onRunCommand={(command) =>
-                sendCommandToTerminal(aiPanelSessionId, command)
-              }
-              onWriteFile={
-                api.isLocalSession(aiPanelSessionId)
-                  ? undefined
-                  : async (path, contents) => {
-                      await api.sftpWriteText(aiPanelSessionId, path, contents);
-                    }
-              }
-              onClose={() => setAiPanelSessionId(null)}
-              getTerminalContext={() =>
-                terminalContextRef.current[aiPanelSessionId] ?? ""
-              }
-            />
+            <Suspense fallback={null}>
+              <AiPanel
+                key={aiPanelSessionId}
+                sessionId={aiPanelSessionId}
+                hostLabel={activeTab.title}
+                osId={hosts.find((h) => h.id === activeTab.hostId)?.os_id}
+                onInsertCommand={(command) =>
+                  insertTextToTerminal(aiPanelSessionId, command)
+                }
+                onRunCommand={(command) =>
+                  sendCommandToTerminal(aiPanelSessionId, command)
+                }
+                onWriteFile={
+                  api.isLocalSession(aiPanelSessionId)
+                    ? undefined
+                    : async (path, contents) => {
+                        await api.sftpWriteText(aiPanelSessionId, path, contents);
+                      }
+                }
+                onClose={() => setAiPanelSessionId(null)}
+                getTerminalContext={() =>
+                  terminalContextRef.current[aiPanelSessionId] ?? ""
+                }
+              />
+            </Suspense>
           )}
         </div>
       )}
