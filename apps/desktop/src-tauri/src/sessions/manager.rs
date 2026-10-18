@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use russh::client;
+use russh::keys::{HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate};
 use russh::{cipher, kex, mac, Channel, ChannelMsg, Disconnect, Preferred};
 use std::borrow::Cow;
 
@@ -76,6 +76,7 @@ fn strict_ssh_preferences() -> Preferred {
             kex::EXTENSION_OPENSSH_STRICT_KEX_AS_SERVER,
         ]),
         key: Preferred::DEFAULT.key,
+        host_key_certificates: Preferred::DEFAULT.host_key_certificates,
         cipher: Cow::Borrowed(&[
             cipher::CHACHA20_POLY1305,
             cipher::AES_256_GCM,
@@ -93,7 +94,6 @@ fn strict_ssh_preferences() -> Preferred {
     }
 }
 use russh_sftp::client::SftpSession;
-use ssh_key::{HashAlg, PublicKey};
 use tauri::{AppHandle, Emitter};
 use tokio::net::TcpListener;
 use tokio::sync::{mpsc, oneshot};
@@ -189,18 +189,16 @@ fn emit_transfer_progress(app: &AppHandle, progress: &SftpTransferProgress) {
     let _ = app.emit("sftp-transfer-progress", progress.clone());
 }
 
-#[async_trait]
 impl client::Handler for SshClientHandler {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        server_public_key: &PublicKey,
+        server_public_key: &PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
+        let server_public_key = server_public_key.public_key();
         let key_type = server_public_key.algorithm().to_string();
-        let public_key = server_public_key
-            .to_openssh()
-            .unwrap_or_default();
+        let public_key = server_public_key.to_openssh().unwrap_or_default();
         let fingerprint = server_public_key.fingerprint(HashAlg::Sha256).to_string();
 
         let existing = {
@@ -1403,10 +1401,20 @@ async fn authenticate(
     if let Some(key_id) = host.key_id.as_ref() {
         match load_key_pair(key_id) {
             Ok(key_pair) => {
-                let ok = session
-                    .authenticate_publickey(&host.username, Arc::new(key_pair))
+                // Prefer rsa-sha2-* when the server advertises it (RFC 8332).
+                // When EXT_INFO is absent, still try sha2-512 — modern OpenSSH
+                // accepts it even without server-sig-algs.
+                let hash_alg = match session.best_supported_rsa_hash().await? {
+                    Some(alg) => alg,
+                    None => Some(HashAlg::Sha512),
+                };
+                let auth = session
+                    .authenticate_publickey(
+                        &host.username,
+                        PrivateKeyWithHashAlg::new(Arc::new(key_pair), hash_alg),
+                    )
                     .await?;
-                if ok {
+                if auth.success() {
                     return Ok(());
                 }
                 errors.push("Public key authentication failed".to_string());
@@ -1416,10 +1424,10 @@ async fn authenticate(
     }
 
     if let Some(password) = get_host_password(&host.id)? {
-        let ok = session
+        let auth = session
             .authenticate_password(&host.username, &password)
             .await?;
-        if ok {
+        if auth.success() {
             return Ok(());
         }
         errors.push("Password authentication failed".to_string());

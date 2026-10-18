@@ -25,9 +25,7 @@ Currently clean. Re-run `cargo audit` before every release.
 
 | ID | Crate @ Version | Severity | Fixed in | Status |
 |---|---|---|---|---|
-| [RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071) | `rsa` 0.9.10 | medium 5.9 | no fix available | Accepted |
-| [RUSTSEC-2026-0154](https://rustsec.org/advisories/RUSTSEC-2026-0154) | `russh` 0.48.2 | high 7.5 | 0.60.3+ | Planned upgrade |
-| [RUSTSEC-2026-0153](https://rustsec.org/advisories/RUSTSEC-2026-0153) | `russh-cryptovec` 0.48.0 | high 7.5 | 0.60.3+ | Planned upgrade (with russh) |
+| [RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071) | `rsa` 0.10.0-rc.18 | medium 5.9 | no fix available | Accepted |
 
 **RUSTSEC-2023-0071 (rsa Marvin attack).** Timing side-channel on PKCS#1 v1.5
 RSA decrypt. Exploitation needs many precise timing measurements of RSA
@@ -37,14 +35,11 @@ remote network adversary; they cannot make repeated timing measurements of
 local disk-level operations. No fixed release upstream yet. We will pick up the
 fix when the `rsa` crate publishes one.
 
-**RUSTSEC-2026-015{3,4} (russh unbounded allocations).** Both are DoS-only: a
-malicious SSH server can force the client to allocate an oversized buffer
-during KEX. Impact is a client-side crash. Azalea's threat model already
-assumes the SSH server the user connects to can be malicious (the shell output
-is executed by the user's terminal). Migrating russh 0.48 to 0.63 requires
-touching the SSH session code paths; scheduled as a follow-up. Meanwhile, the
-desktop app pins strict KEX/cipher/MAC lists to shrink the attack surface (see
-`apps/desktop/src-tauri/src/sessions/manager.rs` `strict_ssh_preferences`).
+**Closed — RUSTSEC-2026-015{3,4} (russh unbounded allocations).** Desktop now
+depends on `russh` 0.63.3 / `russh-sftp` 3.0.1 from crates.io (keys live under
+`russh::keys`; the local `patches/russh` path patch was removed). Both advisories
+are fixed in russh ≥ 0.60.3. Strict KEX/cipher/MAC preferences remain in
+`apps/desktop/src-tauri/src/sessions/manager.rs` `strict_ssh_preferences`.
 
 ### Warnings (unmaintained / unsound / yanked)
 
