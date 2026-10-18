@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import type { Host, SshKey } from "@azalea/shared";
 import { useHideHostAddresses } from "../hooks/useHideHostAddresses";
 import { formatHostEndpoint } from "../lib/utils";
@@ -17,6 +17,7 @@ interface HomePageProps {
   onOpenKeys: () => void;
   onOpenSettings: () => void;
   isMobile?: boolean;
+  workspacesSection?: ReactNode;
 }
 
 export function HomePage({
@@ -31,6 +32,7 @@ export function HomePage({
   onOpenKeys,
   onOpenSettings,
   isMobile = false,
+  workspacesSection,
 }: HomePageProps) {
   const hideAddress = useHideHostAddresses();
   const recent = useMemo(
@@ -191,6 +193,8 @@ export function HomePage({
             ))}
           </div>
         </div>
+
+        {workspacesSection}
 
         <div
           className="rounded-2xl border p-5 sm:p-6"

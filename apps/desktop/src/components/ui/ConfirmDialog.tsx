@@ -1,4 +1,6 @@
 import { createPortal } from "react-dom";
+import { useRef } from "react";
+import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { Button } from "./Button";
 
 interface ConfirmDialogProps {
@@ -22,6 +24,8 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(open, dialogRef, onCancel);
   if (!open) return null;
 
   return createPortal(
@@ -32,6 +36,10 @@ export function ConfirmDialog({
         aria-label="Cancel"
       />
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className="animate-menu-in relative w-full max-w-sm rounded-xl border p-5"
         style={{
           background: "var(--bg-panel)",

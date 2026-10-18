@@ -9,6 +9,7 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 ## Features
 
 - **SSH terminal** - multi-tab sessions, search, clickable links, local shell
+- **Saved workspaces** - save tab order, split pairs, and the active tab from Home; reopen as new sessions. Stored locally per account, without credentials or terminal output. Find workspaces in the existing `Ctrl+/` command menu.
 - **Hosts & groups** - password or key auth, reconnect, host key change warnings
 - **SSH keys** - generate ed25519 or import existing keys; secrets stay in the OS keychain
 - **SFTP** - browse, upload/download, drag-and-drop upload, edit remote text files

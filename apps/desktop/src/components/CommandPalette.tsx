@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Host, SshKey } from "@azalea/shared";
+import type { SavedWorkspace } from "../lib/workspaces";
 import {
   Folder,
   Home,
@@ -22,6 +23,7 @@ export type CommandPaletteActionId =
   | "action-local-terminal"
   | "action-sign-in"
   | `host:${string}`
+  | `workspace:${string}`
   | `key:${string}`;
 
 interface CommandPaletteProps {
@@ -29,6 +31,7 @@ interface CommandPaletteProps {
   onClose: () => void;
   hosts: Host[];
   keys: SshKey[];
+  workspaces?: SavedWorkspace[];
   isMobile?: boolean;
   signedIn?: boolean;
   /** Active account kind; sign-in is hidden for offline. */
@@ -60,6 +63,7 @@ export function CommandPalette({
   onClose,
   hosts,
   keys,
+  workspaces,
   isMobile = false,
   signedIn = false,
   accountKind = null,
@@ -177,8 +181,16 @@ export function CommandPalette({
       keywords: `${key.fingerprint} ${key.key_type}`,
     }));
 
-    return [...nav, ...actions, ...hostItems, ...keyItems];
-  }, [hosts, keys, isMobile, canSignIn, signInLabel, signInDescription]);
+    const workspaceItems: CommandItem[] = (workspaces ?? []).map((workspace) => ({
+      id: `workspace:${workspace.id}`,
+      label: workspace.name,
+      description: `Open ${workspace.tabs.length} saved tabs`,
+      group: "Workspaces",
+      icon: Folder,
+      keywords: "workspace sessions tabs split",
+    }));
+    return [...nav, ...actions, ...workspaceItems, ...hostItems, ...keyItems];
+  }, [hosts, keys, workspaces, isMobile, canSignIn, signInLabel, signInDescription]);
 
   const filtered = useMemo(
     () => items.filter((item) => matches(item, query.trim())),
@@ -281,7 +293,7 @@ export function CommandPalette({
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search hosts, keys, actions…"
+            placeholder="Search hosts, workspaces, keys, actions…"
             className="min-w-0 flex-1 bg-transparent text-sm outline-none"
             style={{ color: "var(--text)" }}
             aria-autocomplete="list"

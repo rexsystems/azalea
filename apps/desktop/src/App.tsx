@@ -56,6 +56,8 @@ import { AiConsentDialog } from "./components/AiConsentDialog";
 import { TelemetryConsentDialog } from "./components/TelemetryConsentDialog";
 import { ForwardsPopover } from "./components/ForwardsPopover";
 import { HomePage } from "./components/HomePage";
+import { WorkspacesSection } from "./components/WorkspacesSection";
+import { captureWorkspace, parseWorkspaces, workspaceStorageKey, type SavedWorkspace } from "./lib/workspaces";
 import { HostsPage } from "./components/HostsPage";
 import { KeysPage } from "./components/KeysPage";
 import { SnippetsPopover } from "./components/SnippetsPopover";
@@ -167,6 +169,23 @@ function App() {
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [accounts, setAccounts] = useState<api.AccountRecord[]>([]);
   const [activeAccount, setActiveAccount] = useState<api.AccountRecord | null>(null);
+  const [workspaceState, setWorkspaceState] = useState<{ accountId: string | null; items: SavedWorkspace[] }>({ accountId: null, items: [] });
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [workspaceBusy, setWorkspaceBusy] = useState(false);
+  const workspaceOpening = useRef(false);
+  const workspaceAccountRef = useRef<string | null>(null);
+  const workspaces = workspaceState.accountId === activeAccount?.id ? workspaceState.items : [];
+  useEffect(() => {
+    const accountId = activeAccount?.id ?? null;
+    workspaceAccountRef.current = accountId;
+    setWorkspaceError(null);
+    try {
+      setWorkspaceState({ accountId, items: accountId ? parseWorkspaces(localStorage.getItem(workspaceStorageKey(accountId))) : [] });
+    } catch {
+      setWorkspaceState({ accountId, items: [] });
+      setWorkspaceError("Saved workspaces could not be read on this device.");
+    }
+  }, [activeAccount?.id]);
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("azalea-active-account", { detail: activeAccount?.id ?? null }));
   }, [activeAccount?.id, syncStatus?.logged_in]);
@@ -366,6 +385,7 @@ function App() {
       setViewingTerminal(true);
 
       await api.startSsh(sessionId, DEFAULT_COLS, DEFAULT_ROWS);
+      return sessionId;
     } catch (err) {
       const msg = String(err);
       setStatusMessage(`Connection failed: ${msg}`);
@@ -408,6 +428,7 @@ function App() {
     setActiveTabId(sessionId);
     setViewingTerminal(true);
     setStatusMessage("Local terminal");
+    return sessionId;
   }, []);
 
   const popOutActiveTab = useCallback(() => {
@@ -1613,6 +1634,74 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  const persistWorkspaces = (items: SavedWorkspace[]) => {
+    if (!activeAccount || workspaceState.accountId !== activeAccount.id || workspaceAccountRef.current !== activeAccount.id) return;
+    try {
+      localStorage.setItem(workspaceStorageKey(activeAccount.id), JSON.stringify(items));
+      setWorkspaceState({ accountId: activeAccount.id, items });
+      setWorkspaceError(null);
+    } catch {
+      setWorkspaceError("Workspace changes could not be saved. Check available device storage.");
+    }
+  };
+
+  const saveWorkspace = () => {
+    const snapshot = captureWorkspace(tabs, activeTabId, splitRatio, api.isLocalSession);
+    if (!snapshot.tabs.length || !activeAccount) return;
+    setPendingPrompt({
+      title: "Save workspace",
+      message: "Saves tab order and split views locally. Opening it adds new sessions alongside existing tabs.",
+      placeholder: "Workspace name",
+      confirmLabel: "Save workspace",
+      onConfirm: (name) => persistWorkspaces([...workspaces, { ...snapshot, id: crypto.randomUUID(), name }]),
+    });
+  };
+
+  const openWorkspace = useCallback(async (workspace: SavedWorkspace) => {
+    if (workspaceOpening.current || !activeAccount) return;
+    const missing = workspace.tabs.filter((tab) => !tab.local && !hosts.some((host) => host.id === tab.hostId));
+    if (missing.length || (isMobile && workspace.tabs.some((tab) => tab.local))) {
+      setWorkspaceError(missing.length
+        ? "This workspace includes deleted hosts. Restore those hosts or save a new workspace."
+        : "This workspace includes local terminals, which are unavailable on mobile.");
+      handleNavigate("home");
+      return;
+    }
+    workspaceOpening.current = true;
+    setWorkspaceBusy(true);
+    setWorkspaceError(null);
+    const accountId = activeAccount.id;
+    const ids: (string | undefined)[] = [];
+    try {
+      for (const tab of workspace.tabs) {
+        if (workspaceAccountRef.current !== accountId) return;
+        const host = hosts.find((item) => item.id === tab.hostId);
+        const id = tab.local ? openLocalTerminal() : host ? await connectToHost(host) : undefined;
+        ids.push(id);
+        if (!id) {
+          setWorkspaceError("Workspace opening stopped because a session failed or was cancelled. Opened tabs have been kept.");
+          return;
+        }
+      }
+      if (workspaceAccountRef.current !== accountId) return;
+      setTabs((previous) => previous.map((tab) => {
+        const index = ids.indexOf(tab.id);
+        if (index < 0) return tab;
+        const mate = workspace.tabs[index].splitWith;
+        return { ...tab, splitWithId: mate === null ? undefined : ids[mate] };
+      }));
+      setSplitRatio(workspace.splitRatio);
+      setActiveTabId(ids[workspace.activeTab] ?? null);
+      setViewingTerminal(true);
+      setStatusMessage(`Opened workspace: ${workspace.name}`);
+    } catch (error) {
+      setWorkspaceError(`Could not open workspace: ${String(error)}`);
+    } finally {
+      workspaceOpening.current = false;
+      setWorkspaceBusy(false);
+    }
+  }, [activeAccount, hosts, isMobile, handleNavigate, openLocalTerminal, connectToHost]);
+
   const handleCommandPaletteAction = useCallback(
     (id: CommandPaletteActionId) => {
       if (id === "nav-home") {
@@ -1655,6 +1744,11 @@ function App() {
         if (host) void connectToHost(host);
         return;
       }
+      if (id.startsWith("workspace:")) {
+        const workspace = workspaces.find((item) => item.id === id.slice(10));
+        if (workspace) void openWorkspace(workspace);
+        return;
+      }
       if (id.startsWith("key:")) {
         handleNavigate("keys");
       }
@@ -1667,6 +1761,8 @@ function App() {
       handleSignInForSync,
       hosts,
       connectToHost,
+      workspaces,
+      openWorkspace,
     ],
   );
   const dismissConnectionError = () => {
@@ -2132,6 +2228,22 @@ function App() {
             onOpenKeys={() => handleNavigate("keys")}
             onOpenSettings={() => handleNavigate("settings")}
             isMobile={isMobile}
+            workspacesSection={<WorkspacesSection
+              workspaces={workspaces}
+              canSave={Boolean(activeAccount) && workspaceState.accountId === activeAccount?.id && tabs.some((tab) => !tab.poppedOut)}
+              busy={workspaceBusy}
+              error={workspaceError}
+              onSave={saveWorkspace}
+              onOpen={(workspace) => void openWorkspace(workspace)}
+              onRename={(workspace) => setPendingPrompt({
+                title: "Rename workspace", defaultValue: workspace.name, confirmLabel: "Save name",
+                onConfirm: (name) => persistWorkspaces(workspaces.map((item) => item.id === workspace.id ? { ...item, name } : item)),
+              })}
+              onDelete={(workspace) => setPendingConfirm({
+                title: "Delete workspace?", message: `Delete "${workspace.name}"? Open sessions will stay open.`, confirmLabel: "Delete", danger: true,
+                onConfirm: () => persistWorkspaces(workspaces.filter((item) => item.id !== workspace.id)),
+              })}
+            />}
           />
         );
       case "hosts":
@@ -2817,6 +2929,7 @@ function App() {
         onClose={() => setCommandPaletteOpen(false)}
         hosts={hosts}
         keys={keys}
+        workspaces={workspaces}
         isMobile={isMobile}
         signedIn={Boolean(syncStatus?.logged_in)}
         accountKind={activeAccount?.kind ?? null}

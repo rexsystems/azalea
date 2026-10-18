@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { Input } from "./Input";
@@ -29,6 +30,8 @@ export function PromptDialog({
   onCancel,
 }: PromptDialogProps) {
   const [value, setValue] = useState(defaultValue);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(open, dialogRef, onCancel);
 
   useEffect(() => {
     if (open) setValue(defaultValue);
@@ -45,13 +48,17 @@ export function PromptDialog({
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <button className="absolute inset-0 bg-black/50" onClick={onCancel} aria-label="Cancel" />
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className="animate-menu-in relative w-full max-w-sm rounded-xl border p-5"
         style={{
           background: "var(--bg-panel)",
           borderColor: "var(--border)",
         }}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
+          if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
             e.preventDefault();
             submit();
           }
@@ -67,6 +74,7 @@ export function PromptDialog({
         )}
         <div className="mt-4">
           <Input
+            aria-label={title}
             autoFocus
             type={inputType}
             value={value}
