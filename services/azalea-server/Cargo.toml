@@ -19,7 +19,9 @@ anyhow = "1"
 thiserror = "2"
 argon2 = "0.5"
 password-hash = "0.5"
-jsonwebtoken = "9"
+# >= 10.3.0 closes GHSA-h395-gr6q-cpjc (exp/nbf type-confusion bypass).
+# v10 requires exactly one crypto backend; rust_crypto covers HS256 secrets.
+jsonwebtoken = { version = "10.3", features = ["rust_crypto"] }
 sha2 = "0.10"
 hex = "0.4"
 rand = "0.8"
@@ -29,6 +31,8 @@ dotenvy = "0.15"
 parking_lot = "0.12"
 base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+# Floor for RUSTSEC-2026-0285 / GHSA-2mjx-qc3c-rqvc (transitive via reqwest).
+rustls = "0.23.45"
 aes-gcm = "0.10"
 futures-util = "0.3"
 clap = { version = "4", features = ["derive", "env"] }

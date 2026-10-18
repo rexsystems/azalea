@@ -52,13 +52,25 @@ are fixed in russh ≥ 0.60.3. Strict KEX/cipher/MAC preferences remain in
 | [RUSTSEC-2025-0100](https://rustsec.org/advisories/RUSTSEC-2025-0100) | `unic-ucd-ident` 0.9.0 | unmaintained (transitive) |
 | [RUSTSEC-2025-0098](https://rustsec.org/advisories/RUSTSEC-2025-0098) | `unic-ucd-version` 0.9.0 | unmaintained (transitive) |
 | [RUSTSEC-2026-0221](https://rustsec.org/advisories/RUSTSEC-2026-0221) | `event-listener` 5.4.1 | unsound (transitive) |
-| [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429) | `glib` 0.18.5 | unsound (transitive from tauri) |
+| [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429) | `glib` 0.18.5 | unsound (transitive from tauri; accepted — blocked upstream) |
 | yanked | `chacha20` 0.10.1 | yanked (transitive from `aes-gcm` chain) |
 | yanked | `spin` 0.9.8 | yanked (transitive) |
 
 Azalea does not import these directly. They arrive through `tauri`, `russh`,
 and the WebKit-GTK bindings. We refresh them when upstream crates publish
 supported versions.
+
+**RUSTSEC-2024-0429 (`glib` 0.18.5 unsound `VariantStrIter`).** Fixed upstream in
+`glib` ≥ 0.20.0. Azalea does not depend on `glib` directly; Linux desktop pulls
+`glib` 0.18.5 through the gtk-rs 0.18 stack (`gtk` 0.18.2, `webkit2gtk` 2.0.2,
+`gio`/`pango`/`cairo-rs`/…), which is pinned by Tauri v2 / wry's current
+GTK3 + WebKitGTK 4.x Linux backend. A Cargo `[patch]` or direct `glib = "0.20"`
+bump is not ABI-compatible with gtk-rs 0.18 (semver break across the whole
+gtk-rs-core set). The safe fix is waiting for Tauri/wry's GTK4 + WebKitGTK 6
+migration (upstream: tauri#14684 / wry#1767), which moves the Linux stack onto
+gtk4/webkit6 and glib ≥ 0.20. Until then this remains accepted: the unsound
+API is `VariantStrIter` iteration; Azalea does not call it, and a crash would
+be local to the desktop process rather than a network auth bypass.
 
 ## npm
 
