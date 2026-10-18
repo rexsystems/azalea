@@ -1,0 +1,117 @@
+name: CI
+
+# Checks every push and pull request to master. Builds nothing for release and
+# needs no secrets. Actions are pinned to the same SHAs as release.yml.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: TypeScript (typecheck, lint, tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # npm < 11.3 can skip platform optionalDeps (npm/cli#4828).
+      - run: npm install -g npm@11
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build --workspace @azalea/desktop
+
+  server:
+    name: azalea-server (fmt, clippy, tests)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/azalea-server
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # stable @ 2026-10
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: services/azalea-server
+          shared-key: ci-server
+
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  desktop:
+    name: Desktop Rust (fmt, clippy, tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            file \
+            libssl-dev \
+            libasound2-dev \
+            cmake \
+            clang \
+            libclang-dev \
+            libdbus-1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # stable @ 2026-10
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop/src-tauri
+          shared-key: ci-desktop
+
+      # tauri::generate_context! needs the built frontend in apps/desktop/dist.
+      - run: npm install -g npm@11
+      - run: npm ci
+      - run: npm run build --workspace @azalea/desktop
+
+      - name: cargo fmt --check
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --check
+
+      # The desktop crate still has clippy warnings; they are reported, not fatal.
+      - name: cargo clippy
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets
+
+      - name: cargo test
+        working-directory: apps/desktop/src-tauri
+        run: cargo test
