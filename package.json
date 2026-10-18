@@ -20,11 +20,13 @@
     "build:deb": "npm run tauri build --workspace @azalea/desktop -- --bundles deb --no-sign",
     "build:macos": "npm run tauri build --workspace @azalea/desktop -- --bundles app --no-sign",
     "build:macos:ci": "npm run tauri build --workspace @azalea/desktop -- --bundles app",
-    "lint": "npm run build --workspace @azalea/desktop",
+    "lint": "npm run lint --workspace @azalea/desktop",
     "dev:web": "npm run dev --prefix apps/azalea-server-web",
     "dev:dashboard": "npm run dev --prefix apps/azalea-server-web",
     "build:dashboard": "npm run build --prefix apps/azalea-server-web",
-    "test:dashboard": "npm test --prefix apps/azalea-server-web"
+    "test:dashboard": "npm test --prefix apps/azalea-server-web",
+    "typecheck": "npm run typecheck --workspace @azalea/desktop",
+    "test": "npm test --workspace @azalea/desktop && npm run test:dashboard && node --test .github/tests/*.test.mjs"
   },
   "overrides": {
     "next": "16.3.8",

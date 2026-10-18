@@ -21,15 +21,12 @@ Thanks for your interest in contributing!
 Before submitting a PR:
 
 ```bash
-# Desktop
+npm run typecheck
+npm run lint
+npm test
 npm run build --workspace @azalea/desktop
-npm run test:ai --workspace @azalea/desktop
-node --test apps/desktop/tests/recovery-key.test.mjs
 (cd apps/desktop/src-tauri && cargo fmt --check && cargo clippy && cargo test)
-
-# If you changed the sync server or the dashboard
 (cd services/azalea-server && cargo fmt --check && cargo clippy && cargo test)
-npm run test:dashboard
 ```
 
 ## Code style

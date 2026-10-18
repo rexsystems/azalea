@@ -83,7 +83,7 @@ export function detectArch(): string {
 
 function redact(text: string): string {
   let out = text;
-  out = out.replace(/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/gi, "[email]");
+  out = out.replace(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi, "[email]");
   out = out.replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[ip]");
   out = out.replace(/(\/home|\/Users|\/root)\/[^\s/"']+/g, "$1/[user]");
   out = out.replace(/[A-Za-z]:\\Users\\[^\s\\/"']+/gi, "[drive]\\Users\\[user]");

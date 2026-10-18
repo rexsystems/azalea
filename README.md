@@ -62,20 +62,14 @@ npm run dev:web                           # proxies /api to http://127.0.0.1:948
 ### Test
 
 ```bash
-# Desktop (TypeScript)
-npx tsc --noEmit -p apps/desktop
-npm run test:ai --workspace @azalea/desktop
-node --test apps/desktop/tests/recovery-key.test.mjs
+# Desktop typecheck and lint, then the desktop, dashboard and release-script tests
+npm run typecheck
+npm run lint
+npm test
 
-# Desktop (Rust)
+# Rust
 cd apps/desktop/src-tauri && cargo test
-
-# Sync server
 cd services/azalea-server && cargo test
-
-# Web dashboard and release scripts
-npm run test:dashboard
-node --test .github/tests/*.test.mjs
 ```
 
 ### Build

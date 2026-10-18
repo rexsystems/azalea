@@ -179,7 +179,7 @@ export function KeysPage({
   };
 
   const handleImport = async () => {
-    let picked: api.PickedTextFile | null = null;
+    let picked: api.PickedTextFile | null;
     try {
       picked = await api.pickTextFile([{ name: "Private key", extensions: ["*"] }]);
     } catch (err) {
