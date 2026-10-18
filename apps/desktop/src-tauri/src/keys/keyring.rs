@@ -169,7 +169,12 @@ fn remove_if_present(path: &Path) {
 
 /// Stores a secret in the OS keychain when it actually persists; otherwise
 /// writes an encrypted file under the app data directory.
-fn store_secret(account: &str, encrypted_path: &Path, legacy_path: &Path, secret: &str) -> anyhow::Result<()> {
+fn store_secret(
+    account: &str,
+    encrypted_path: &Path,
+    legacy_path: &Path,
+    secret: &str,
+) -> anyhow::Result<()> {
     if keyring_persists() {
         match keyring_set(account, secret) {
             Ok(()) => {
@@ -188,7 +193,11 @@ fn store_secret(account: &str, encrypted_path: &Path, legacy_path: &Path, secret
 
 /// Reads a secret, preferring a persistent OS keychain. Secrets found in the
 /// legacy plaintext files are migrated into secure storage and removed.
-fn load_secret(account: &str, encrypted_path: &Path, legacy_path: &Path) -> anyhow::Result<Option<String>> {
+fn load_secret(
+    account: &str,
+    encrypted_path: &Path,
+    legacy_path: &Path,
+) -> anyhow::Result<Option<String>> {
     if keyring_persists() {
         if let Ok(Some(secret)) = keyring_get(account) {
             remove_if_present(encrypted_path);

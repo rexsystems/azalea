@@ -83,12 +83,7 @@ pub async fn connect_selfhost(
 
     let account = registry
         .lock()
-        .add(
-            AccountKind::Selfhost,
-            label,
-            Some(base_url),
-            web_url,
-        )
+        .add(AccountKind::Selfhost, label, Some(base_url), web_url)
         .map_err(|e| e.to_string())?;
 
     if let Err(err) = switch_to_account(&app, &registry, &db, &sync, &account.id).await {
@@ -213,7 +208,11 @@ async fn switch_to_account(
     db.lock().reopen(path).map_err(|e| e.to_string())?;
 
     let mut sync = sync.lock().await;
-    sync.bind_account(account.id.clone(), account.base_url.clone(), account.web_url.clone());
+    sync.bind_account(
+        account.id.clone(),
+        account.base_url.clone(),
+        account.web_url.clone(),
+    );
     Ok(account)
 }
 
@@ -244,10 +243,7 @@ pub async fn remove_account(
         }
     }
 
-    let next_id = registry
-        .lock()
-        .active_id()
-        .to_string();
+    let next_id = registry.lock().active_id().to_string();
 
     if removed_was_active {
         switch_to_account(&app, &registry, &db, &sync, &next_id).await

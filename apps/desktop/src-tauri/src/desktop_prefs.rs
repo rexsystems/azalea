@@ -49,7 +49,10 @@ impl DesktopPrefs {
     }
 
     pub fn close_to_tray(&self) -> bool {
-        self.preferences.lock().expect("desktop prefs").close_to_tray
+        self.preferences
+            .lock()
+            .expect("desktop prefs")
+            .close_to_tray
             && *self.tray_available.lock().expect("desktop prefs tray")
     }
 

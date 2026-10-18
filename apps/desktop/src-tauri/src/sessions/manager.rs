@@ -653,10 +653,7 @@ pub async fn open_sftp(
     channel.request_subsystem(true, "sftp").await?;
     let sftp = Arc::new(SftpSession::new(channel.into_stream()).await?);
 
-    manager
-        .lock()
-        .await
-        .store_sftp(session_id, sftp.clone());
+    manager.lock().await.store_sftp(session_id, sftp.clone());
     Ok(sftp)
 }
 
@@ -742,9 +739,9 @@ async fn plan_local_dir_upload(
     let mut stack = vec![root.to_path_buf()];
 
     while let Some(dir) = stack.pop() {
-        let mut entries = tokio::fs::read_dir(&dir).await.map_err(|err| {
-            anyhow::anyhow!("Cannot read {}: {err}", dir.display())
-        })?;
+        let mut entries = tokio::fs::read_dir(&dir)
+            .await
+            .map_err(|err| anyhow::anyhow!("Cannot read {}: {err}", dir.display()))?;
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             let file_type = entry.file_type().await?;
@@ -831,9 +828,9 @@ pub async fn sftp_upload_file(
         .to_string();
 
     let result = async {
-        let meta = tokio::fs::metadata(local).await.map_err(|err| {
-            anyhow::anyhow!("Cannot access {}: {err}", local.display())
-        })?;
+        let meta = tokio::fs::metadata(local)
+            .await
+            .map_err(|err| anyhow::anyhow!("Cannot access {}: {err}", local.display()))?;
 
         let sftp = open_sftp(manager, session_id).await?;
 
@@ -1081,8 +1078,7 @@ pub async fn start_port_forward(
         loop {
             let Ok((mut tcp, peer)) = listener.accept().await else {
                 listening_loop.store(false, Ordering::SeqCst);
-                *last_error_loop.lock() =
-                    Some("Listener closed unexpectedly".to_string());
+                *last_error_loop.lock() = Some("Listener closed unexpectedly".to_string());
                 emit_forward_status(&app_loop, &{
                     let n = connections_loop.load(Ordering::SeqCst) as u32;
                     PortForwardStatus {
@@ -1239,7 +1235,11 @@ async fn run_session(
     });
 
     let addr = format!("{}:{}", host.hostname, host.port);
-    emit_log(&app, &session_id, &format!("Connecting to {addr} as {}...", host.username));
+    emit_log(
+        &app,
+        &session_id,
+        &format!("Connecting to {addr} as {}...", host.username),
+    );
 
     let handler = SshClientHandler {
         db: db.clone(),
@@ -1379,10 +1379,7 @@ async fn run_session(
 }
 
 fn emit_output(app: &AppHandle, session_id: &str, data: &[u8]) {
-    let encoded = base64::Engine::encode(
-        &base64::engine::general_purpose::STANDARD,
-        data,
-    );
+    let encoded = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, data);
     let _ = app.emit(
         "terminal-output",
         TerminalOutputEvent {
@@ -1656,11 +1653,7 @@ pub async fn install_authorized_key(
     // /etc/skel/ or /var/lib/*.
     if !looks_like_user_home(&home, &host.username) {
         let _ = session
-            .disconnect(
-                Disconnect::ByApplication,
-                "Unexpected home directory",
-                "en",
-            )
+            .disconnect(Disconnect::ByApplication, "Unexpected home directory", "en")
             .await;
         anyhow::bail!(
             "Server returned an unexpected home directory ({home}). Refusing to install the key."
@@ -1677,8 +1670,7 @@ pub async fn install_authorized_key(
     }
 
     let existing = if sftp.try_exists(&auth_keys_path).await.unwrap_or(false) {
-        String::from_utf8(sftp.read(&auth_keys_path).await.unwrap_or_default())
-            .unwrap_or_default()
+        String::from_utf8(sftp.read(&auth_keys_path).await.unwrap_or_default()).unwrap_or_default()
     } else {
         String::new()
     };

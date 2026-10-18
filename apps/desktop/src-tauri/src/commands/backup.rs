@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::keys::generate::import_private_key_with_id;
 use crate::keys::{
     delete_host_password, delete_private_key, get_host_password, get_private_key,
     store_host_password,
 };
-use crate::keys::generate::import_private_key_with_id;
 use crate::models::{Host, HostGroup};
 use crate::store::SharedDatabase;
 
@@ -282,7 +282,10 @@ pub fn import_azalea_backup_db(
 
     for key in backup.keys {
         let pem = key.private_key_pem.ok_or_else(|| {
-            format!("Backup key \"{}\" is missing its private key material.", key.name)
+            format!(
+                "Backup key \"{}\" is missing its private key material.",
+                key.name
+            )
         })?;
         let imported = if replace {
             import_private_key_with_id(&key.name, &pem, None, Some(&key.id))
@@ -303,7 +306,10 @@ pub fn import_azalea_backup_db(
         } else {
             Uuid::new_v4().to_string()
         };
-        let mapped_key_id = host.key_id.as_ref().and_then(|old| key_id_map.get(old).cloned());
+        let mapped_key_id = host
+            .key_id
+            .as_ref()
+            .and_then(|old| key_id_map.get(old).cloned());
         let mapped_group_id = host
             .group_id
             .as_ref()
@@ -371,7 +377,8 @@ fn import_json_hosts(
     let entries = extract_json_host_entries(&value);
     if entries.is_empty() {
         return Err(
-            "No hosts found. Use a JSON host export or an OpenSSH config (Host blocks).".to_string(),
+            "No hosts found. Use a JSON host export or an OpenSSH config (Host blocks)."
+                .to_string(),
         );
     }
 
@@ -492,7 +499,11 @@ fn format_ssh_host_aliases(value: &str) -> Option<String> {
     Some(aliases.join(" | "))
 }
 
-fn import_ssh_config(db: &tauri::State<'_, SharedDatabase>, data: &str, replace: bool) -> Result<usize, String> {
+fn import_ssh_config(
+    db: &tauri::State<'_, SharedDatabase>,
+    data: &str,
+    replace: bool,
+) -> Result<usize, String> {
     if replace {
         let db = db.lock();
         let existing_hosts = db.list_hosts().map_err(|err| err.to_string())?;
@@ -516,7 +527,10 @@ fn import_ssh_config(db: &tauri::State<'_, SharedDatabase>, data: &str, replace:
 
     let mut flush = |name: &str, hostname: &str, user: &str, port: i64| -> Result<(), String> {
         let host_key = (hostname.to_ascii_lowercase(), port, user.to_string());
-        if seen.iter().any(|(h, p, u)| h == &host_key.0 && *p == host_key.1 && u == &host_key.2) {
+        if seen
+            .iter()
+            .any(|(h, p, u)| h == &host_key.0 && *p == host_key.1 && u == &host_key.2)
+        {
             return Ok(());
         }
         let now = chrono::Utc::now().timestamp();
@@ -553,7 +567,8 @@ fn import_ssh_config(db: &tauri::State<'_, SharedDatabase>, data: &str, replace:
         let value = parts.collect::<Vec<_>>().join(" ");
 
         if keyword == "host" {
-            if let (Some(name), Some(hostname)) = (current_name.as_ref(), current_hostname.as_ref()) {
+            if let (Some(name), Some(hostname)) = (current_name.as_ref(), current_hostname.as_ref())
+            {
                 flush(name, hostname, &current_user, current_port)?;
             }
             current_name = format_ssh_host_aliases(&value);

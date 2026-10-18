@@ -567,8 +567,14 @@ fn store_private_key_material(
         let openssh = openssh.to_string();
         // Round-trip check: ssh-key has historically mangled some RSA encodings.
         if let Ok(reloaded) = parse_private_key(&openssh, None) {
-            let fp_ok = reloaded.public_key().fingerprint(HashAlg::Sha256).to_string()
-                == private_key.public_key().fingerprint(HashAlg::Sha256).to_string();
+            let fp_ok = reloaded
+                .public_key()
+                .fingerprint(HashAlg::Sha256)
+                .to_string()
+                == private_key
+                    .public_key()
+                    .fingerprint(HashAlg::Sha256)
+                    .to_string();
             let sign_ok = prove_key_can_sign(&reloaded, b"azalea-store-check").is_ok();
             if fp_ok && sign_ok {
                 return keyring::store_private_key(id, &openssh);
@@ -582,7 +588,9 @@ fn store_private_key_material(
         || normalized.contains("Proc-Type:")
         || normalized.contains("DEK-Info:")
         || (crate::keys::ppk::looks_like_ppk(original_pem)
-            && original_pem.to_ascii_lowercase().contains("encryption: aes"));
+            && original_pem
+                .to_ascii_lowercase()
+                .contains("encryption: aes"));
     if looks_encrypted {
         anyhow::bail!(
             "Imported key decrypted, but could not re-encode it to OpenSSH format for storage. Try converting with: ssh-keygen -p -m RFC4716 -f key"
@@ -648,10 +656,7 @@ pub fn import_private_key_with_id(
         Algorithm::SkEd25519 | Algorithm::SkEcdsaSha2NistP256 => {
             anyhow::bail!("Security keys (FIDO/U2F) can't be imported as private key files.")
         }
-        Algorithm::Ed25519
-        | Algorithm::Rsa { .. }
-        | Algorithm::Ecdsa { .. }
-        | Algorithm::Dsa => {}
+        Algorithm::Ed25519 | Algorithm::Rsa { .. } | Algorithm::Ecdsa { .. } | Algorithm::Dsa => {}
         other => anyhow::bail!("Unsupported key algorithm: {other}"),
     }
 
@@ -708,7 +713,8 @@ mod tests {
 
     #[test]
     fn public_key_identity_ignores_comment() {
-        let id = public_key_identity("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest comment here").unwrap();
+        let id =
+            public_key_identity("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest comment here").unwrap();
         assert_eq!(id, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITest");
     }
 }
@@ -782,8 +788,6 @@ mod openssh_lenient_tests {
     }
 }
 
-
-
 #[cfg(test)]
 mod broad_import_tests {
     use super::*;
@@ -804,46 +808,89 @@ mod broad_import_tests {
             eprintln!("skip: fixtures missing at {FIX}");
             return;
         }
-        assert!(matches!(must_parse("ed25519_openssh", None).algorithm(), Algorithm::Ed25519));
-        assert!(matches!(must_parse("rsa2048_openssh", None).algorithm(), Algorithm::Rsa { .. }));
-        assert!(matches!(must_parse("rsa2048_pkcs1", None).algorithm(), Algorithm::Rsa { .. }));
-        assert!(matches!(must_parse("rsa2048_pkcs8", None).algorithm(), Algorithm::Rsa { .. }));
-        assert!(matches!(must_parse("rsa3072_openssh", None).algorithm(), Algorithm::Rsa { .. }));
-        assert!(matches!(must_parse("rsa4096_openssh", None).algorithm(), Algorithm::Rsa { .. }));
-        assert!(matches!(must_parse("rsa2048_enc", Some("secret")).algorithm(), Algorithm::Rsa { .. }));
+        assert!(matches!(
+            must_parse("ed25519_openssh", None).algorithm(),
+            Algorithm::Ed25519
+        ));
+        assert!(matches!(
+            must_parse("rsa2048_openssh", None).algorithm(),
+            Algorithm::Rsa { .. }
+        ));
+        assert!(matches!(
+            must_parse("rsa2048_pkcs1", None).algorithm(),
+            Algorithm::Rsa { .. }
+        ));
+        assert!(matches!(
+            must_parse("rsa2048_pkcs8", None).algorithm(),
+            Algorithm::Rsa { .. }
+        ));
+        assert!(matches!(
+            must_parse("rsa3072_openssh", None).algorithm(),
+            Algorithm::Rsa { .. }
+        ));
+        assert!(matches!(
+            must_parse("rsa4096_openssh", None).algorithm(),
+            Algorithm::Rsa { .. }
+        ));
+        assert!(matches!(
+            must_parse("rsa2048_enc", Some("secret")).algorithm(),
+            Algorithm::Rsa { .. }
+        ));
         assert!(matches!(
             must_parse("ecdsa256_openssh", None).algorithm(),
-            Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }
+            Algorithm::Ecdsa {
+                curve: EcdsaCurve::NistP256
+            }
         ));
         assert!(matches!(
             must_parse("ecdsa384_openssh", None).algorithm(),
-            Algorithm::Ecdsa { curve: EcdsaCurve::NistP384 }
+            Algorithm::Ecdsa {
+                curve: EcdsaCurve::NistP384
+            }
         ));
         assert!(matches!(
             must_parse("ecdsa521_openssh", None).algorithm(),
-            Algorithm::Ecdsa { curve: EcdsaCurve::NistP521 }
+            Algorithm::Ecdsa {
+                curve: EcdsaCurve::NistP521
+            }
         ));
         assert!(matches!(
             must_parse("ecdsa256_sec1", None).algorithm(),
-            Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }
+            Algorithm::Ecdsa {
+                curve: EcdsaCurve::NistP256
+            }
         ));
         assert!(matches!(
             must_parse("ecdsa384_sec1", None).algorithm(),
-            Algorithm::Ecdsa { curve: EcdsaCurve::NistP384 }
+            Algorithm::Ecdsa {
+                curve: EcdsaCurve::NistP384
+            }
         ));
         assert!(matches!(
             must_parse("ecdsa521_sec1", None).algorithm(),
-            Algorithm::Ecdsa { curve: EcdsaCurve::NistP521 }
+            Algorithm::Ecdsa {
+                curve: EcdsaCurve::NistP521
+            }
         ));
         assert!(matches!(
             must_parse("ecdsa256_pkcs8", None).algorithm(),
-            Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }
+            Algorithm::Ecdsa {
+                curve: EcdsaCurve::NistP256
+            }
         ));
-        assert!(matches!(must_parse("ed25519.ppk", None).algorithm(), Algorithm::Ed25519));
-        assert!(matches!(must_parse("rsa2048.ppk", None).algorithm(), Algorithm::Rsa { .. }));
+        assert!(matches!(
+            must_parse("ed25519.ppk", None).algorithm(),
+            Algorithm::Ed25519
+        ));
+        assert!(matches!(
+            must_parse("rsa2048.ppk", None).algorithm(),
+            Algorithm::Rsa { .. }
+        ));
         assert!(matches!(
             must_parse("ecdsa256.ppk", None).algorithm(),
-            Algorithm::Ecdsa { curve: EcdsaCurve::NistP256 }
+            Algorithm::Ecdsa {
+                curve: EcdsaCurve::NistP256
+            }
         ));
     }
 
@@ -871,8 +918,7 @@ mod broad_import_tests {
             // Round-trip OpenSSH encode/decode (storage path).
             let openssh = key.to_openssh(ssh_key::LineEnding::LF).unwrap().to_string();
             let again = parse_private_key(&openssh, None).unwrap();
-            prove_key_can_sign(&again, b"chal")
-                .unwrap_or_else(|e| panic!("generate {label}: {e}"));
+            prove_key_can_sign(&again, b"chal").unwrap_or_else(|e| panic!("generate {label}: {e}"));
         }
     }
 }

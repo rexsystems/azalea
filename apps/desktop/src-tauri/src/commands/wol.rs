@@ -62,11 +62,7 @@ pub fn send_wake_on_lan(mac_address: &str, broadcast: Option<&str>) -> anyhow::R
 
 #[tauri::command]
 pub fn wake_on_lan(input: WakeOnLanInput) -> Result<(), String> {
-    send_wake_on_lan(
-        &input.mac_address,
-        input.broadcast.as_deref(),
-    )
-    .map_err(|err| err.to_string())
+    send_wake_on_lan(&input.mac_address, input.broadcast.as_deref()).map_err(|err| err.to_string())
 }
 
 #[cfg(test)]

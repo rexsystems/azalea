@@ -52,8 +52,8 @@ pub async fn pick_text_file(
         return Err("File is too large to import (16 MB limit).".to_string());
     }
 
-    let contents = std::fs::read_to_string(&path)
-        .map_err(|_| "File is not valid UTF-8 text.".to_string())?;
+    let contents =
+        std::fs::read_to_string(&path).map_err(|_| "File is not valid UTF-8 text.".to_string())?;
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())

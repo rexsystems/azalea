@@ -1,12 +1,12 @@
 mod commands;
 pub mod crash_report;
+#[cfg(desktop)]
+mod desktop_prefs;
 mod keys;
 mod models;
 mod sessions;
 mod store;
 mod sync;
-#[cfg(desktop)]
-mod desktop_prefs;
 #[cfg(desktop)]
 mod voice;
 

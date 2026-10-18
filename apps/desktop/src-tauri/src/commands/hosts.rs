@@ -6,9 +6,7 @@ use crate::store::SharedDatabase;
 
 #[tauri::command]
 pub fn list_hosts(db: tauri::State<'_, SharedDatabase>) -> Result<Vec<Host>, String> {
-    db.lock()
-        .list_hosts()
-        .map_err(|err| err.to_string())
+    db.lock().list_hosts().map_err(|err| err.to_string())
 }
 
 #[tauri::command]
@@ -135,7 +133,5 @@ pub fn host_has_password(id: String) -> Result<bool, String> {
 #[tauri::command]
 pub fn delete_host(db: tauri::State<'_, SharedDatabase>, id: String) -> Result<(), String> {
     crate::keys::delete_host_password(&id).map_err(|err| err.to_string())?;
-    db.lock()
-        .delete_host(&id)
-        .map_err(|err| err.to_string())
+    db.lock().delete_host(&id).map_err(|err| err.to_string())
 }

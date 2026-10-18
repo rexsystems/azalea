@@ -12,7 +12,9 @@ pub struct MailConfig {
 
 impl MailConfig {
     pub fn from_env() -> Option<Self> {
-        let api_key = env::var("RESEND_API_KEY").ok().filter(|v| !v.trim().is_empty())?;
+        let api_key = env::var("RESEND_API_KEY")
+            .ok()
+            .filter(|v| !v.trim().is_empty())?;
         let from = env::var("AZALEA_MAIL_FROM")
             .ok()
             .filter(|v| !v.trim().is_empty())
@@ -29,11 +31,7 @@ impl MailConfig {
     }
 }
 
-pub async fn send_password_reset(
-    mail: &MailConfig,
-    to_email: &str,
-    token: &str,
-) -> ApiResult<()> {
+pub async fn send_password_reset(mail: &MailConfig, to_email: &str, token: &str) -> ApiResult<()> {
     let reset_url = format!(
         "{}/reset-password?token={}",
         mail.public_web_url,

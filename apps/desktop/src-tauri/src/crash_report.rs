@@ -10,8 +10,7 @@ use sentry::{ClientInitGuard, ClientOptions, Level};
 use serde::Deserialize;
 
 /// Public client DSN for https://error.mythical.systems (GlitchTip).
-const GLITCHTIP_DSN: &str =
-    "https://f201d7b7760e4107bd214cbb8673eadf@error.mythical.systems/3";
+const GLITCHTIP_DSN: &str = "https://f201d7b7760e4107bd214cbb8673eadf@error.mythical.systems/3";
 
 static REPORTING_ENABLED: AtomicBool = AtomicBool::new(false);
 
@@ -123,11 +122,7 @@ pub fn report_client_error(input: ClientErrorInput) {
     if message.is_empty() {
         return;
     }
-    let stack = input
-        .stack
-        .as_deref()
-        .map(redact)
-        .filter(|s| !s.is_empty());
+    let stack = input.stack.as_deref().map(redact).filter(|s| !s.is_empty());
 
     sentry::with_scope(
         |scope| {

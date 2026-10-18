@@ -47,8 +47,8 @@ pub fn hash_password(password: &str) -> ApiResult<String> {
 }
 
 pub fn verify_password(password: &str, password_hash: &str) -> ApiResult<bool> {
-    let parsed = PasswordHash::new(password_hash)
-        .map_err(|e| ApiError::Internal(anyhow::anyhow!(e)))?;
+    let parsed =
+        PasswordHash::new(password_hash).map_err(|e| ApiError::Internal(anyhow::anyhow!(e)))?;
     Ok(Argon2::default()
         .verify_password(password.as_bytes(), &parsed)
         .is_ok())

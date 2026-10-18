@@ -28,7 +28,14 @@ pub async fn start_ssh(
     sessions
         .lock()
         .await
-        .start(app, db.inner().clone(), manager, input.host_id, input.cols, input.rows)
+        .start(
+            app,
+            db.inner().clone(),
+            manager,
+            input.host_id,
+            input.cols,
+            input.rows,
+        )
         .await
         .map_err(|err| err.to_string())
 }
@@ -44,7 +51,14 @@ pub async fn reconnect_ssh(
     sessions
         .lock()
         .await
-        .reconnect(app, db.inner().clone(), manager, input.session_id, input.cols, input.rows)
+        .reconnect(
+            app,
+            db.inner().clone(),
+            manager,
+            input.session_id,
+            input.cols,
+            input.rows,
+        )
         .await
         .map_err(|err| err.to_string())
 }

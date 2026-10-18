@@ -5,14 +5,17 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::db::now_rfc3339;
-use rusqlite::params;
 use crate::error::{ApiError, ApiResult};
 use crate::routes::extractors::AuthUser;
 use crate::state::AppState;
+use rusqlite::params;
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/v1/vault", get(get_vault).put(put_vault).delete(delete_vault))
+        .route(
+            "/v1/vault",
+            get(get_vault).put(put_vault).delete(delete_vault),
+        )
         .route("/v1/account", get(get_account))
 }
 
@@ -123,7 +126,11 @@ async fn put_vault(
     let expected = body.expected_version.unwrap_or(0);
     let size = (body.kdf_salt.len()
         + body.verifier.len()
-        + body.recovery_envelope.as_ref().map(|s| s.len()).unwrap_or(0)
+        + body
+            .recovery_envelope
+            .as_ref()
+            .map(|s| s.len())
+            .unwrap_or(0)
         + body.ciphertext.len()) as i64;
 
     let (plan, free_limit, pro_limit): (String, i64, i64) = state.db.with_conn(|conn| {
@@ -182,9 +189,7 @@ async fn put_vault(
         }
         Some(v) => {
             if v != expected {
-                return Err(ApiError::Conflict(format!(
-                    "version_conflict current={v}"
-                )));
+                return Err(ApiError::Conflict(format!("version_conflict current={v}")));
             }
             let new_version = v + 1;
             state.db.with_conn(|conn| {

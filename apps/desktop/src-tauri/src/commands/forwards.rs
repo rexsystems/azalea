@@ -35,10 +35,7 @@ pub fn create_port_forward(
 }
 
 #[tauri::command]
-pub fn delete_port_forward(
-    db: tauri::State<'_, SharedDatabase>,
-    id: String,
-) -> Result<(), String> {
+pub fn delete_port_forward(db: tauri::State<'_, SharedDatabase>, id: String) -> Result<(), String> {
     db.lock()
         .delete_port_forward(&id)
         .map_err(|err| err.to_string())

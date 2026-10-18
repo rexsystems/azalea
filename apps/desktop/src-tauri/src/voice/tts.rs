@@ -84,12 +84,15 @@ pub fn valid_file(path: &Path, expected_bytes: u64, expected_md5: &str) -> bool 
 
 pub fn voice_ready(voice_path: &Path, spec: &VoiceSpec) -> bool {
     let dir = voice_dir(voice_path, spec.id);
-    valid_file(&dir.join(format!("{}.onnx", spec.id)), spec.onnx_bytes, spec.onnx_md5)
-        && valid_file(
-            &dir.join(format!("{}.onnx.json", spec.id)),
-            spec.json_bytes,
-            spec.json_md5,
-        )
+    valid_file(
+        &dir.join(format!("{}.onnx", spec.id)),
+        spec.onnx_bytes,
+        spec.onnx_md5,
+    ) && valid_file(
+        &dir.join(format!("{}.onnx.json", spec.id)),
+        spec.json_bytes,
+        spec.json_md5,
+    )
 }
 
 pub fn piper_ready(voice_path: &Path) -> bool {
@@ -97,7 +100,8 @@ pub fn piper_ready(voice_path: &Path) -> bool {
 }
 
 pub fn any_tts_ready(voice_path: &Path) -> bool {
-    piper_ready(voice_path) && (voice_ready(voice_path, &EN_LESSAC) || voice_ready(voice_path, &RO_MIHAI))
+    piper_ready(voice_path)
+        && (voice_ready(voice_path, &EN_LESSAC) || voice_ready(voice_path, &RO_MIHAI))
 }
 
 pub fn pick_voice(voice_path: &Path, language: &str) -> Option<&'static VoiceSpec> {
@@ -278,9 +282,8 @@ fn find_piper_binary(dir: &Path) -> Option<PathBuf> {
 
 /// Move the folder that contains the Piper binary to `dest` (`…/tts/piper`).
 fn install_piper_tree(staging: &Path, dest: &Path) -> anyhow::Result<()> {
-    let bin = find_piper_binary(staging).ok_or_else(|| {
-        anyhow::anyhow!("Piper did not install correctly. Download it again.")
-    })?;
+    let bin = find_piper_binary(staging)
+        .ok_or_else(|| anyhow::anyhow!("Piper did not install correctly. Download it again."))?;
     let source_root = bin
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Piper did not install correctly. Download it again."))?
@@ -376,7 +379,12 @@ fn extract_archive(archive: &Path, dest: &Path) -> anyhow::Result<()> {
     #[cfg(not(target_os = "windows"))]
     {
         let status = Command::new("tar")
-            .args(["-xzf", &archive.to_string_lossy(), "-C", &dest.to_string_lossy()])
+            .args([
+                "-xzf",
+                &archive.to_string_lossy(),
+                "-C",
+                &dest.to_string_lossy(),
+            ])
             .status()?;
         if !status.success() {
             anyhow::bail!("Could not unpack the Piper download.");
@@ -386,9 +394,8 @@ fn extract_archive(archive: &Path, dest: &Path) -> anyhow::Result<()> {
 }
 
 fn play_wav(path: &Path, stop: &AtomicBool) -> anyhow::Result<()> {
-    let mut command = play_command(path).ok_or_else(|| {
-        anyhow::anyhow!("No system audio player found to play Piper output.")
-    })?;
+    let mut command = play_command(path)
+        .ok_or_else(|| anyhow::anyhow!("No system audio player found to play Piper output."))?;
     command.stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(target_os = "windows")]
     {
@@ -460,8 +467,9 @@ pub fn speak_piper(
     text: &str,
     stop: &AtomicBool,
 ) -> anyhow::Result<()> {
-    let spec = pick_voice(voice_path, language)
-        .ok_or_else(|| anyhow::anyhow!("Download Piper in Voice settings before spoken replies."))?;
+    let spec = pick_voice(voice_path, language).ok_or_else(|| {
+        anyhow::anyhow!("Download Piper in Voice settings before spoken replies.")
+    })?;
     let bin = piper_bin(voice_path);
     if !bin.is_file() {
         anyhow::bail!("Download Piper in Voice settings before spoken replies.");

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
@@ -166,9 +166,9 @@ impl Database {
     }
 
     pub fn list_groups(&self) -> anyhow::Result<Vec<HostGroup>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, name, created_at FROM host_groups ORDER BY name ASC",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, name, created_at FROM host_groups ORDER BY name ASC")?;
 
         let rows = stmt.query_map([], |row| {
             Ok(HostGroup {
@@ -222,7 +222,10 @@ impl Database {
     }
 
     pub fn delete_group(&self, id: &str) -> anyhow::Result<()> {
-        self.conn.execute("UPDATE hosts SET group_id = NULL WHERE group_id = ?1", params![id])?;
+        self.conn.execute(
+            "UPDATE hosts SET group_id = NULL WHERE group_id = ?1",
+            params![id],
+        )?;
         self.conn
             .execute("DELETE FROM host_groups WHERE id = ?1", params![id])?;
         Ok(())
@@ -432,7 +435,10 @@ impl Database {
         Ok(())
     }
 
-    pub fn find_key_by_fingerprint(&self, fingerprint: &str) -> anyhow::Result<Option<SshKeyRecord>> {
+    pub fn find_key_by_fingerprint(
+        &self,
+        fingerprint: &str,
+    ) -> anyhow::Result<Option<SshKeyRecord>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, public_key, key_type, fingerprint, created_at
              FROM keys WHERE fingerprint = ?1 LIMIT 1",
@@ -465,7 +471,11 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_known_host(&self, hostname: &str, port: i64) -> anyhow::Result<Option<KnownHostRecord>> {
+    pub fn get_known_host(
+        &self,
+        hostname: &str,
+        port: i64,
+    ) -> anyhow::Result<Option<KnownHostRecord>> {
         let mut stmt = self.conn.prepare(
             "SELECT hostname, port, key_type, public_key, fingerprint, created_at
              FROM known_hosts WHERE hostname = ?1 AND port = ?2",
@@ -507,9 +517,9 @@ impl Database {
     }
 
     pub fn list_snippets(&self) -> anyhow::Result<Vec<Snippet>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, name, command, created_at FROM snippets ORDER BY name ASC",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, name, command, created_at FROM snippets ORDER BY name ASC")?;
         let rows = stmt.query_map([], |row| {
             Ok(Snippet {
                 id: row.get(0)?,
@@ -524,7 +534,12 @@ impl Database {
     pub fn insert_snippet(&self, snippet: &Snippet) -> anyhow::Result<()> {
         self.conn.execute(
             "INSERT INTO snippets (id, name, command, created_at) VALUES (?1, ?2, ?3, ?4)",
-            params![snippet.id, snippet.name, snippet.command, snippet.created_at],
+            params![
+                snippet.id,
+                snippet.name,
+                snippet.command,
+                snippet.created_at
+            ],
         )?;
         Ok(())
     }
@@ -538,7 +553,8 @@ impl Database {
     }
 
     pub fn delete_snippet(&self, id: &str) -> anyhow::Result<()> {
-        self.conn.execute("DELETE FROM snippets WHERE id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM snippets WHERE id = ?1", params![id])?;
         Ok(())
     }
 
@@ -597,12 +613,15 @@ impl Database {
     }
 
     pub fn delete_port_forward(&self, id: &str) -> anyhow::Result<()> {
-        self.conn.execute("DELETE FROM port_forwards WHERE id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM port_forwards WHERE id = ?1", params![id])?;
         Ok(())
     }
 
     pub fn get_sync_meta(&self, key: &str) -> anyhow::Result<Option<String>> {
-        let mut stmt = self.conn.prepare("SELECT value FROM sync_meta WHERE key = ?1")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT value FROM sync_meta WHERE key = ?1")?;
         let mut rows = stmt.query(params![key])?;
         if let Some(row) = rows.next()? {
             Ok(Some(row.get(0)?))
@@ -621,7 +640,8 @@ impl Database {
     }
 
     pub fn delete_sync_meta(&self, key: &str) -> anyhow::Result<()> {
-        self.conn.execute("DELETE FROM sync_meta WHERE key = ?1", params![key])?;
+        self.conn
+            .execute("DELETE FROM sync_meta WHERE key = ?1", params![key])?;
         Ok(())
     }
 }
@@ -639,5 +659,7 @@ pub type SharedDatabase = Arc<parking_lot::Mutex<Database>>;
 
 pub fn init_database(app: &AppHandle, account_id: &str) -> anyhow::Result<SharedDatabase> {
     let path = crate::store::accounts::account_db_path(app, account_id)?;
-    Ok(Arc::new(parking_lot::Mutex::new(Database::open_path(path)?)))
+    Ok(Arc::new(parking_lot::Mutex::new(Database::open_path(
+        path,
+    )?)))
 }

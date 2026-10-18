@@ -4,7 +4,8 @@ use std::path::PathBuf;
 const CONFIG_KEYS: &[&str] = &["AZALEA_API_URL", "AZALEA_WEB_URL"];
 
 fn main() {
-    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
+    let manifest_dir =
+        PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let mut values = HashMap::new();
 
     println!("cargo:rerun-if-changed=build.rs");

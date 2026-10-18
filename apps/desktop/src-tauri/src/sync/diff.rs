@@ -45,7 +45,14 @@ impl VaultDiff {
 
 pub fn diff_backups(local: &AzaleaBackup, remote: &AzaleaBackup) -> VaultDiff {
     VaultDiff {
-        hosts: diff_hosts(&local.hosts, &remote.hosts, &local.keys, &remote.keys, &local.groups, &remote.groups),
+        hosts: diff_hosts(
+            &local.hosts,
+            &remote.hosts,
+            &local.keys,
+            &remote.keys,
+            &local.groups,
+            &remote.groups,
+        ),
         keys: diff_keys(&local.keys, &remote.keys),
         groups: diff_groups(&local.groups, &remote.groups),
     }
@@ -213,14 +220,10 @@ fn diff_hosts(
         .map(|g| (g.id.clone(), g.name.clone()))
         .collect();
 
-    let local_map: HashMap<String, &BackupHost> = local
-        .iter()
-        .map(|h| (host_identity(h), h))
-        .collect();
-    let remote_map: HashMap<String, &BackupHost> = remote
-        .iter()
-        .map(|h| (host_identity(h), h))
-        .collect();
+    let local_map: HashMap<String, &BackupHost> =
+        local.iter().map(|h| (host_identity(h), h)).collect();
+    let remote_map: HashMap<String, &BackupHost> =
+        remote.iter().map(|h| (host_identity(h), h)).collect();
     let local_ids: HashSet<&str> = local_map.keys().map(String::as_str).collect();
     let remote_ids: HashSet<&str> = remote_map.keys().map(String::as_str).collect();
 
@@ -296,7 +299,8 @@ fn diff_by_identity<T>(
     equal: impl Fn(&T, &T) -> bool,
 ) -> ItemDiff {
     let local_map: HashMap<String, &T> = local.iter().map(|item| (identity(item), item)).collect();
-    let remote_map: HashMap<String, &T> = remote.iter().map(|item| (identity(item), item)).collect();
+    let remote_map: HashMap<String, &T> =
+        remote.iter().map(|item| (identity(item), item)).collect();
     let local_ids: HashSet<&str> = local_map.keys().map(String::as_str).collect();
     let remote_ids: HashSet<&str> = remote_map.keys().map(String::as_str).collect();
 

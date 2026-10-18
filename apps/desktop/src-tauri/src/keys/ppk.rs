@@ -191,7 +191,11 @@ fn derive_ppk3_material(file: &PpkFile, passphrase: &str) -> anyhow::Result<[u8;
     Ok(out)
 }
 
-fn verify_ppk_mac(file: &PpkFile, passphrase: Option<&str>, private_plain: &[u8]) -> anyhow::Result<()> {
+fn verify_ppk_mac(
+    file: &PpkFile,
+    passphrase: Option<&str>,
+    private_plain: &[u8],
+) -> anyhow::Result<()> {
     let enc = if is_unencrypted(&file.encryption) {
         "none"
     } else {
@@ -211,19 +215,18 @@ fn verify_ppk_mac(file: &PpkFile, passphrase: Option<&str>, private_plain: &[u8]
         // Unencrypted PPK3 omits Argon2 headers; MAC uses a zero-length HMAC-SHA-256 key.
         // Encrypted PPK3: MAC key is bytes 48..80 of Argon2 output.
         let mut mac = if is_unencrypted(&file.encryption) {
-            HmacSha256::new_from_slice(&[])
-                .map_err(|e| anyhow::anyhow!("hmac: {e}"))?
+            HmacSha256::new_from_slice(&[]).map_err(|e| anyhow::anyhow!("hmac: {e}"))?
         } else {
             let phrase = passphrase
                 .filter(|p| !p.is_empty())
                 .ok_or_else(|| anyhow::anyhow!("KEY_NEEDS_PASSPHRASE"))?;
             let out = derive_ppk3_material(file, phrase)?;
-            HmacSha256::new_from_slice(&out[48..80])
-                .map_err(|e| anyhow::anyhow!("hmac: {e}"))?
+            HmacSha256::new_from_slice(&out[48..80]).map_err(|e| anyhow::anyhow!("hmac: {e}"))?
         };
         mac.update(&mac_data);
-        mac.verify_slice(&expected)
-            .map_err(|_| anyhow::anyhow!("PPK MAC check failed (wrong passphrase or corrupt file)"))?;
+        mac.verify_slice(&expected).map_err(|_| {
+            anyhow::anyhow!("PPK MAC check failed (wrong passphrase or corrupt file)")
+        })?;
     } else {
         // PPK2: SHA1("putty-private-key-file-mac-key" [|| passphrase])
         let mut key_material = b"putty-private-key-file-mac-key".to_vec();
@@ -236,11 +239,12 @@ fn verify_ppk_mac(file: &PpkFile, passphrase: Option<&str>, private_plain: &[u8]
         let mut h = Sha1::new();
         h.update(&key_material);
         let mac_key = h.finalize();
-        let mut mac = HmacSha1::new_from_slice(&mac_key)
-            .map_err(|e| anyhow::anyhow!("hmac: {e}"))?;
+        let mut mac =
+            HmacSha1::new_from_slice(&mac_key).map_err(|e| anyhow::anyhow!("hmac: {e}"))?;
         mac.update(&mac_data);
-        mac.verify_slice(&expected)
-            .map_err(|_| anyhow::anyhow!("PPK MAC check failed (wrong passphrase or corrupt file)"))?;
+        mac.verify_slice(&expected).map_err(|_| {
+            anyhow::anyhow!("PPK MAC check failed (wrong passphrase or corrupt file)")
+        })?;
     }
     Ok(())
 }

@@ -21,11 +21,9 @@ pub fn generate_key(
     db: State<'_, SharedDatabase>,
     input: CreateKeyInput,
 ) -> Result<SshKeyRecord, String> {
-    let key = generate_ssh_key(&input.name, input.algorithm.as_deref())
-        .map_err(|err| err.to_string())?;
-    db.lock()
-        .insert_key(&key)
-        .map_err(|err| err.to_string())?;
+    let key =
+        generate_ssh_key(&input.name, input.algorithm.as_deref()).map_err(|err| err.to_string())?;
+    db.lock().insert_key(&key).map_err(|err| err.to_string())?;
     Ok(key)
 }
 
@@ -61,9 +59,7 @@ pub fn import_key(
 
     let key = import_private_key_with_id(&input.name, &input.private_key_pem, passphrase, None)
         .map_err(|err| err.to_string())?;
-    db.lock()
-        .insert_key(&key)
-        .map_err(|err| err.to_string())?;
+    db.lock().insert_key(&key).map_err(|err| err.to_string())?;
     Ok(key)
 }
 
