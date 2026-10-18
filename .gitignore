@@ -44,3 +44,6 @@ id_dsa.*
 *.ppk
 minisign.key
 tauri-signing-*
+
+# Local Android builds; publish APKs through Releases instead
+apps/desktop/dist-android/
