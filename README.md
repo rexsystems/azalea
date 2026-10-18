@@ -4,7 +4,7 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-informational)
-![Version](https://img.shields.io/badge/version-0.1.1-brightgreen)
+[![Release](https://img.shields.io/github/v/release/rexsystems/azalea?label=release&color=brightgreen)](https://github.com/rexsystems/azalea/releases/latest)
 
 ## Features
 
@@ -15,8 +15,11 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 - **Port forwarding** - manage and start local forwards from a session
 - **Snippets** - save and run common commands
 - **Import / export** - Azalea backups, OpenSSH `config`, and JSON host lists
-- **Cloud sync** (optional) - zero-knowledge encrypted vault; Free / Pro storage caps
-- **Themes & settings** - Midnight / Noir, font size, connect screen, auto-update
+- **Cloud sync** (optional) - vault encrypted on your device before upload; Free / Pro storage caps. See [cloud sync](docs/cloud-sync.md)
+- **Self-hosted server** - run your own sync server with Docker, an install script, or the admin CLI. See [self-host](docs/self-host.md)
+- **Web dashboard** - login, account and admin pages for a self-hosted server (`apps/azalea-server-web`). See [web apps](docs/web.md)
+- **Auto-update** - signed updates on Windows, Linux (AppImage) and macOS. See [updater](docs/updater.md)
+- **Themes & settings** - Midnight / Noir, font size, connect screen
 - **Terminal AI** (opt-in) - Ask / Agent, command approval, live output, provider model catalogs and custom model IDs. See [AI setup and behavior](docs/ai.md).
 - **Voice assistant** (opt-in) - local “Hey Azalea” recognition, voice replies, Wake-on-LAN and background tray support. See [voice setup](docs/voice.md).
 
@@ -24,7 +27,7 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 20+
+- [Node.js](https://nodejs.org/) 22+ (the desktop tests need it; CI uses 22)
 - [Rust](https://rustup.rs/) 1.88+
 - **Linux (Fedora / Nobara / RHEL):**
   ```bash
@@ -44,6 +47,35 @@ git clone https://github.com/rexsystems/azalea.git
 cd azalea
 npm install
 npm run dev
+```
+
+Sync server and web dashboard (optional, for working on sync):
+
+```bash
+cd services/azalea-server
+AZALEA_JWT_SECRET=dev-secret cargo run    # listens on 0.0.0.0:9482, data in ./data
+
+# second terminal, from the repo root
+npm run dev:web                           # proxies /api to http://127.0.0.1:9482
+```
+
+### Test
+
+```bash
+# Desktop (TypeScript)
+npx tsc --noEmit -p apps/desktop
+npm run test:ai --workspace @azalea/desktop
+node --test apps/desktop/tests/recovery-key.test.mjs
+
+# Desktop (Rust)
+cd apps/desktop/src-tauri && cargo test
+
+# Sync server
+cd services/azalea-server && cargo test
+
+# Web dashboard and release scripts
+npm run test:dashboard
+node --test .github/tests/*.test.mjs
 ```
 
 ### Build
@@ -74,10 +106,11 @@ Output lives under `apps/desktop/src-tauri/target/release/bundle/` (or `target/<
 azalea/
 ├── apps/desktop/              # Tauri 2 + React desktop app
 │   ├── src/                   # UI
-│   └── src-tauri/             # Rust (SSH, SFTP, SQLite, keychain, sync)
+│   └── src-tauri/             # Rust (SSH, SFTP, SQLite, keychain, sync, AI, voice)
+├── apps/azalea-server-web/    # Next.js dashboard for self-hosted servers
 ├── services/azalea-server/    # Self-hostable sync API (Rust + SQLite + Docker)
 ├── packages/shared/           # Shared TypeScript types
-└── docs/                      # Sync, self-host, updater, web notes
+└── docs/                      # Sync, self-host, updater, AI, voice, security
 ```
 
 ## Tech stack
@@ -90,14 +123,20 @@ azalea/
 | SSH / SFTP | russh |
 | Storage | SQLite + OS keychain |
 | Sync | azalea-server (Rust) + client-side encryption |
+| Web dashboard | Next.js (static export, served by nginx) |
 
 ## Docs
 
 - [Cloud sync](docs/cloud-sync.md)
 - [Self-host (VPS / Docker / CLI)](docs/self-host.md)
+- [Sync server CLI and env](services/azalea-server/README.md)
 - [Sync API v1](docs/sync-api-v1.md)
 - [Updater](docs/updater.md)
-- [Web app](docs/web.md)
+- [Web apps](docs/web.md)
+- [Terminal AI](docs/ai.md)
+- [Voice assistant](docs/voice.md)
+- [Security model](docs/security.md)
+- [Security audit: findings and exceptions](docs/security-audit.md)
 
 ## Security
 
@@ -107,6 +146,8 @@ azalea/
 - The webview runs under a restrictive CSP and cannot read or write arbitrary files
 - Optional anonymous telemetry (off by default): daily install ping and short crash reports, no host or key data
 - Backup export files are **not** encrypted: they contain private keys and host passwords in plain text
+
+To report a vulnerability, see [docs/security.md](docs/security.md#reporting).
 
 ## Contributing
 

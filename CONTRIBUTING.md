@@ -6,23 +6,30 @@ Thanks for your interest in contributing!
 
 1. Fork the repository
 2. Clone your fork
-3. Run `npm install` from the repo root
-4. Run `npm run dev` to start the desktop app in development mode
+3. Install the prerequisites listed in the [README](README.md#prerequisites) (Node.js 22+, Rust 1.88+, platform libraries)
+4. Run `npm install` from the repo root
+5. Run `npm run dev` to start the desktop app in development mode
 
 ## Development workflow
 
 - **Frontend**: `apps/desktop/src/` - React + TypeScript
 - **Backend**: `apps/desktop/src-tauri/src/` - Rust (SSH, storage, keychain)
 - **Shared types**: `packages/shared/`
+- **Sync server**: `services/azalea-server/` - Rust (Axum + SQLite)
+- **Web dashboard**: `apps/azalea-server-web/` - Next.js
 
 Before submitting a PR:
 
 ```bash
-cd apps/desktop
-npm run build
-cd src-tauri
-cargo clippy
-cargo test
+# Desktop
+npm run build --workspace @azalea/desktop
+npm run test:ai --workspace @azalea/desktop
+node --test apps/desktop/tests/recovery-key.test.mjs
+(cd apps/desktop/src-tauri && cargo fmt --check && cargo clippy && cargo test)
+
+# If you changed the sync server or the dashboard
+(cd services/azalea-server && cargo fmt --check && cargo clippy && cargo test)
+npm run test:dashboard
 ```
 
 ## Code style
