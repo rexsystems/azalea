@@ -22,6 +22,26 @@ const SEARCH_DECORATIONS = {
   activeMatchBorder: "#fde047",
 };
 
+// Nerd/Powerline families first so starship/p10k PUA icons render when installed
+// (common on Linux). Unpatched monospace follows; missing names are skipped.
+const TERMINAL_FONT_FAMILY = [
+  "JetBrainsMono Nerd Font",
+  "JetBrainsMono NF",
+  "MesloLGS NF",
+  "MesloLGS Nerd Font",
+  "Hack Nerd Font",
+  "CaskaydiaCove Nerd Font",
+  "Cascadia Code NF",
+  "FiraCode Nerd Font",
+  "Symbols Nerd Font Mono",
+  "JetBrains Mono",
+  "Cascadia Mono",
+  "Fira Code",
+  "monospace",
+]
+  .map((name) => (name.includes(" ") ? `"${name}"` : name))
+  .join(", ");
+
 interface TerminalProps {
   sessionId: string;
   active: boolean;
@@ -654,7 +674,7 @@ export const TerminalView = memo(function TerminalView({
     const term = new XTerm({
       cursorBlink: true,
       scrollback: 8000,
-      fontFamily: '"JetBrains Mono", "Cascadia Mono", "Fira Code", monospace',
+      fontFamily: TERMINAL_FONT_FAMILY,
       fontSize: settingsRef.current.fontSize,
       lineHeight: 1.15,
       letterSpacing: 0,
