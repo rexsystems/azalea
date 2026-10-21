@@ -1,21 +1,49 @@
 use std::fs;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AccountKind {
-    Cloud,
     Selfhost,
     Offline,
+    Gdrive,
+    Onedrive,
+    Dropbox,
+}
+
+impl AccountKind {
+    pub fn from_str_migrate(raw: &str) -> Self {
+        match raw {
+            "selfhost" => Self::Selfhost,
+            "gdrive" => Self::Gdrive,
+            "onedrive" => Self::Onedrive,
+            "dropbox" => Self::Dropbox,
+            // Legacy hosted Azalea Cloud → local-only profile.
+            "cloud" | "offline" => Self::Offline,
+            _ => Self::Offline,
+        }
+    }
+
+    pub fn is_personal_cloud(&self) -> bool {
+        matches!(self, Self::Gdrive | Self::Onedrive | Self::Dropbox)
+    }
+}
+
+fn deserialize_account_kind<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<AccountKind, D::Error> {
+    let raw = String::deserialize(deserializer)?;
+    Ok(AccountKind::from_str_migrate(&raw))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountRecord {
     pub id: String,
+    #[serde(deserialize_with = "deserialize_account_kind")]
     pub kind: AccountKind,
     pub label: String,
     #[serde(default)]
@@ -82,8 +110,21 @@ impl AccountRegistry {
 
         if path.exists() {
             let raw = fs::read_to_string(&path)?;
-            let data: AccountsFile = serde_json::from_str(&raw)?;
-            return Ok(Self { path, data });
+            let mut data: AccountsFile = serde_json::from_str(&raw)?;
+            let mut changed = raw.contains("\"cloud\"");
+            for account in &mut data.accounts {
+                if account.kind == AccountKind::Offline
+                    && (account.label == "Azalea Cloud" || account.label == "Cloud")
+                {
+                    account.label = "Local".to_string();
+                    changed = true;
+                }
+            }
+            let reg = Self { path, data };
+            if changed {
+                reg.save()?;
+            }
+            return Ok(reg);
         }
 
         let id = Uuid::new_v4().to_string();

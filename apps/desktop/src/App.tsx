@@ -1305,6 +1305,41 @@ function App() {
     [],
   );
 
+  const handleConnectPersonalCloud = useCallback(
+    async (provider: "gdrive" | "onedrive" | "dropbox") => {
+      const previousId = activeAccount?.id ?? null;
+      await closeAllSessions();
+      const result = await api.connectPersonalCloud(provider);
+      setActiveAccount(result.account);
+      await refreshAccounts();
+      await Promise.all([
+        refreshHosts(),
+        refreshGroups(),
+        refreshKeys(),
+        refreshSyncStatus(),
+      ]);
+      setStatusMessage(`Connected to ${result.account.label}.`);
+      openVaultDialog({
+        label: result.account.label,
+        email: result.email ?? "",
+        vaultExists: result.vault_exists,
+      });
+      if (previousId && previousId !== result.account.id) {
+        setPendingCopyFromId(previousId);
+      }
+    },
+    [
+      activeAccount?.id,
+      closeAllSessions,
+      openVaultDialog,
+      refreshAccounts,
+      refreshGroups,
+      refreshHosts,
+      refreshKeys,
+      refreshSyncStatus,
+    ],
+  );
+
   const handleConnectSelfhost = useCallback(
     async (input: {
       label: string;
@@ -1482,7 +1517,11 @@ function App() {
     void (async () => {
       try {
         setStatusMessage("Opening browser to sign in…");
-        await api.syncBrowserLogin();
+        if (api.isPersonalCloudKind(activeAccount?.kind)) {
+          await api.reauthPersonalCloud();
+        } else {
+          await api.syncBrowserLogin();
+        }
         const status = await refreshSyncStatus();
         await refreshAccounts();
         const account = await api.activeAccount();
@@ -2585,6 +2624,7 @@ function App() {
         <FirstRunWizard
           onConnectSelfhost={handleConnectSelfhost}
           onConnectSelfhostBrowser={handleConnectSelfhostBrowser}
+          onConnectPersonalCloud={handleConnectPersonalCloud}
           onDone={() => {
             setOnboarded(true);
             void refreshAccounts();
@@ -2604,6 +2644,7 @@ function App() {
         onAddAccount={handleAddAccount}
         onConnectSelfhost={handleConnectSelfhost}
         onConnectSelfhostBrowser={handleConnectSelfhostBrowser}
+        onConnectPersonalCloud={handleConnectPersonalCloud}
         onRemoveAccount={handleRemoveAccount}
         onCopyAccountData={(fromId) => {
           const source = accounts.find((a) => a.id === fromId);

@@ -1,0 +1,4 @@
+SVGs from https://dashboardicons.com (homarr-labs/dashboard-icons via jsDelivr):
+- google-drive.svg
+- onedrive.svg (microsoft-onedrive)
+- dropbox.svg

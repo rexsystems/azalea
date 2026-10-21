@@ -668,8 +668,12 @@ export function SettingsPage({
                     accountKind === "offline"
                       ? "Local profile. Hosts and keys stay on this device."
                       : accountKind === "selfhost"
-                        ? "Your instance, vault status, and master password."
-                        : "Sign-in, vault, and encrypted cloud backup."
+                        ? "Your instance, vault status, and master passphrase."
+                        : accountKind === "gdrive" ||
+                            accountKind === "onedrive" ||
+                            accountKind === "dropbox"
+                          ? "Personal cloud vault. Master passphrase stays on this device."
+                          : "Sign-in and encrypted vault sync."
                   }
                 />
                 <SyncSection

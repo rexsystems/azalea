@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Check,
   Copy,
-  ExternalLink,
   Globe,
   KeyRound,
   Loader2,
@@ -10,7 +9,6 @@ import {
   LogOut,
   RefreshCw,
 } from "./icons";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import * as api from "../lib/api";
 import { copyText } from "../lib/clipboard";
 import { maskEmail } from "../lib/utils";
@@ -35,8 +33,6 @@ interface SyncSectionProps {
 
 type Busy = null | "status" | "auth" | "setup" | "unlock" | "sync";
 
-const WEB_PRICING_URL = "https://azalea.rexsystems.me/pricing";
-
 const inputClass =
   "w-full rounded-lg border px-3 py-2 text-sm outline-none transition-ui";
 
@@ -55,12 +51,12 @@ function fmtBytes(bytes: number): string {
 
 function syncStateLabel(status: api.SyncStatus): string {
   if (status.storage_blocked) return "Storage full - upload blocked";
-  if (!status.unlocked) return status.vault_exists === false ? "No cloud vault" : "Locked";
+  if (!status.unlocked) return status.vault_exists === false ? "No remote vault" : "Locked";
   if (
     status.remote_version != null &&
     status.remote_version > status.last_synced_version
   ) {
-    return "Cloud has newer changes";
+    return "Remote has newer changes";
   }
   if (
     status.local_estimated_bytes != null &&
@@ -78,10 +74,32 @@ function StoragePanel({
   status: api.SyncStatus;
   accountKind?: api.AccountKind | null;
 }) {
+  if (api.isPersonalCloudKind(accountKind) || status.plan === "personal") {
+    return (
+      <div
+        className="space-y-2 rounded-lg border p-3"
+        style={{ borderColor: "var(--border-subtle)", background: "var(--bg-base)" }}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
+            Personal cloud storage
+          </span>
+        </div>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Encrypted vault in your own Drive / OneDrive / Dropbox. No Azalea plan limit.
+        </p>
+        {status.unlocked && status.local_estimated_bytes != null && (
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            This device (estimated): {fmtBytes(status.local_estimated_bytes)}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   const used = status.cloud_used_bytes;
   const limit = status.storage_limit_bytes;
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-  const cloud = accountKind === "cloud";
 
   return (
     <div
@@ -90,7 +108,7 @@ function StoragePanel({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
-          {cloud ? "Cloud storage" : "Vault storage"}
+          Vault storage
         </span>
         <PlanBadge plan={status.plan} role={status.role} />
       </div>
@@ -107,7 +125,7 @@ function StoragePanel({
         />
       </div>
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-        {fmtBytes(used)} / {fmtBytes(limit)} {cloud ? "in cloud" : "on this instance"}
+        {fmtBytes(used)} / {fmtBytes(limit)} on this instance
       </p>
       {status.unlocked && status.local_estimated_bytes != null && (
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -119,17 +137,6 @@ function StoragePanel({
           Your vault is too large for the {status.plan === "pro" ? "Pro" : "Free"} plan. Remove
           hosts or keys locally, then sync again.
         </p>
-      )}
-      {cloud && status.plan !== "pro" && (
-        <button
-          type="button"
-          className="mt-1 inline-flex items-center gap-1 text-xs transition-colors hover:opacity-80"
-          style={{ color: "var(--accent)" }}
-          onClick={() => void openUrl(WEB_PRICING_URL)}
-        >
-          Upgrade to Pro
-          <ExternalLink size={11} />
-        </button>
       )}
     </div>
   );
@@ -212,9 +219,7 @@ export function SyncSection({
   const runPreview = useCallback(async () => {
     if (status?.storage_blocked) {
       setError(
-        accountKind === "cloud"
-          ? "Cloud vault is full. Remove hosts or keys locally, then try again, or upgrade to Pro."
-          : "Vault is full. Remove hosts or keys on this device, then try again.",
+        "Vault is full. Remove hosts or keys on this device, then try again.",
       );
       return;
     }
@@ -252,7 +257,11 @@ export function SyncSection({
   const handleBrowserLogin = () =>
     run("auth", async () => {
       setNotice("Opening your browser… complete the sign-in there, then return here.");
-      await api.syncBrowserLogin();
+      if (api.isPersonalCloudKind(accountKind)) {
+        await api.reauthPersonalCloud();
+      } else {
+        await api.syncBrowserLogin();
+      }
       setNotice("Signed in.");
     });
 
@@ -273,7 +282,7 @@ export function SyncSection({
       setRecoveryKey(recovery);
       setPassphrase("");
       setPassphraseConfirm("");
-      setNotice("Vault created and pushed to the cloud.");
+      setNotice("Vault created and pushed to remote storage.");
     });
 
   const handleUnlock = () =>
@@ -324,7 +333,15 @@ export function SyncSection({
   const spinner = <Loader2 size={14} className="animate-spin" />;
 
   const kindTitle =
-    accountKind === "selfhost" ? "Self-hosted" : accountKind === "cloud" ? "Azalea Cloud" : "Local";
+    accountKind === "selfhost"
+      ? "Self-hosted"
+      : accountKind === "gdrive"
+        ? "Google Drive"
+        : accountKind === "onedrive"
+          ? "OneDrive"
+          : accountKind === "dropbox"
+            ? "Dropbox"
+            : "Local";
   const profileCard = (
     <div
       className="rounded-lg border px-3 py-2.5"
@@ -347,7 +364,9 @@ export function SyncSection({
             </div>
           ) : null}
         </div>
-        {status?.logged_in ? <PlanBadge plan={status.plan} role={status.role} size="md" /> : null}
+        {status?.logged_in && status.plan !== "personal" ? (
+          <PlanBadge plan={status.plan} role={status.role} size="md" />
+        ) : null}
       </div>
     </div>
   );
@@ -361,10 +380,10 @@ export function SyncSection({
       );
     }
 
-    if (!status.configured) {
+    if (!status.configured && accountKind !== "offline") {
       return (
         <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Cloud sync is not available in this build.
+          Sync is not available for this profile.
         </p>
       );
     }
@@ -374,8 +393,8 @@ export function SyncSection({
         <div className="space-y-3">
           {profileCard}
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            This profile is local only. Hosts and keys stay on this device. Add a Cloud or
-            Self-hosted account from the switcher if you want sync.
+            This profile is local only. Hosts and keys stay on this device. Add Google Drive,
+            OneDrive, Dropbox, or Self-hosted from the switcher if you want sync.
           </p>
         </div>
       );
@@ -383,6 +402,7 @@ export function SyncSection({
 
     if (!status.logged_in) {
       const selfhost = accountKind === "selfhost";
+      const personal = api.isPersonalCloudKind(accountKind);
       return (
         <div className="space-y-3">
           {profileCard}
@@ -429,8 +449,9 @@ export function SyncSection({
           ) : (
             <>
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Sign in through your browser to link this device. Account signup and password resets
-                happen on the Azalea website.
+                {personal
+                  ? "Sign in with your cloud provider to unlock encrypted sync on this device."
+                  : "Sign in through your browser to link this device."}
               </p>
               <Button
                 className="w-full"
@@ -453,7 +474,9 @@ export function SyncSection({
             <div className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
               {status.email ? maskEmail(status.email) : "Signed in"}
             </div>
-            <PlanBadge plan={status.plan} role={status.role} size="md" />
+            {status.plan !== "personal" ? (
+              <PlanBadge plan={status.plan} role={status.role} size="md" />
+            ) : null}
           </div>
           <div className="text-xs" style={{ color: "var(--text-muted)" }}>
             {syncStateLabel(status)}
@@ -576,9 +599,7 @@ export function SyncSection({
           </Button>
         </div>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          {accountKind === "cloud"
-            ? "Sync previews changes before upload or download. Local data is unlimited; only encrypted cloud storage counts toward your plan."
-            : "Sync previews changes before upload or download."}
+          Sync previews changes before upload or download.
         </p>
       </div>
     );
@@ -669,15 +690,15 @@ export function SyncSection({
             <h3 className="text-[15px] font-medium" style={{ color: "var(--text)" }}>
               Account &amp; Sync
             </h3>
-            {status?.logged_in && (
+            {status?.logged_in && status.plan !== "personal" && (
               <PlanBadge plan={status.plan} role={status.role} size="md" />
             )}
           </div>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-            {accountKind === "cloud"
-              ? "Encrypted cloud backup for hosts, keys, and settings."
+            {api.isPersonalCloudKind(accountKind)
+              ? "Encrypted vault in your personal cloud. Master passphrase stays on this device."
               : accountKind === "selfhost"
-                ? "Encrypted vault on your instance. Master password stays on this device."
+                ? "Encrypted vault on your instance. Master passphrase stays on this device."
                 : "This profile stays on this device."}
           </p>
         </div>

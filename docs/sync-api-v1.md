@@ -5,8 +5,10 @@ to this HTTP API.
 
 Base URL examples:
 
-- Azalea Cloud: `https://api.azalea.rexsystems.me` (TBD at cutover)
 - Self-host: `https://sync.example.com` or `http://host:9482`
+
+Personal cloud sync (Google Drive / OneDrive / Dropbox) does not use this HTTP
+API; see [`cloud-sync.md`](./cloud-sync.md).
 
 All JSON. Errors: `{ "error": "code", "message": "..." }` with a suitable HTTP
 status.
@@ -187,7 +189,7 @@ Not server-side. Local registry:
 ```json
 {
   "id": "uuid",
-  "kind": "cloud" | "selfhost" | "offline",
+  "kind": "selfhost" | "offline" | "gdrive" | "onedrive" | "dropbox",
   "label": "Work",
   "base_url": "https://...",
   "email": "..."

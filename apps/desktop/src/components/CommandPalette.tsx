@@ -35,7 +35,13 @@ interface CommandPaletteProps {
   isMobile?: boolean;
   signedIn?: boolean;
   /** Active account kind; sign-in is hidden for offline. */
-  accountKind?: "cloud" | "selfhost" | "offline" | null;
+  accountKind?:
+    | "selfhost"
+    | "offline"
+    | "gdrive"
+    | "onedrive"
+    | "dropbox"
+    | null;
   onAction: (id: CommandPaletteActionId) => void;
 }
 
@@ -75,13 +81,19 @@ export function CommandPalette({
   const listRef = useRef<HTMLDivElement>(null);
 
   const canSignIn =
-    !signedIn && (accountKind === "cloud" || accountKind === "selfhost");
+    !signedIn &&
+    (accountKind === "selfhost" ||
+      accountKind === "gdrive" ||
+      accountKind === "onedrive" ||
+      accountKind === "dropbox");
   const signInLabel =
-    accountKind === "selfhost" ? "Connect self-hosted account" : "Sign in with browser";
+    accountKind === "selfhost"
+      ? "Connect self-hosted account"
+      : "Sign in with browser";
   const signInDescription =
     accountKind === "selfhost"
       ? "Email and password for your sync server"
-      : "Open the browser to link Azalea Cloud";
+      : "Open the browser to reconnect personal cloud sync";
 
 
   const items = useMemo<CommandItem[]>(() => {

@@ -8,6 +8,7 @@ import {
 import { createPortal } from "react-dom";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import * as api from "../lib/api";
+import { isPersonalCloudKind } from "../lib/api";
 import { maskEmail } from "../lib/utils";
 import {
   AlertTriangle,
@@ -23,6 +24,7 @@ import {
   User,
 } from "./icons";
 import { PlanBadge } from "./PlanBadge";
+import { ProviderIcon, providerFromKind } from "./ProviderIcon";
 import { UserAvatar } from "./UserAvatar";
 import { resolveSelfHostUrls } from "../lib/selfhostUrl";
 
@@ -49,6 +51,9 @@ interface AccountSwitcherProps {
     base_url: string;
     web_url: string;
   }) => void | Promise<void>;
+  onConnectPersonalCloud?: (
+    provider: "gdrive" | "onedrive" | "dropbox",
+  ) => void | Promise<void>;
   onRemove: (id: string) => void | Promise<void>;
   onCopyFrom?: (fromId: string) => void | Promise<void>;
   onManage: () => void;
@@ -62,14 +67,17 @@ type AddStep =
 
 function kindIcon(kind: AccountKind): ReactNode {
   if (kind === "selfhost") return <Server size={14} />;
-  if (kind === "cloud") return <Globe size={14} />;
+  const provider = providerFromKind(kind);
+  if (provider) return <ProviderIcon provider={provider} size={14} />;
   return <SquareTerminal size={14} />;
 }
 
 function kindLabel(kind: AccountKind): string {
   if (kind === "selfhost") return "Self-hosted";
-  if (kind === "cloud") return "Cloud";
-  return "Offline";
+  if (kind === "gdrive") return "Google Drive";
+  if (kind === "onedrive") return "OneDrive";
+  if (kind === "dropbox") return "Dropbox";
+  return "Local";
 }
 
 const fieldClass =
@@ -88,6 +96,7 @@ export function AccountSwitcher({
   onAdd,
   onConnectSelfhost,
   onConnectSelfhostBrowser,
+  onConnectPersonalCloud,
   onRemove,
   onCopyFrom,
   onManage,
@@ -129,7 +138,8 @@ export function AccountSwitcher({
   const authDisconnected = Boolean(syncStatus?.auth_disconnected);
   const loggedIn = Boolean(syncStatus?.logged_in);
   const needsAuth =
-    (active?.kind === "cloud" || active?.kind === "selfhost") && !loggedIn;
+    (active?.kind === "selfhost" || isPersonalCloudKind(active?.kind)) &&
+    !loggedIn;
   // Only treat session email as signed-in identity. Registry email is for form
   // prefill after logout / never-signed-in profiles still look unsigned.
   const displayEmail =
@@ -207,15 +217,27 @@ export function AccountSwitcher({
         ? kindLabel(active.kind)
         : "Account";
 
-  const addSimpleAccount = async (kind: "cloud" | "offline") => {
+  const addOfflineAccount = async () => {
     try {
       setBusy(true);
       setError(null);
-      if (kind === "cloud") {
-        await onAdd({ kind: "cloud", label: "Azalea Cloud" });
-      } else {
-        await onAdd({ kind: "offline", label: "Offline" });
-      }
+      await onAdd({ kind: "offline", label: "Local" });
+      close();
+    } catch (err) {
+      setError(String(err).replace(/^Error:\s*/, ""));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addPersonalCloud = async (
+    provider: "gdrive" | "onedrive" | "dropbox",
+  ) => {
+    if (!onConnectPersonalCloud) return;
+    try {
+      setBusy(true);
+      setError(null);
+      await onConnectPersonalCloud(provider);
       close();
     } catch (err) {
       setError(String(err).replace(/^Error:\s*/, ""));
@@ -296,7 +318,7 @@ export function AccountSwitcher({
         } else {
           await api.syncPasswordLogin(loginEmail, password);
         }
-      } else if (active?.kind === "cloud" && onSignIn) {
+      } else if (isPersonalCloudKind(active?.kind) && onSignIn) {
         onSignIn();
         close();
         return;
@@ -593,11 +615,25 @@ export function AccountSwitcher({
                 </div>
                 <div className="space-y-1">
                   <ChoiceRow
-                    icon={<Globe size={15} />}
-                    title="Azalea Cloud"
-                    description="Hosted sync from Rexsystems"
-                    disabled={busy}
-                    onClick={() => void addSimpleAccount("cloud")}
+                    icon={<ProviderIcon provider="gdrive" size={16} />}
+                    title="Google Drive"
+                    description="Encrypted vault in your Drive"
+                    disabled={busy || !onConnectPersonalCloud}
+                    onClick={() => void addPersonalCloud("gdrive")}
+                  />
+                  <ChoiceRow
+                    icon={<ProviderIcon provider="onedrive" size={16} />}
+                    title="OneDrive"
+                    description="Encrypted vault in your OneDrive"
+                    disabled={busy || !onConnectPersonalCloud}
+                    onClick={() => void addPersonalCloud("onedrive")}
+                  />
+                  <ChoiceRow
+                    icon={<ProviderIcon provider="dropbox" size={16} />}
+                    title="Dropbox"
+                    description="Encrypted vault in your Dropbox"
+                    disabled={busy || !onConnectPersonalCloud}
+                    onClick={() => void addPersonalCloud("dropbox")}
                   />
                   <ChoiceRow
                     icon={<Server size={15} />}
@@ -612,10 +648,10 @@ export function AccountSwitcher({
                   />
                   <ChoiceRow
                     icon={<SquareTerminal size={15} />}
-                    title="Offline"
+                    title="Local"
                     description="This device only"
                     disabled={busy}
-                    onClick={() => void addSimpleAccount("offline")}
+                    onClick={() => void addOfflineAccount()}
                   />
                 </div>
                 {error && (
@@ -903,7 +939,7 @@ export function AccountSwitcher({
                       {busy ? "Reconnecting…" : "Reconnect"}
                     </button>
                   </>
-                ) : active?.kind === "cloud" ? (
+                ) : isPersonalCloudKind(active?.kind) ? (
                   <button
                     type="button"
                     disabled={busy}
@@ -920,8 +956,8 @@ export function AccountSwitcher({
                     className="text-[11px]"
                     style={{ color: "var(--text-muted)" }}
                   >
-                    This profile is local only. Switch to Cloud or Self-hosted
-                    to connect an account.
+                    This profile is local only. Add Google Drive, OneDrive,
+                    Dropbox, or Self-hosted to sync.
                   </p>
                 )}
               </div>

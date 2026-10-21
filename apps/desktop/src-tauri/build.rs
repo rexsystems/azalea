@@ -1,7 +1,13 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-const CONFIG_KEYS: &[&str] = &["AZALEA_API_URL", "AZALEA_WEB_URL"];
+const CONFIG_KEYS: &[&str] = &[
+    "AZALEA_API_URL",
+    "AZALEA_WEB_URL",
+    "AZALEA_GOOGLE_CLIENT_ID",
+    "AZALEA_MICROSOFT_CLIENT_ID",
+    "AZALEA_DROPBOX_CLIENT_ID",
+];
 
 fn main() {
     let manifest_dir =

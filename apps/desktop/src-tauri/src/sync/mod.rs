@@ -1,5 +1,7 @@
 pub mod crypto;
 pub mod diff;
+pub mod providers;
+pub mod store;
 
 use std::sync::Arc;
 
@@ -7,8 +9,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::commands::backup::{build_backup, import_azalea_backup_db, AzaleaBackup};
+use crate::store::accounts::AccountKind;
 use crate::store::SharedDatabase;
 use crypto::VaultKey;
+use providers::PersonalProvider;
+use store::{VaultBlob, PERSONAL_CLOUD_LIMIT_BYTES};
 
 const KEYRING_SERVICE: &str = "azalea";
 const META_LAST_VERSION: &str = "sync_last_version";
@@ -67,6 +72,15 @@ impl Default for AccountPlanRow {
 }
 
 async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
+    if state.kind.is_personal_cloud() {
+        return AccountPlanRow {
+            plan: "personal".to_string(),
+            role: "user".to_string(),
+            limit_bytes: PERSONAL_CLOUD_LIMIT_BYTES,
+            used_bytes: 0,
+            remaining_bytes: PERSONAL_CLOUD_LIMIT_BYTES,
+        };
+    }
     let Ok((status, body)) = api_request(state, reqwest::Method::GET, "/v1/account", None).await
     else {
         return AccountPlanRow::default();
@@ -107,16 +121,16 @@ async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
 
 fn normalize_plan_row(mut row: AccountPlanRow) -> AccountPlanRow {
     let plan = row.plan.trim().to_ascii_lowercase();
-    row.plan = if plan == "pro" {
-        "pro".into()
-    } else {
-        "free".into()
+    row.plan = match plan.as_str() {
+        "pro" => "pro".into(),
+        "personal" => "personal".into(),
+        _ => "free".into(),
     };
     if row.limit_bytes <= 0 {
-        row.limit_bytes = if row.plan == "pro" {
-            10 * 1024 * 1024
-        } else {
-            FREE_VAULT_LIMIT_BYTES
+        row.limit_bytes = match row.plan.as_str() {
+            "pro" => 10 * 1024 * 1024,
+            "personal" => PERSONAL_CLOUD_LIMIT_BYTES,
+            _ => FREE_VAULT_LIMIT_BYTES,
         };
     }
     row
@@ -133,6 +147,9 @@ pub struct SyncState {
     account_id: Option<String>,
     api_base: Option<String>,
     web_url: Option<String>,
+    kind: AccountKind,
+    /// ETag / Dropbox rev for the last fetched personal-cloud vault.
+    vault_revision: Option<String>,
 }
 
 pub type SharedSyncState = Arc<tokio::sync::Mutex<SyncState>>;
@@ -149,6 +166,8 @@ pub fn init_sync_state() -> SharedSyncState {
         account_id: None,
         api_base: None,
         web_url: None,
+        kind: AccountKind::Offline,
+        vault_revision: None,
     }))
 }
 
@@ -267,7 +286,21 @@ fn api_base_url(state: &SyncState) -> anyhow::Result<String> {
 }
 
 fn api_configured(state: &SyncState) -> bool {
-    api_base_url(state).is_ok()
+    if state.kind.is_personal_cloud() {
+        return true;
+    }
+    if state.kind == AccountKind::Selfhost {
+        return state
+            .api_base
+            .as_ref()
+            .map(|u| !u.trim().is_empty())
+            .unwrap_or(false);
+    }
+    false
+}
+
+fn personal_provider(state: &SyncState) -> Option<PersonalProvider> {
+    PersonalProvider::from_kind(&state.kind)
 }
 
 fn keyring_name(state: &SyncState, key: &str) -> String {
@@ -378,10 +411,12 @@ impl SyncState {
     pub fn bind_account(
         &mut self,
         account_id: String,
+        kind: AccountKind,
         api_base: Option<String>,
         web_url: Option<String>,
     ) {
         self.account_id = Some(account_id);
+        self.kind = kind;
         self.api_base = api_base;
         self.web_url = web_url;
         self.access_token = None;
@@ -390,12 +425,40 @@ impl SyncState {
         self.user_id = None;
         self.email = None;
         self.vault_key = None;
+        self.vault_revision = None;
         if let Some(token) = get_keyring(&keyring_name(self, "sync-refresh-token")) {
             self.refresh_token = Some(token);
         }
         if let Some(email) = get_keyring(&keyring_name(self, "sync-email")) {
             self.email = Some(email);
         }
+        if let Some(uid) = get_keyring(&keyring_name(self, "sync-user-id")) {
+            self.user_id = Some(uid);
+        }
+    }
+
+    pub fn http_client(&self) -> reqwest::Client {
+        self.http.clone()
+    }
+
+    pub fn apply_personal_session(&mut self, tokens: providers::TokenSet) {
+        self.apply_personal_tokens(tokens);
+    }
+
+    fn apply_personal_tokens(&mut self, tokens: providers::TokenSet) {
+        self.access_token = Some(tokens.access_token);
+        self.expires_at = chrono::Utc::now().timestamp() + tokens.expires_in - 60;
+        self.user_id = Some(tokens.user_id.clone());
+        if let Some(email) = tokens.email.clone() {
+            self.email = Some(email.clone());
+            let _ = store_keyring(&keyring_name(self, "sync-email"), &email);
+        }
+        let _ = store_keyring(&keyring_name(self, "sync-user-id"), &tokens.user_id);
+        if let Some(refresh) = tokens.refresh_token {
+            let _ = store_keyring(&keyring_name(self, "sync-refresh-token"), &refresh);
+            self.refresh_token = Some(refresh);
+        }
+        delete_keyring(&keyring_name(self, "sync-auth-disconnected"));
     }
 }
 
@@ -720,28 +783,47 @@ async fn refresh_session(state: &mut SyncState) -> anyhow::Result<()> {
         .or_else(|| get_keyring(&keyring_name(state, "sync-refresh-token")))
         .ok_or_else(|| anyhow::anyhow!("Not logged in"))?;
 
-    match auth_refresh(state, &refresh_token).await {
-        Ok(session) => {
-            state.apply_session(session);
-            Ok(())
-        }
-        Err(err) => {
-            let msg = err.to_string().to_lowercase();
-            let hard_reject = msg.contains("invalid refresh token")
-                || msg.contains("invalid_grant")
-                || msg.contains("refresh token not found")
-                || msg.contains("refresh token expired")
-                || msg.contains("session not found")
-                || msg.contains("unauthorized");
-            if hard_reject {
-                state.access_token = None;
-                state.refresh_token = None;
-                state.expires_at = 0;
-                delete_keyring(&keyring_name(state, "sync-refresh-token"));
-                let _ = store_keyring(&keyring_name(state, "sync-auth-disconnected"), "1");
+    if let Some(provider) = personal_provider(state) {
+        match providers::refresh_token(provider, &state.http, &refresh_token).await {
+            Ok(tokens) => {
+                state.apply_personal_tokens(tokens);
+                Ok(())
             }
-            Err(err)
+            Err(err) => {
+                mark_auth_disconnected_if_hard(state, &err);
+                Err(err)
+            }
         }
+    } else {
+        match auth_refresh(state, &refresh_token).await {
+            Ok(session) => {
+                state.apply_session(session);
+                Ok(())
+            }
+            Err(err) => {
+                mark_auth_disconnected_if_hard(state, &err);
+                Err(err)
+            }
+        }
+    }
+}
+
+fn mark_auth_disconnected_if_hard(state: &mut SyncState, err: &anyhow::Error) {
+    let msg = err.to_string().to_lowercase();
+    let hard_reject = msg.contains("invalid refresh token")
+        || msg.contains("invalid_grant")
+        || msg.contains("refresh token not found")
+        || msg.contains("refresh token expired")
+        || msg.contains("session not found")
+        || msg.contains("unauthorized")
+        || msg.contains("expired")
+        || msg.contains("revoked");
+    if hard_reject {
+        state.access_token = None;
+        state.refresh_token = None;
+        state.expires_at = 0;
+        delete_keyring(&keyring_name(state, "sync-refresh-token"));
+        let _ = store_keyring(&keyring_name(state, "sync-auth-disconnected"), "1");
     }
 }
 
@@ -786,22 +868,25 @@ fn has_persisted_login(state: &SyncState) -> bool {
 pub fn logout(state: &mut SyncState, db: &SharedDatabase) {
     let refresh_key = keyring_name(state, "sync-refresh-token");
     let email_key = keyring_name(state, "sync-email");
+    let user_key = keyring_name(state, "sync-user-id");
     let disconnected_key = keyring_name(state, "sync-auth-disconnected");
     state.access_token = None;
     state.refresh_token = None;
     state.user_id = None;
     state.email = None;
     state.vault_key = None;
+    state.vault_revision = None;
     state.expires_at = 0;
     delete_keyring(&refresh_key);
     delete_keyring(&email_key);
+    delete_keyring(&user_key);
     delete_keyring(&disconnected_key);
     let db = db.lock();
     let _ = db.delete_sync_meta(META_LAST_VERSION);
     let _ = db.delete_sync_meta(META_LAST_HASH);
 }
 
-// ---------- vault REST ----------
+// ---------- vault REST / personal cloud ----------
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct VaultRow {
@@ -810,6 +895,22 @@ pub struct VaultRow {
     pub verifier: String,
     pub recovery_envelope: Option<String>,
     pub ciphertext: String,
+    #[serde(skip)]
+    #[allow(dead_code)]
+    pub revision: Option<String>,
+}
+
+impl From<VaultBlob> for VaultRow {
+    fn from(blob: VaultBlob) -> Self {
+        Self {
+            version: blob.version,
+            kdf_salt: blob.kdf_salt,
+            verifier: blob.verifier,
+            recovery_envelope: blob.recovery_envelope,
+            ciphertext: blob.ciphertext,
+            revision: blob.revision,
+        }
+    }
 }
 
 async fn api_request(
@@ -841,7 +942,22 @@ async fn api_request(
     Ok((status, value))
 }
 
-pub async fn fetch_vault(state: &SyncState) -> anyhow::Result<Option<VaultRow>> {
+pub async fn fetch_vault(state: &mut SyncState) -> anyhow::Result<Option<VaultRow>> {
+    if let Some(provider) = personal_provider(state) {
+        let token = state
+            .access_token
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not logged in"))?
+            .clone();
+        let blob = providers::fetch_vault(provider, &state.http, &token).await?;
+        if let Some(ref b) = blob {
+            state.vault_revision = b.revision.clone();
+        } else {
+            state.vault_revision = None;
+        }
+        return Ok(blob.map(VaultRow::from));
+    }
+
     let (status, body) = api_request(state, reqwest::Method::GET, "/v1/vault", None).await?;
 
     if !status.is_success() {
@@ -862,13 +978,46 @@ pub async fn fetch_vault(state: &SyncState) -> anyhow::Result<Option<VaultRow>> 
 }
 
 async fn put_vault(
-    state: &SyncState,
+    state: &mut SyncState,
     expected_version: i64,
     kdf_salt: &str,
     verifier: &str,
     recovery_envelope: Option<&str>,
     ciphertext: &str,
 ) -> anyhow::Result<i64> {
+    if let Some(provider) = personal_provider(state) {
+        let token = state
+            .access_token
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Not logged in"))?
+            .clone();
+        let new_version = if expected_version == 0 {
+            1
+        } else {
+            expected_version + 1
+        };
+        let blob = VaultBlob {
+            version: new_version,
+            kdf_salt: kdf_salt.to_string(),
+            verifier: verifier.to_string(),
+            recovery_envelope: recovery_envelope.map(str::to_string),
+            ciphertext: ciphertext.to_string(),
+            revision: None,
+        };
+        let prior = state.vault_revision.clone();
+        let (version, rev) = providers::put_vault(
+            provider,
+            &state.http,
+            &token,
+            expected_version,
+            &blob,
+            prior.as_deref(),
+        )
+        .await?;
+        state.vault_revision = rev;
+        return Ok(version);
+    }
+
     let (status, body) = api_request(
         state,
         reqwest::Method::PUT,
@@ -899,7 +1048,7 @@ async fn put_vault(
 }
 
 async fn insert_vault(
-    state: &SyncState,
+    state: &mut SyncState,
     kdf_salt: &str,
     verifier: &str,
     recovery_envelope: &str,
@@ -919,7 +1068,7 @@ async fn insert_vault(
 
 /// Optimistic-lock update. Returns false when someone else pushed in between.
 async fn update_vault(
-    state: &SyncState,
+    state: &mut SyncState,
     expected_version: i64,
     _new_version: i64,
     ciphertext: &str,
@@ -1130,8 +1279,7 @@ fn decrypt_vault_payload(
     if let Ok(account_id) = require_account_id(state) {
         if account_id != user_id {
             let aad_local = crypto::vault_aad(&account_id, vault.version, &vault.kdf_salt);
-            if let Ok(plain) = crypto::decrypt_with_aad(vault_key, &vault.ciphertext, &aad_local)
-            {
+            if let Ok(plain) = crypto::decrypt_with_aad(vault_key, &vault.ciphertext, &aad_local) {
                 return Ok(plain);
             }
         }
@@ -1142,7 +1290,7 @@ fn decrypt_vault_payload(
 }
 
 async fn push_local(
-    state: &SyncState,
+    state: &mut SyncState,
     vault_key: &VaultKey,
     local_json: &str,
     expected: i64,

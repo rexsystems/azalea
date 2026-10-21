@@ -34,6 +34,9 @@ interface AppShellProps {
     base_url: string;
     web_url: string;
   }) => void | Promise<void>;
+  onConnectPersonalCloud?: (
+    provider: "gdrive" | "onedrive" | "dropbox",
+  ) => void | Promise<void>;
   onRemoveAccount: (id: string) => void | Promise<void>;
   onCopyAccountData?: (fromId: string) => void | Promise<void>;
   onOpenAccount?: () => void;
@@ -121,6 +124,7 @@ export function AppShell({
   onAddAccount,
   onConnectSelfhost,
   onConnectSelfhostBrowser,
+  onConnectPersonalCloud,
   onRemoveAccount,
   onCopyAccountData,
   onOpenAccount,
@@ -154,6 +158,7 @@ export function AppShell({
       onAdd={onAddAccount}
       onConnectSelfhost={onConnectSelfhost}
       onConnectSelfhostBrowser={onConnectSelfhostBrowser}
+      onConnectPersonalCloud={onConnectPersonalCloud}
       onRemove={onRemoveAccount}
       onCopyFrom={onCopyAccountData}
       onManage={openAccount}

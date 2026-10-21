@@ -333,7 +333,7 @@ export function respondHostKey(
   return invoke("respond_host_key", { sessionId, accept });
 }
 
-// ---------- Cloud sync ----------
+// ---------- Sync (self-host + personal cloud) ----------
 
 export interface SyncStatus {
   configured: boolean;
@@ -488,7 +488,24 @@ export function syncNow(
   return invoke("sync_now", { settings, resolution: resolution ?? null });
 }
 
-export type AccountKind = "cloud" | "selfhost" | "offline";
+export type AccountKind =
+  | "selfhost"
+  | "offline"
+  | "gdrive"
+  | "onedrive"
+  | "dropbox";
+
+export function isPersonalCloudKind(
+  kind: AccountKind | null | undefined,
+): boolean {
+  return kind === "gdrive" || kind === "onedrive" || kind === "dropbox";
+}
+
+export function isSyncAccountKind(
+  kind: AccountKind | null | undefined,
+): boolean {
+  return kind != null && kind !== "offline";
+}
 
 export interface AccountRecord {
   id: string;
@@ -554,6 +571,26 @@ export function connectSelfhost(input: {
       password: input.password,
     },
   });
+}
+
+export interface ConnectPersonalCloudResult {
+  account: AccountRecord;
+  vault_exists: boolean | null;
+  email: string | null;
+}
+
+/** OAuth to Google Drive / OneDrive / Dropbox, then create the profile. */
+export function connectPersonalCloud(
+  provider: "gdrive" | "onedrive" | "dropbox",
+): Promise<ConnectPersonalCloudResult> {
+  return invoke("connect_personal_cloud", {
+    input: { provider },
+  });
+}
+
+/** Re-run OAuth for the active personal cloud profile. */
+export function reauthPersonalCloud(): Promise<void> {
+  return invoke("reauth_personal_cloud");
 }
 
 export function renameAccount(

@@ -279,12 +279,7 @@ mod tests {
         let key = generate_key();
         let server_user = "usr_abc123";
         let local_slot = "00000000-0000-0000-0000-000000000001";
-        let blob = encrypt_with_aad(
-            &key,
-            b"payload",
-            &vault_aad(server_user, 2, "salt"),
-        )
-        .unwrap();
+        let blob = encrypt_with_aad(&key, b"payload", &vault_aad(server_user, 2, "salt")).unwrap();
         assert_eq!(
             decrypt_with_aad(&key, &blob, &vault_aad(server_user, 2, "salt")).unwrap(),
             b"payload"

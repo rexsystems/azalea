@@ -1,6 +1,6 @@
 # Azalea
 
-Open-source SSH client for Linux, Windows, and macOS. Local-first host and key management, with optional encrypted cloud sync.
+Open-source SSH client for Linux, Windows, and macOS. Local-first host and key management, with optional encrypted sync to your Drive / OneDrive / Dropbox or a self-hosted server.
 
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-informational)
@@ -16,7 +16,7 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 - **Port forwarding** - manage and start local forwards from a session
 - **Snippets** - save and run common commands
 - **Import / export** - Azalea backups, OpenSSH `config`, and JSON host lists
-- **Cloud sync** (optional) - vault encrypted on your device before upload; Free / Pro storage caps. See [cloud sync](docs/cloud-sync.md)
+- **Encrypted sync** (optional) - vault encrypted on your device, stored in Google Drive / OneDrive / Dropbox or your self-hosted server. See [sync](docs/cloud-sync.md)
 - **Self-hosted server** - run your own sync server with Docker, an install script, or the admin CLI. See [self-host](docs/self-host.md)
 - **Web dashboard** - login, account and admin pages for a self-hosted server (`apps/azalea-server-web`). See [web apps](docs/web.md)
 - **Auto-update** - signed updates on Windows, Linux (AppImage) and macOS. See [updater](docs/updater.md)
@@ -122,7 +122,7 @@ azalea/
 
 ## Docs
 
-- [Cloud sync](docs/cloud-sync.md)
+- [Sync (personal cloud & self-host)](docs/cloud-sync.md)
 - [Self-host (VPS / Docker / CLI)](docs/self-host.md)
 - [Sync server CLI and env](services/azalea-server/README.md)
 - [Sync API v1](docs/sync-api-v1.md)

@@ -20,13 +20,14 @@ credit you in the release notes unless you ask otherwise.
 | Component | Runs as | Trust level | Notes |
 |---|---|---|---|
 | `apps/desktop` (Tauri client) | End user | User-trusted | Holds decrypted secrets in memory. |
-| `services/azalea-server` | User (self-host) or Rexsystems (cloud) | Sees only ciphertext | Never handles vault plaintext. |
+| `services/azalea-server` | User (self-host) | Sees only ciphertext | Never handles vault plaintext. |
+| Personal cloud (Drive / OneDrive / Dropbox) | User’s provider | Sees opaque vault file + metadata | OAuth app-folder only; no Azalea server in the path. |
 | `apps/azalea-server-web` (in-repo) | Static export behind nginx | Public | Login and admin UI for the sync API. |
 | `~/projects/azalea-web` (marketing) | Cloudflare Pages | Public | No secrets; no auth surface. |
 | `azalea-telemetry` (private) | Rexsystems only | Opt-in, aggregate | Not part of the sync trust chain. |
 
-Users pick the sync server (cloud or self-host). The desktop app never sends
-vault plaintext to any server; the sync API stores an opaque encrypted blob.
+Users pick personal cloud storage or a self-hosted sync server. The desktop app
+never sends vault plaintext; remote storage holds an opaque encrypted blob.
 Telemetry is a separate service. Sync, auth, and updates do not consult it.
 
 ## Threat model

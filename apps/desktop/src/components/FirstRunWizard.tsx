@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from "react";
-import { ArrowLeft, Globe, Server, SquareTerminal } from "./icons";
+import { ArrowLeft, Server, SquareTerminal } from "./icons";
 import * as api from "../lib/api";
 import { resolveSelfHostUrls } from "../lib/selfhostUrl";
 import { Logo } from "./Logo";
+import { ProviderIcon } from "./ProviderIcon";
 import { TitleBar } from "./TitleBar";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -21,6 +22,9 @@ interface FirstRunWizardProps {
     base_url: string;
     web_url: string;
   }) => void | Promise<void>;
+  onConnectPersonalCloud: (
+    provider: "gdrive" | "onedrive" | "dropbox",
+  ) => void | Promise<void>;
 }
 
 type Step = "choose" | "selfhost" | "selfhost-login";
@@ -29,6 +33,7 @@ export function FirstRunWizard({
   onDone,
   onConnectSelfhost,
   onConnectSelfhostBrowser,
+  onConnectPersonalCloud,
 }: FirstRunWizardProps) {
   const [step, setStep] = useState<Step>("choose");
   const [serverUrl, setServerUrl] = useState("");
@@ -40,21 +45,25 @@ export function FirstRunWizard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const finishSimple = async (kind: "cloud" | "offline") => {
+  const finishOffline = async () => {
     try {
       setBusy(true);
       setError(null);
-      if (kind === "offline") {
-        await api.setAccountsOnboarded(true);
-        onDone();
-        return;
-      }
-      await api.addAccount({
-        kind: "cloud",
-        label: "Azalea Cloud",
-        base_url: null,
-        web_url: null,
-      });
+      await api.setAccountsOnboarded(true);
+      onDone();
+    } catch (err) {
+      setError(String(err).replace(/^Error:\s*/, ""));
+      setBusy(false);
+    }
+  };
+
+  const finishPersonal = async (
+    provider: "gdrive" | "onedrive" | "dropbox",
+  ) => {
+    try {
+      setBusy(true);
+      setError(null);
+      await onConnectPersonalCloud(provider);
       await api.setAccountsOnboarded(true);
       onDone();
     } catch (err) {
@@ -116,7 +125,7 @@ export function FirstRunWizard({
 
   const subtitle =
     step === "choose"
-      ? "Choose a sync option for this install."
+      ? "Choose where encrypted sync lives — or stay local."
       : step === "selfhost"
         ? "URL of your azalea-server."
         : `Sign in to ${instanceName ?? "your server"}.`;
@@ -142,11 +151,25 @@ export function FirstRunWizard({
           {step === "choose" ? (
             <div className="space-y-2">
               <Choice
-                icon={<Globe size={18} />}
-                title="Azalea Cloud"
-                description="Hosted sync from Rexsystems."
+                icon={<ProviderIcon provider="gdrive" size={20} />}
+                title="Google Drive"
+                description="Sign in. Vault stays encrypted in your Drive."
                 disabled={busy}
-                onClick={() => void finishSimple("cloud")}
+                onClick={() => void finishPersonal("gdrive")}
+              />
+              <Choice
+                icon={<ProviderIcon provider="onedrive" size={20} />}
+                title="OneDrive"
+                description="Sign in. Vault stays encrypted in your OneDrive."
+                disabled={busy}
+                onClick={() => void finishPersonal("onedrive")}
+              />
+              <Choice
+                icon={<ProviderIcon provider="dropbox" size={20} />}
+                title="Dropbox"
+                description="Sign in. Vault stays encrypted in your Dropbox."
+                disabled={busy}
+                onClick={() => void finishPersonal("dropbox")}
               />
               <Choice
                 icon={<Server size={18} />}
@@ -157,11 +180,16 @@ export function FirstRunWizard({
               />
               <Choice
                 icon={<SquareTerminal size={18} />}
-                title="Offline"
+                title="Local"
                 description="This device only. No sync."
                 disabled={busy}
-                onClick={() => void finishSimple("offline")}
+                onClick={() => void finishOffline()}
               />
+              {error && (
+                <p className="text-sm" style={{ color: "var(--danger)" }}>
+                  {error}
+                </p>
+              )}
             </div>
           ) : step === "selfhost" ? (
             <div className="space-y-3">
@@ -179,8 +207,8 @@ export function FirstRunWizard({
               )}
               <div className="flex gap-2">
                 <Button
-                  variant="secondary"
-                  className="flex-1"
+                  type="button"
+                  variant="ghost"
                   disabled={busy}
                   onClick={() => {
                     setStep("choose");
@@ -191,7 +219,8 @@ export function FirstRunWizard({
                   Back
                 </Button>
                 <Button
-                  className="flex-1"
+                  type="button"
+                  className="home-action-primary flex-1"
                   disabled={busy || !serverUrl.trim()}
                   onClick={() => void continueSelfhost()}
                 >
@@ -201,14 +230,6 @@ export function FirstRunWizard({
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                No web dashboard on this server. Sign in with email and password.
-              </p>
-              {instanceName && (
-                <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                  {instanceName}
-                </p>
-              )}
               <Input
                 label="Email"
                 type="email"
@@ -221,9 +242,6 @@ export function FirstRunWizard({
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && email.trim() && password) void finishSelfhost();
-                }}
               />
               {error && (
                 <p className="text-sm" style={{ color: "var(--danger)" }}>
@@ -232,24 +250,24 @@ export function FirstRunWizard({
               )}
               <div className="flex gap-2">
                 <Button
-                  variant="secondary"
-                  className="flex-1"
+                  type="button"
+                  variant="ghost"
                   disabled={busy}
                   onClick={() => {
                     setStep("selfhost");
                     setError(null);
-                    setPassword("");
                   }}
                 >
                   <ArrowLeft size={16} />
                   Back
                 </Button>
                 <Button
-                  className="flex-1"
+                  type="button"
+                  className="home-action-primary flex-1"
                   disabled={busy || !email.trim() || !password}
                   onClick={() => void finishSelfhost()}
                 >
-                  {busy ? "Signing in…" : "Sign in"}
+                  {busy ? "Connecting…" : "Connect"}
                 </Button>
               </div>
             </div>
@@ -278,20 +296,17 @@ function Choice({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="hover-subtle transition-ui flex w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left disabled:opacity-50"
-      style={{ borderColor: "var(--border-subtle)", background: "var(--bg-card)" }}
+      className="flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-ui hover-subtle disabled:opacity-50"
+      style={{ borderColor: "var(--border-subtle)", background: "var(--bg-elevated)" }}
     >
-      <span
-        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-        style={{ background: "var(--accent-muted)", color: "var(--accent)" }}
-      >
+      <span className="mt-0.5" style={{ color: "var(--text-secondary)" }}>
         {icon}
       </span>
-      <span className="min-w-0">
+      <span>
         <span className="block text-sm font-medium" style={{ color: "var(--text)" }}>
           {title}
         </span>
-        <span className="block text-xs" style={{ color: "var(--text-muted)" }}>
+        <span className="mt-0.5 block text-xs" style={{ color: "var(--text-muted)" }}>
           {description}
         </span>
       </span>

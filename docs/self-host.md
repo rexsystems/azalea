@@ -328,5 +328,5 @@ docker compose -f docker-compose.build.yml up -d --build
 ## Related
 
 - [Sync API](./sync-api-v1.md)
-- [Cloud sync overview](./cloud-sync.md)
+- [Sync overview](./cloud-sync.md)
 - Server: `services/azalea-server/`

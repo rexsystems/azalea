@@ -1,13 +1,15 @@
 interface PlanBadgeProps {
-  plan: "free" | "pro";
+  plan: string;
   role?: string | null;
   size?: "sm" | "md";
 }
 
 export function PlanBadge({ plan, role, size = "sm" }: PlanBadgeProps) {
   const isAdmin = (role ?? "").toLowerCase() === "admin";
-  const isPro = plan === "pro";
+  const normalized = plan.trim().toLowerCase();
+  if (normalized === "personal") return null;
 
+  const isPro = normalized === "pro";
   const label = isAdmin ? "Admin" : isPro ? "Pro" : "Free";
   const color = isAdmin
     ? "var(--danger)"

@@ -101,7 +101,7 @@ pub fn run() {
             let sync_state = init_sync_state();
             if let Some(account) = active {
                 let mut sync = sync_state.blocking_lock();
-                sync.bind_account(account.id, account.base_url, account.web_url);
+                sync.bind_account(account.id, account.kind, account.base_url, account.web_url);
             }
             app.manage(registry);
             app.manage(db);
@@ -230,6 +230,8 @@ pub fn run() {
             accounts::accounts_onboarded,
             accounts::set_accounts_onboarded,
             accounts::connect_selfhost,
+            accounts::connect_personal_cloud,
+            accounts::reauth_personal_cloud,
             accounts::add_account,
             accounts::rename_account,
             accounts::switch_account,

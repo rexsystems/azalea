@@ -8,7 +8,9 @@ use crate::store::accounts::{
     account_db_path, valid_account_id, AccountKind, AccountRecord, AccountRegistry,
 };
 use crate::store::SharedDatabase;
+use crate::sync::providers::{oauth, PersonalProvider};
 use crate::sync::{self, SharedSyncState};
+use tauri_plugin_opener::OpenerExt;
 
 pub type SharedAccountRegistry = Arc<Mutex<AccountRegistry>>;
 
@@ -101,7 +103,7 @@ pub async fn connect_selfhost(
         let mut state = sync.lock().await;
         state.apply_auth_session(session);
         let _ = registry.lock().set_email(&account.id, Some(email.clone()));
-        match sync::fetch_vault(&state).await {
+        match sync::fetch_vault(&mut state).await {
             Ok(Some(_)) => Some(true),
             Ok(None) => Some(false),
             Err(_) => None,
@@ -138,6 +140,139 @@ pub struct AddAccountInput {
     web_url: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct ConnectPersonalCloudInput {
+    provider: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct ConnectPersonalCloudResult {
+    pub account: AccountRecord,
+    pub vault_exists: Option<bool>,
+    pub email: Option<String>,
+}
+
+fn parse_personal_provider(raw: &str) -> Result<PersonalProvider, String> {
+    match raw {
+        "gdrive" | "google" | "google_drive" => Ok(PersonalProvider::GoogleDrive),
+        "onedrive" | "microsoft" => Ok(PersonalProvider::OneDrive),
+        "dropbox" => Ok(PersonalProvider::Dropbox),
+        _ => Err(format!("Unknown personal cloud provider: {raw}")),
+    }
+}
+
+/// OAuth sign-in to Google Drive / OneDrive / Dropbox, then create a profile.
+#[tauri::command]
+pub async fn connect_personal_cloud(
+    app: AppHandle,
+    registry: State<'_, SharedAccountRegistry>,
+    db: State<'_, SharedDatabase>,
+    sync: State<'_, SharedSyncState>,
+    input: ConnectPersonalCloudInput,
+) -> Result<ConnectPersonalCloudResult, String> {
+    let provider = parse_personal_provider(input.provider.trim())?;
+    let _ = provider.client_id().map_err(|e| e.to_string())?;
+
+    let http = {
+        let state = sync.lock().await;
+        state.http_client()
+    };
+
+    let tokens = oauth::run_oauth_loopback(provider, &http, |url| {
+        app.opener()
+            .open_url(url, None::<&str>)
+            .map_err(|e| anyhow::anyhow!("Could not open the browser: {e}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let label = provider.label().to_string();
+    let kind = provider.kind();
+    let account = registry
+        .lock()
+        .add(kind, label, None, None)
+        .map_err(|e| e.to_string())?;
+
+    if let Err(err) = switch_to_account(&app, &registry, &db, &sync, &account.id).await {
+        let id = account.id.clone();
+        let _ = registry.lock().remove(&id);
+        if let Ok(path) = account_db_path(&app, &id) {
+            if let Some(dir) = path.parent() {
+                let _ = std::fs::remove_dir_all(dir);
+            }
+        }
+        return Err(err);
+    }
+
+    let email = tokens.email.clone();
+    let vault_exists = {
+        let mut state = sync.lock().await;
+        state.apply_personal_session(tokens);
+        if let Some(ref email) = email {
+            let _ = registry.lock().set_email(&account.id, Some(email.clone()));
+        }
+        match sync::fetch_vault(&mut state).await {
+            Ok(Some(_)) => Some(true),
+            Ok(None) => Some(false),
+            Err(_) => None,
+        }
+    };
+
+    let account = registry
+        .lock()
+        .active()
+        .cloned()
+        .ok_or_else(|| "No active account".to_string())?;
+
+    Ok(ConnectPersonalCloudResult {
+        account,
+        vault_exists,
+        email,
+    })
+}
+
+/// Re-authenticate an existing personal cloud profile (token expired).
+#[tauri::command]
+pub async fn reauth_personal_cloud(
+    app: AppHandle,
+    registry: State<'_, SharedAccountRegistry>,
+    sync: State<'_, SharedSyncState>,
+) -> Result<(), String> {
+    let kind = {
+        let reg = registry.lock();
+        reg.active()
+            .map(|a| a.kind.clone())
+            .ok_or_else(|| "No active account".to_string())?
+    };
+    let provider = PersonalProvider::from_kind(&kind)
+        .ok_or_else(|| "Not a personal cloud account".to_string())?;
+    let _ = provider.client_id().map_err(|e| e.to_string())?;
+
+    let http = {
+        let state = sync.lock().await;
+        state.http_client()
+    };
+
+    let tokens = oauth::run_oauth_loopback(provider, &http, |url| {
+        app.opener()
+            .open_url(url, None::<&str>)
+            .map_err(|e| anyhow::anyhow!("Could not open the browser: {e}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    let email = tokens.email.clone();
+    let account_id = {
+        let mut state = sync.lock().await;
+        state.apply_personal_session(tokens);
+        state.account_id_clone()
+    };
+    if let (Some(id), Some(email)) = (account_id, email) {
+        let _ = registry.lock().set_email(&id, Some(email));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn add_account(
     app: AppHandle,
@@ -146,11 +281,13 @@ pub async fn add_account(
     sync: State<'_, SharedSyncState>,
     input: AddAccountInput,
 ) -> Result<AccountRecord, String> {
-    let kind = match input.kind.as_str() {
-        "cloud" => AccountKind::Cloud,
-        "selfhost" => AccountKind::Selfhost,
-        _ => AccountKind::Offline,
-    };
+    let kind = AccountKind::from_str_migrate(&input.kind);
+    if matches!(
+        kind,
+        AccountKind::Gdrive | AccountKind::Onedrive | AccountKind::Dropbox
+    ) {
+        return Err("Use connect_personal_cloud to add a personal cloud account".into());
+    }
     let account = registry
         .lock()
         .add(kind, input.label, input.base_url, input.web_url)
@@ -210,6 +347,7 @@ async fn switch_to_account(
     let mut sync = sync.lock().await;
     sync.bind_account(
         account.id.clone(),
+        account.kind.clone(),
         account.base_url.clone(),
         account.web_url.clone(),
     );
