@@ -6,6 +6,18 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-informational)
 [![Release](https://img.shields.io/github/v/release/rexsystems/azalea?label=release&color=brightgreen)](https://github.com/rexsystems/azalea/releases/latest)
 
+## Screenshots
+
+Browse the [full screenshot gallery](docs/screenshots/README.md) for desktop pages, terminal tools, settings, account flows, all 12 themes, and the self-hosted web dashboard. Screenshots show the application UI with demo data and simulated connections.
+
+| Home | Hosts |
+| --- | --- |
+| [![Home](docs/screenshots/01-home.png)](docs/screenshots/01-home.png) | [![Hosts](docs/screenshots/02-hosts.png)](docs/screenshots/02-hosts.png) |
+
+| Terminal and SFTP | Web administration |
+| --- | --- |
+| [![Terminal and SFTP](docs/screenshots/25-sftp.png)](docs/screenshots/25-sftp.png) | [![Web administration](docs/screenshots/web-08-admin-users.png)](docs/screenshots/web-08-admin-users.png) |
+
 ## Features
 
 - **SSH terminal** - multi-tab sessions, search, clickable links, local shell
