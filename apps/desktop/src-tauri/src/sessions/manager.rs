@@ -60,7 +60,7 @@ fn looks_like_user_home(home: &str, username: &str) -> bool {
 /// drop it. Users stuck talking to legacy servers can opt in via the
 /// `AZALEA_ALLOW_LEGACY_SSH=1` environment variable, which falls back to
 /// russh's defaults (still no CBC ciphers, still no DH-group1).
-fn strict_ssh_preferences() -> Preferred {
+pub(super) fn strict_ssh_preferences() -> Preferred {
     if std::env::var("AZALEA_ALLOW_LEGACY_SSH").ok().as_deref() == Some("1") {
         return Preferred::DEFAULT;
     }
@@ -1388,8 +1388,8 @@ fn emit_output(app: &AppHandle, session_id: &str, data: &[u8]) {
     );
 }
 
-async fn authenticate(
-    session: &mut client::Handle<SshClientHandler>,
+pub(super) async fn authenticate<H: client::Handler>(
+    session: &mut client::Handle<H>,
     host: &Host,
 ) -> anyhow::Result<()> {
     let mut errors: Vec<String> = Vec::new();

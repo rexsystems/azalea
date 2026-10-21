@@ -99,6 +99,30 @@ export function prepareSsh(hostId: string): Promise<string> {
   return invoke("prepare_ssh", { hostId });
 }
 
+export type BatchStatus = "queued" | "running" | "succeeded" | "failed" | "timed_out" | "cancelled";
+export type BatchEvent =
+  | { kind: "started"; host_id: string }
+  | { kind: "output"; host_id: string; text: string; stderr: boolean }
+  | { kind: "finished"; host_id: string; status: BatchStatus; exit_code: number | null; error: string | null };
+
+export function runBatchCommand(
+  batchId: string, hostIds: string[], command: string, timeoutSeconds: number | null,
+  onEvent: (event: BatchEvent) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const channel = new Channel<BatchEvent | { kind: "complete" }>();
+    channel.onmessage = (event) => {
+      if (event.kind === "complete") resolve();
+      else onEvent(event);
+    };
+    void invoke("run_batch_command", { batchId, hostIds, command, timeoutSeconds, onEvent: channel }).catch(reject);
+  });
+}
+
+export function cancelBatchCommand(batchId: string): Promise<void> {
+  return invoke("cancel_batch_command", { batchId });
+}
+
 export function startSsh(
   sessionId: string,
   cols: number,

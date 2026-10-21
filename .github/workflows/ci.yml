@@ -2,6 +2,11 @@ name: CI
 
 # Checks every push and pull request to master. Builds nothing for release and
 # needs no secrets. Actions are pinned to the same SHAs as release.yml.
+#
+# Speed (free runners only):
+# - path filters skip unrelated jobs
+# - desktop uses a stub frontend dist (no npm) for tauri::generate_context!
+# - cargo test on desktop runs on master push only (clippy still on every run)
 
 on:
   push:
@@ -12,14 +17,47 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-24.04
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      server: ${{ steps.filter.outputs.server }}
+      desktop: ${{ steps.filter.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'apps/desktop/**'
+              - '!apps/desktop/src-tauri/**'
+              - 'apps/azalea-server-web/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/tests/**'
+              - '.github/workflows/ci.yml'
+            server:
+              - 'services/azalea-server/**'
+              - '.github/workflows/ci.yml'
+            desktop:
+              - 'apps/desktop/src-tauri/**'
+              - '.github/workflows/ci.yml'
+
   web:
     name: TypeScript (typecheck, lint, tests)
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -39,6 +77,8 @@ jobs:
 
   server:
     name: azalea-server (fmt, clippy, tests)
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.server == 'true' }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -62,14 +102,20 @@ jobs:
 
   desktop:
     name: Desktop Rust (fmt, clippy, tests)
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.desktop == 'true' }}
     runs-on: ubuntu-24.04
+    env:
+      # Faster links on free runners; compile cost dominates, but this is free.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             libwebkit2gtk-4.1-dev \
             build-essential \
             file \
@@ -81,12 +127,8 @@ jobs:
             libdbus-1-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            libxdo-dev
-
-      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
-        with:
-          node-version: 22
-          cache: npm
+            libxdo-dev \
+            mold
 
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # stable @ 2026-10
         with:
@@ -96,12 +138,14 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/desktop/src-tauri
-          shared-key: ci-desktop
+          shared-key: ci-desktop-mold
 
-      # tauri::generate_context! needs the built frontend in apps/desktop/dist.
-      - run: npm install -g npm@11
-      - run: npm ci
-      - run: npm run build --workspace @azalea/desktop
+      # tauri::generate_context! only needs frontendDist to exist; clippy/tests
+      # do not need a real Vite build (that stays on the web job + release).
+      - name: Stub frontend dist
+        run: |
+          mkdir -p apps/desktop/dist
+          printf '%s\n' '<!doctype html><title>ci</title>' > apps/desktop/dist/index.html
 
       - name: cargo fmt --check
         working-directory: apps/desktop/src-tauri
@@ -112,5 +156,33 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       - name: cargo test
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         working-directory: apps/desktop/src-tauri
         run: cargo test
+
+  # Single required check for branch protection: skipped path-filtered jobs
+  # count as OK; only failure/cancelled of a scheduled job fails the gate.
+  ci:
+    name: CI
+    needs: [changes, web, server, desktop]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check job results
+        run: |
+          set -euo pipefail
+          for result in \
+            "${{ needs.changes.result }}" \
+            "${{ needs.web.result }}" \
+            "${{ needs.server.result }}" \
+            "${{ needs.desktop.result }}"
+          do
+            case "$result" in
+              success|skipped) ;;
+              *)
+                echo "Blocking result: $result"
+                exit 1
+                ;;
+            esac
+          done
+          echo "CI ok"
