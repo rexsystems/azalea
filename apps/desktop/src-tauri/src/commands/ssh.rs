@@ -105,6 +105,7 @@ pub async fn disconnect_ssh(
 pub async fn disconnect_all_ssh(
     sessions: tauri::State<'_, SharedSshSessionManager>,
 ) -> Result<(), String> {
+    crate::sessions::batch::cancel_all_batches();
     sessions.lock().await.disconnect_all();
     Ok(())
 }

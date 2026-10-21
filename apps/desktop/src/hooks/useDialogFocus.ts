@@ -8,10 +8,11 @@ export function useDialogFocus(open: boolean, ref: RefObject<HTMLDivElement | nu
     const previous = document.activeElement;
     const dialog = ref.current;
     if (!dialog) return;
-    const controls = () => [...dialog.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), [tabindex='0']")];
+    const controls = () => [...dialog.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, [tabindex='0']")].filter((element) => element.getClientRects().length > 0);
     controls()[0]?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (dialog.querySelector('[aria-haspopup="listbox"][aria-expanded="true"]')) return;
         event.preventDefault();
         event.stopPropagation();
         onCloseRef.current();
@@ -20,7 +21,10 @@ export function useDialogFocus(open: boolean, ref: RefObject<HTMLDivElement | nu
         const elements = controls();
         const first = elements[0];
         const last = elements[elements.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
+        if (!elements.includes(document.activeElement as HTMLElement)) {
+          event.preventDefault();
+          (event.shiftKey ? last : first)?.focus();
+        } else if (event.shiftKey && document.activeElement === first) {
           event.preventDefault();
           last?.focus();
         } else if (!event.shiftKey && document.activeElement === last) {

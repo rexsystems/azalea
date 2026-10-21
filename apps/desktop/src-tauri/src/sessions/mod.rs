@@ -1,3 +1,4 @@
+pub mod batch;
 pub mod local;
 pub mod manager;
 

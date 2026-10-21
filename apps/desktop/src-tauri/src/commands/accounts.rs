@@ -341,6 +341,7 @@ async fn switch_to_account(
         reg.switch(id).map_err(|e| e.to_string())?.clone()
     };
 
+    crate::sessions::batch::cancel_all_batches();
     let path = account_db_path(app, &account.id).map_err(|e| e.to_string())?;
     db.lock().reopen(path).map_err(|e| e.to_string())?;
 

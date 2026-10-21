@@ -32,6 +32,7 @@ interface HostsPageProps {
   onEditHost: (host: Host) => void;
   onDeleteHost: (host: Host) => void;
   onDeleteHosts: (hosts: Host[]) => void;
+  onRunCommand: (hosts: Host[]) => void;
   onRenameGroup: (group: HostGroup) => void;
   onDeleteGroup: (group: HostGroup) => void;
   onMoveHost: (hostId: string, groupId: string | null) => void;
@@ -54,6 +55,7 @@ export function HostsPage({
   onEditHost,
   onDeleteHost,
   onDeleteHosts,
+  onRunCommand,
   onRenameGroup,
   onDeleteGroup,
   onMoveHost,
@@ -100,6 +102,8 @@ export function HostsPage({
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
           target.isContentEditable);
+
+      if (target?.closest('[role="dialog"]')) return;
 
       if (e.key === "Escape" && selectedIds.size > 0) {
         setSelectedIds(new Set());
@@ -210,6 +214,12 @@ export function HostsPage({
             label: "Add server",
             icon: <Server size={16} />,
             onClick: () => onAddServer(group.id),
+          },
+          {
+            id: "run-command",
+            label: "Run command on group…",
+            icon: <SquareTerminal size={16} />,
+            onClick: () => onRunCommand(hosts.filter((host) => host.group_id === group.id)),
           },
           {
             id: "rename",
@@ -376,6 +386,15 @@ export function HostsPage({
               )}
             </span>
             <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => onRunCommand(selectedHosts)}
+                className="hover-subtle inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+                style={{ color: "var(--text)" }}
+              >
+                <SquareTerminal size={15} />
+                Run command
+              </button>
               <button
                 type="button"
                 onClick={clearSelection}

@@ -32,6 +32,7 @@ import { ImportSection } from "./ImportSection";
 import { UpdateSection } from "./UpdateSection";
 import { AiSettingsSection } from "./AiSettingsSection";
 import { VoiceSettingsSection } from "./VoiceSettingsSection";
+import { BatchSettingsSection } from "./BatchSettingsSection";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { isTelemetryEnabled, setTelemetryEnabled } from "../lib/telemetry";
 import { isMobileRuntime } from "../hooks/useIsMobile";
@@ -615,7 +616,7 @@ export function SettingsPage({
               <>
                 <PanelHeader
                   title="Terminal"
-                  description="Clipboard and font size for sessions."
+                  description="Clipboard, font size, and batch command limits."
                 />
                 <SettingRow label="Clipboard">
                   <div className="space-y-2">
@@ -653,6 +654,9 @@ export function SettingsPage({
                       })
                     }
                   />
+                </SettingRow>
+                <SettingRow label="Batch commands" description="Defaults for commands sent to multiple hosts.">
+                  <BatchSettingsSection />
                 </SettingRow>
               </>
             )}

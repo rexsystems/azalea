@@ -27,6 +27,7 @@ Browse the [full screenshot gallery](docs/screenshots/README.md) for desktop pag
 - **SFTP** - browse, upload/download, drag-and-drop upload, edit remote text files
 - **Port forwarding** - manage and start local forwards from a session
 - **Snippets** - save and run common commands
+- **Batch commands** - run a command or snippet on selected hosts or a group, with separate output, exit codes, timeout and cancellation. See [batch commands](docs/batch-commands.md)
 - **Import / export** - Azalea backups, OpenSSH `config`, and JSON host lists
 - **Encrypted sync** (optional) - vault encrypted on your device, stored in Google Drive / OneDrive / Dropbox or your self-hosted server. See [sync](docs/cloud-sync.md)
 - **Self-hosted server** - run your own sync server with Docker, an install script, or the admin CLI. See [self-host](docs/self-host.md)

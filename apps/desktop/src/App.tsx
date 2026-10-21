@@ -59,6 +59,7 @@ import { HomePage } from "./components/HomePage";
 import { WorkspacesSection } from "./components/WorkspacesSection";
 import { captureWorkspace, parseWorkspaces, workspaceStorageKey, type SavedWorkspace } from "./lib/workspaces";
 import { HostsPage } from "./components/HostsPage";
+import { BatchCommandDialog } from "./components/BatchCommandDialog";
 import { KeysPage } from "./components/KeysPage";
 import { SnippetsPopover } from "./components/SnippetsPopover";
 import { TabBar } from "./components/TabBar";
@@ -167,8 +168,10 @@ function App() {
   const [navPage, setNavPage] = useState<NavPage>("home");
   const [settingsMounted, setSettingsMounted] = useState(false);
   const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  const [batchHosts, setBatchHosts] = useState<Host[] | null>(null);
   const [accounts, setAccounts] = useState<api.AccountRecord[]>([]);
   const [activeAccount, setActiveAccount] = useState<api.AccountRecord | null>(null);
+  useEffect(() => { setBatchHosts(null); }, [activeAccount?.id]);
   const [workspaceState, setWorkspaceState] = useState<{ accountId: string | null; items: SavedWorkspace[] }>({ accountId: null, items: [] });
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
@@ -2307,6 +2310,7 @@ function App() {
             onEditHost={openEditDrawer}
             onDeleteHost={handleDeleteHost}
             onDeleteHosts={requestDeleteHosts}
+            onRunCommand={setBatchHosts}
             onRenameGroup={handleRenameGroup}
             onDeleteGroup={handleDeleteGroup}
             onMoveHost={(hostId, groupId) => void handleMoveHost(hostId, groupId)}
@@ -2628,6 +2632,7 @@ function App() {
 
   return (
     <>
+      {batchHosts && <BatchCommandDialog hosts={batchHosts} onClose={() => setBatchHosts(null)} />}
       {onboarded === false ? (
         <FirstRunWizard
           onConnectSelfhost={handleConnectSelfhost}
