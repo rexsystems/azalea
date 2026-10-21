@@ -186,14 +186,18 @@ pub fn vault_hash(json: &str) -> String {
     B64.encode(Sha256::digest(json.as_bytes()))
 }
 
-/// Build the AAD tag bound to a specific vault snapshot. Binds the account
-/// id, vault version, and kdf_salt so a malicious server cannot replay an
-/// older ciphertext for the same account (rollback) or another account's
+/// Build the AAD tag bound to a specific vault snapshot.
+///
+/// `bound_id` is an opaque identity string — callers must pass the **server
+/// auth user id** for new writes so the same vault unlocks on every device.
+/// Older vaults may still be bound to a local desktop account UUID; decrypt
+/// paths try both. Also binds vault version and kdf_salt so a malicious
+/// server cannot replay an older ciphertext (rollback) or another account's
 /// ciphertext (cross-account swap) without detection.
-pub fn vault_aad(account_id: &str, version: i64, kdf_salt: &str) -> Vec<u8> {
-    let mut out = Vec::with_capacity(account_id.len() + kdf_salt.len() + 24);
+pub fn vault_aad(bound_id: &str, version: i64, kdf_salt: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bound_id.len() + kdf_salt.len() + 24);
     out.extend_from_slice(b"azalea-vault-v1|");
-    out.extend_from_slice(account_id.as_bytes());
+    out.extend_from_slice(bound_id.as_bytes());
     out.push(b'|');
     out.extend_from_slice(version.to_string().as_bytes());
     out.push(b'|');
@@ -265,6 +269,27 @@ mod tests {
         assert!(decrypt_with_aad(&key, &blob, &vault_aad("acc-1", 4, "salt1")).is_err());
         // Wrong salt
         assert!(decrypt_with_aad(&key, &blob, &vault_aad("acc-1", 5, "salt2")).is_err());
+    }
+
+    #[test]
+    fn aad_bound_id_is_opaque() {
+        // Server user_id and local account UUID are both opaque strings in AAD;
+        // decrypt only succeeds when the same identity that was used to encrypt
+        // is reproduced (cross-device sync requires binding to user_id).
+        let key = generate_key();
+        let server_user = "usr_abc123";
+        let local_slot = "00000000-0000-0000-0000-000000000001";
+        let blob = encrypt_with_aad(
+            &key,
+            b"payload",
+            &vault_aad(server_user, 2, "salt"),
+        )
+        .unwrap();
+        assert_eq!(
+            decrypt_with_aad(&key, &blob, &vault_aad(server_user, 2, "salt")).unwrap(),
+            b"payload"
+        );
+        assert!(decrypt_with_aad(&key, &blob, &vault_aad(local_slot, 2, "salt")).is_err());
     }
 
     #[test]

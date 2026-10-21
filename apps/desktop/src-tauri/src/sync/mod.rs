@@ -1035,11 +1035,12 @@ pub async fn setup_passphrase(
     let recovery_envelope = crypto::seal_vault_key(&recovery_kek, &vault_key)?;
 
     let (json, _) = local_vault_json(db, settings.clone())?;
-    let account_id = require_account_id(state)?;
-    // AAD binds account_id + version (1 for the initial write) + kdf_salt so
-    // a malicious server cannot swap this ciphertext for another account's or
-    // an older version's blob without detection.
-    let aad = crypto::vault_aad(&account_id, 1, &salt);
+    let user_id = require_user_id(state)?;
+    // AAD binds server user_id + version (1 for the initial write) + kdf_salt
+    // so a malicious server cannot swap this ciphertext for another account's
+    // or an older version's blob without detection. user_id (not local
+    // account UUID) so every device for this login can decrypt.
+    let aad = crypto::vault_aad(&user_id, 1, &salt);
     let ciphertext = crypto::encrypt_with_aad(&vault_key, json.as_bytes(), &aad)?;
 
     let plan = fetch_account_plan(state).await;
@@ -1082,22 +1083,62 @@ pub async fn unlock(
         anyhow::bail!("Passphrase or recovery key required.");
     };
 
-    // Verify the vault decrypts; do not overwrite local data here.
-    let account_id = require_account_id(state)?;
-    let aad = crypto::vault_aad(&account_id, vault.version, &vault.kdf_salt);
-    let _plaintext = crypto::decrypt_with_aad(&vault_key, &vault.ciphertext, &aad)?;
+    // Credentials already opened the verifier — ciphertext failure is AAD /
+    // format mismatch (e.g. vault written on another device with a local
+    // account UUID), not a wrong passphrase/recovery key.
+    decrypt_vault_payload(state, &vault_key, &vault).map_err(|_| {
+        anyhow::anyhow!(
+            "Credentials are correct, but this vault was encrypted on another device with an older app version. Unlock and sync once from that device with the updated app, then try again here."
+        )
+    })?;
 
     state.vault_key = Some(vault_key);
     Ok(vault.version)
 }
 
-/// Returns the current account id or errors out. Vault crypto that binds AAD
-/// on account_id must not silently fall back to an empty string, or the AAD
-/// would be trivially predictable and its rollback-protection purpose lost.
+/// Returns the current local account id or errors out.
 fn require_account_id(state: &SyncState) -> anyhow::Result<String> {
     state
         .account_id_clone()
         .ok_or_else(|| anyhow::anyhow!("No account bound; cannot encrypt vault"))
+}
+
+/// Server auth user id used as the canonical AAD bound identity. Must not
+/// fall back to empty — that would make AAD trivially predictable.
+fn require_user_id(state: &SyncState) -> anyhow::Result<String> {
+    state
+        .user_id
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("Not signed in; cannot encrypt vault"))
+}
+
+/// Decrypt vault ciphertext trying, in order:
+/// 1. AAD bound to server `user_id` (canonical for new writes)
+/// 2. AAD bound to local `account_id` (vaults written before the user_id fix)
+/// 3. Legacy V1 blob with no AAD
+fn decrypt_vault_payload(
+    state: &SyncState,
+    vault_key: &VaultKey,
+    vault: &VaultRow,
+) -> anyhow::Result<Vec<u8>> {
+    let user_id = require_user_id(state)?;
+    let aad_user = crypto::vault_aad(&user_id, vault.version, &vault.kdf_salt);
+    if let Ok(plain) = crypto::decrypt_with_aad(vault_key, &vault.ciphertext, &aad_user) {
+        return Ok(plain);
+    }
+
+    if let Ok(account_id) = require_account_id(state) {
+        if account_id != user_id {
+            let aad_local = crypto::vault_aad(&account_id, vault.version, &vault.kdf_salt);
+            if let Ok(plain) = crypto::decrypt_with_aad(vault_key, &vault.ciphertext, &aad_local)
+            {
+                return Ok(plain);
+            }
+        }
+    }
+
+    // Older vaults may still be V1. Subsequent push rewrites as V2 + user_id AAD.
+    crypto::decrypt(vault_key, &vault.ciphertext)
 }
 
 async fn push_local(
@@ -1109,8 +1150,8 @@ async fn push_local(
     limit_bytes: i64,
 ) -> anyhow::Result<Option<i64>> {
     let new_version = expected + 1;
-    let account_id = require_account_id(state)?;
-    let aad = crypto::vault_aad(&account_id, new_version, &vault_meta.kdf_salt);
+    let user_id = require_user_id(state)?;
+    let aad = crypto::vault_aad(&user_id, new_version, &vault_meta.kdf_salt);
     let ciphertext = crypto::encrypt_with_aad(vault_key, local_json.as_bytes(), &aad)?;
     let total = vault_row_bytes(
         &ciphertext,
@@ -1135,17 +1176,7 @@ async fn remote_backup(
     vault_key: &VaultKey,
     vault: &VaultRow,
 ) -> anyhow::Result<AzaleaBackup> {
-    let account_id = require_account_id(state)?;
-    let aad = crypto::vault_aad(&account_id, vault.version, &vault.kdf_salt);
-    // decrypt_with_aad falls back to legacy V1 blobs (no AAD) when the caller
-    // passes an empty aad. We deliberately pass real AAD here so any V2 blob
-    // whose version/account/salt was tampered with fails to decrypt.
-    let plaintext = crypto::decrypt_with_aad(vault_key, &vault.ciphertext, &aad).or_else(|_| {
-        // Backward compat: older vaults may still be V1. Fall back to legacy
-        // path so users don't get stuck after upgrading. Any subsequent push
-        // will rewrite the blob as V2 with AAD binding.
-        crypto::decrypt(vault_key, &vault.ciphertext)
-    })?;
+    let plaintext = decrypt_vault_payload(state, vault_key, vault)?;
     let json =
         String::from_utf8(plaintext).map_err(|_| anyhow::anyhow!("Corrupted vault payload"))?;
     parse_backup_json(&json)
@@ -1307,10 +1338,7 @@ pub async fn perform_sync(
                     last_version,
                 );
             }
-            let account_id = require_account_id(state)?;
-            let aad = crypto::vault_aad(&account_id, vault.version, &vault.kdf_salt);
-            let plaintext = crypto::decrypt_with_aad(&vault_key, &vault.ciphertext, &aad)
-                .or_else(|_| crypto::decrypt(&vault_key, &vault.ciphertext))?;
+            let plaintext = decrypt_vault_payload(state, &vault_key, &vault)?;
             let settings = apply_remote_vault(db, &plaintext)?;
             set_synced_meta(db, vault.version, settings.as_ref())?;
             return Ok(SyncOutcome::Pulled {
