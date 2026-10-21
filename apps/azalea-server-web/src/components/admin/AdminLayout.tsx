@@ -38,13 +38,20 @@ export function AdminLayout({ title, subtitle, children }: AdminLayoutProps) {
           <Logo size={22} style={{ color: "var(--accent)" }} />
           <span>Azalea</span>
         </Link>
-        <nav className="admin-nav">
+        <nav className="admin-nav" aria-label="Administration">
           <Link
             href="/admin"
             className={`btn ${pathname === "/admin" ? "btn-primary" : "btn-ghost"} px-3 py-1.5 text-sm`}
             aria-current={pathname === "/admin" ? "page" : undefined}
           >
-            Dashboard
+            Users
+          </Link>
+          <Link
+            href="/admin/plans"
+            className={`btn ${pathname === "/admin/plans" ? "btn-primary" : "btn-ghost"} px-3 py-1.5 text-sm`}
+            aria-current={pathname === "/admin/plans" ? "page" : undefined}
+          >
+            Plans & quotas
           </Link>
           <Link
             href="/admin/settings"
@@ -109,6 +116,7 @@ export function AdminDenied() {
 export function AdminLoading() {
   return (
     <main className="flex min-h-screen items-center justify-center">
+      <p role="status">Loading administration…</p>
       <Logo
         size={36}
         className="animate-pulse"

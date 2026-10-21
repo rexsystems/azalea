@@ -359,7 +359,7 @@ export function AccountSwitcher({
       <UserAvatar email={displayEmail ?? undefined} size={28} />
       {warningIcon}
       {loggedIn && syncStatus ? (
-        <PlanBadge plan={syncStatus.plan} role={syncStatus.role} />
+        <PlanBadge plan={syncStatus.plan} planName={syncStatus.plan_name} role={syncStatus.role} />
       ) : (
         <span
           className="text-[11px] font-medium"
@@ -401,7 +401,7 @@ export function AccountSwitcher({
         </div>
         <div className="mt-1 flex items-center gap-1.5">
           {loggedIn && syncStatus ? (
-            <PlanBadge plan={syncStatus.plan} role={syncStatus.role} />
+            <PlanBadge plan={syncStatus.plan} planName={syncStatus.plan_name} role={syncStatus.role} />
           ) : (
             <span
               className="truncate text-[10px] font-semibold"

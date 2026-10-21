@@ -35,7 +35,7 @@ fn ensure_vault_within_limit(limit_bytes: i64, total_bytes: i64) -> anyhow::Resu
         let used_kb = total_bytes / 1024;
         let limit_kb = limit_bytes / 1024;
         anyhow::bail!(
-            "Cloud vault exceeds your plan limit ({used_kb} KB / {limit_kb} KB). Remove hosts or keys locally, then sync again, or upgrade to Pro."
+            "Cloud vault exceeds your plan limit ({used_kb} KB / {limit_kb} KB). Remove hosts or keys locally, then sync again, or ask your administrator to increase your quota."
         );
     }
     Ok(())
@@ -44,7 +44,7 @@ fn ensure_vault_within_limit(limit_bytes: i64, total_bytes: i64) -> anyhow::Resu
 fn vault_error_message(body: &Value) -> String {
     let msg = auth_error_message(body);
     if msg.contains("Cloud vault exceeds") || msg.contains("storage limit") {
-        return "Cloud vault is full. Remove hosts or keys locally, then sync again, or upgrade to Pro on the website.".to_string();
+        return "Cloud vault is full. Remove hosts or keys locally, then sync again, or ask your administrator to increase your quota.".to_string();
     }
     msg
 }
@@ -52,6 +52,8 @@ fn vault_error_message(body: &Value) -> String {
 #[derive(Debug, Clone, Deserialize)]
 struct AccountPlanRow {
     plan: String,
+    #[serde(default)]
+    plan_name: String,
     role: String,
     limit_bytes: i64,
     used_bytes: i64,
@@ -63,6 +65,7 @@ impl Default for AccountPlanRow {
     fn default() -> Self {
         Self {
             plan: "free".to_string(),
+            plan_name: "Free".to_string(),
             role: "user".to_string(),
             limit_bytes: FREE_VAULT_LIMIT_BYTES,
             used_bytes: 0,
@@ -75,6 +78,7 @@ async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
     if state.kind.is_personal_cloud() {
         return AccountPlanRow {
             plan: "personal".to_string(),
+            plan_name: "Personal cloud".to_string(),
             role: "user".to_string(),
             limit_bytes: PERSONAL_CLOUD_LIMIT_BYTES,
             used_bytes: 0,
@@ -94,6 +98,8 @@ async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
     struct AccountBody {
         plan: String,
         #[serde(default)]
+        plan_name: String,
+        #[serde(default)]
         role: String,
         vault_bytes: i64,
         vault_limit_bytes: i64,
@@ -105,6 +111,7 @@ async fn fetch_account_plan(state: &SyncState) -> AccountPlanRow {
 
     let mut row = normalize_plan_row(AccountPlanRow {
         plan: account.plan,
+        plan_name: account.plan_name,
         role: account.role,
         limit_bytes: account.vault_limit_bytes,
         used_bytes: account.vault_bytes,
@@ -124,8 +131,16 @@ fn normalize_plan_row(mut row: AccountPlanRow) -> AccountPlanRow {
     row.plan = match plan.as_str() {
         "pro" => "pro".into(),
         "personal" => "personal".into(),
-        _ => "free".into(),
+        "" => "free".into(),
+        _ => plan,
     };
+    if row.plan_name.trim().is_empty() {
+        row.plan_name = match row.plan.as_str() {
+            "free" => "Free".into(),
+            "pro" => "Pro".into(),
+            _ => row.plan.clone(),
+        };
+    }
     if row.limit_bytes <= 0 {
         row.limit_bytes = match row.plan.as_str() {
             "pro" => 10 * 1024 * 1024,
@@ -1534,6 +1549,7 @@ pub struct SyncStatus {
     pub remote_version: Option<i64>,
     pub last_synced_version: i64,
     pub plan: String,
+    pub plan_name: String,
     pub role: String,
     pub storage_limit_bytes: i64,
     pub cloud_used_bytes: i64,
@@ -1628,6 +1644,7 @@ pub async fn status(state: &mut SyncState, db: &SharedDatabase) -> SyncStatus {
         remote_version,
         last_synced_version: last_version,
         plan: plan.plan,
+        plan_name: plan.plan_name,
         role: plan.role,
         storage_limit_bytes: plan.limit_bytes,
         cloud_used_bytes: plan.used_bytes,

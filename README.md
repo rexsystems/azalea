@@ -30,7 +30,7 @@ Browse the [full screenshot gallery](docs/screenshots/README.md) for desktop pag
 - **Import / export** - Azalea backups, OpenSSH `config`, and JSON host lists
 - **Encrypted sync** (optional) - vault encrypted on your device, stored in Google Drive / OneDrive / Dropbox or your self-hosted server. See [sync](docs/cloud-sync.md)
 - **Self-hosted server** - run your own sync server with Docker, an install script, or the admin CLI. See [self-host](docs/self-host.md)
-- **Web dashboard** - login, account and admin pages for a self-hosted server (`apps/azalea-server-web`). See [web apps](docs/web.md)
+- **Web dashboard** - login, accounts, custom plans and per-user vault quotas for a self-hosted server (`apps/azalea-server-web`). See [web apps](docs/web.md)
 - **Auto-update** - signed updates on Windows, Linux (AppImage) and macOS. See [updater](docs/updater.md)
 - **Themes & settings** - Midnight / Noir, font size, connect screen
 - **Terminal AI** (opt-in) - Ask / Agent, command approval, live output, provider model catalogs and custom model IDs. See [AI setup and behavior](docs/ai.md).

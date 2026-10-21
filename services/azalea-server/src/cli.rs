@@ -62,7 +62,7 @@ pub enum UserCommand {
         password: String,
         #[arg(long, default_value = "user", value_parser = ["user", "admin"])]
         role: String,
-        #[arg(long, default_value = "free", value_parser = ["free", "pro"])]
+        #[arg(long, default_value = "free")]
         plan: String,
     },
     /// Set a user's password
@@ -89,11 +89,11 @@ pub enum UserCommand {
         #[arg(long, value_parser = ["user", "admin"])]
         role: String,
     },
-    /// Set plan (free|pro)
+    /// Assign an existing plan ID
     SetPlan {
         #[arg(long)]
         email: String,
-        #[arg(long, value_parser = ["free", "pro"])]
+        #[arg(long)]
         plan: String,
     },
 }
@@ -248,6 +248,10 @@ fn run_user(dir: &Path, cmd: UserCommand) -> anyhow::Result<()> {
             plan,
         } => {
             let email = normalize_email(&email)?;
+            anyhow::ensure!(
+                db.with_conn(|conn| crate::plans::plan_exists(conn, &plan))?,
+                "unknown plan: {plan}"
+            );
             validate_password(&password)?;
             let password_hash = hash_password(&password).map_err(|e| anyhow::anyhow!("{e}"))?;
             let id = Uuid::new_v4().to_string();
@@ -314,6 +318,10 @@ fn run_user(dir: &Path, cmd: UserCommand) -> anyhow::Result<()> {
         }
         UserCommand::SetPlan { email, plan } => {
             let email = normalize_email(&email)?;
+            anyhow::ensure!(
+                db.with_conn(|conn| crate::plans::plan_exists(conn, &plan))?,
+                "unknown plan: {plan}"
+            );
             let now = now_rfc3339();
             let n = db.with_conn(|conn| {
                 Ok(conn.execute(

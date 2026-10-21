@@ -1,5 +1,5 @@
 import { apiRequest } from "./azalea-api";
-import type { AdminSettings, AdminUser } from "./admin-users";
+import type { AdminPlan, AdminSettings, AdminUser } from "./admin-users";
 
 const adminFetch = apiRequest;
 
@@ -24,7 +24,8 @@ export function createAdminUser(input: {
   email: string;
   password: string;
   role: "user" | "admin";
-  plan: "free" | "pro";
+  plan: string;
+  quota_override_bytes?: number;
 }) {
   return adminFetch<AdminUser>("/v1/admin/users", {
     method: "POST",
@@ -37,8 +38,10 @@ export function patchAdminUser(
   body: {
     disabled?: boolean;
     role?: "user" | "admin";
-    plan?: "free" | "pro";
+    plan?: string;
     password?: string;
+    quota_override_bytes?: number;
+    reset_quota?: boolean;
   },
 ) {
   return adminFetch<{ ok: boolean }>(`/v1/admin/users/${id}`, {
@@ -123,5 +126,37 @@ export function requestServerUpdate(
       method: "POST",
       body: JSON.stringify({ selection }),
     },
+  );
+}
+
+export function listAdminPlans() {
+  return adminFetch<AdminPlan[]>("/v1/admin/plans");
+}
+
+export function createAdminPlan(input: {
+  id: string;
+  name: string;
+  limit_bytes: number;
+}) {
+  return adminFetch<AdminPlan>("/v1/admin/plans", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function patchAdminPlan(
+  id: string,
+  input: { name: string; limit_bytes: number },
+) {
+  return adminFetch<AdminPlan>(`/v1/admin/plans/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteAdminPlan(id: string) {
+  return adminFetch<{ ok: boolean }>(
+    `/v1/admin/plans/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
   );
 }

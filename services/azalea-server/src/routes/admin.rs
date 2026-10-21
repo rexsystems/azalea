@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::auth::hash_password;
 use crate::db::now_rfc3339;
 use crate::error::{ApiError, ApiResult};
+use crate::plans::{self, Plan};
 use crate::routes::extractors::AdminUser;
 use crate::state::AppState;
 
@@ -20,10 +21,16 @@ pub fn router() -> Router<Arc<AppState>> {
         )
         .route("/v1/admin/users", get(list_users).post(create_user))
         .route("/v1/admin/users/{id}", patch(patch_user))
+        .route("/v1/admin/plans", get(list_plans).post(create_plan))
+        .route(
+            "/v1/admin/plans/{id}",
+            patch(patch_plan).delete(delete_plan),
+        )
 }
 
 #[derive(Serialize)]
 struct SettingsResponse {
+    plans: Vec<Plan>,
     signup_enabled: bool,
     captcha_provider: String,
     captcha_site_key: String,
@@ -50,6 +57,9 @@ struct AdminUserRow {
     email: String,
     role: String,
     plan: String,
+    plan_name: String,
+    quota_override_bytes: Option<i64>,
+    vault_limit_bytes: i64,
     disabled: bool,
     vault_bytes: i64,
     created_at: String,
@@ -66,6 +76,7 @@ struct CreateUserBody {
     role: String,
     #[serde(default = "default_plan")]
     plan: String,
+    quota_override_bytes: Option<i64>,
 }
 
 fn default_role() -> String {
@@ -82,6 +93,9 @@ struct PatchUserBody {
     role: Option<String>,
     plan: Option<String>,
     password: Option<String>,
+    quota_override_bytes: Option<i64>,
+    #[serde(default)]
+    reset_quota: bool,
 }
 
 async fn get_settings(
@@ -113,6 +127,7 @@ fn read_settings(state: &AppState) -> ApiResult<Json<SettingsResponse>> {
     })?;
 
     Ok(Json(SettingsResponse {
+        plans: state.db.with_conn(plans::read_plans)?,
         signup_enabled: row.0 != 0,
         captcha_provider: row.1,
         captcha_site_key: row.2,
@@ -248,8 +263,9 @@ async fn list_users(
                       FROM vaults v WHERE v.user_id = u.id
                     ), 0),
                     (SELECT v.updated_at FROM vaults v WHERE v.user_id = u.id),
-                    (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id)
-             FROM users u ORDER BY u.created_at ASC",
+                    (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id),
+                    p.name,u.quota_override_bytes,COALESCE(u.quota_override_bytes,p.limit_bytes)
+             FROM users u JOIN plans p ON p.id=u.plan ORDER BY u.created_at ASC",
         )?;
         let rows = stmt.query_map([], |r| {
             Ok(AdminUserRow {
@@ -263,6 +279,9 @@ async fn list_users(
                 vault_bytes: r.get(7)?,
                 vault_updated_at: r.get(8)?,
                 last_sign_in_at: r.get(9)?,
+                plan_name: r.get(10)?,
+                quota_override_bytes: r.get(11)?,
+                vault_limit_bytes: r.get(12)?,
             })
         })?;
         let mut out = Vec::new();
@@ -293,16 +312,23 @@ async fn create_user(
     } else {
         "user"
     };
-    let plan = if body.plan == "pro" { "pro" } else { "free" };
+    let plan = body.plan.trim();
+    let plan_info = state
+        .db
+        .with_conn(|conn| plans::find_plan(conn, plan))?
+        .ok_or_else(|| ApiError::BadRequest("Choose an existing plan.".into()))?;
+    if let Some(quota) = body.quota_override_bytes {
+        plans::validate_quota(quota)?;
+    }
     let password_hash = hash_password(&body.password)?;
     let id = Uuid::new_v4().to_string();
     let now = now_rfc3339();
 
     let insert = state.db.with_conn(|conn| {
         conn.execute(
-            "INSERT INTO users (id, email, password_hash, role, plan, disabled, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6)",
-            params![id, email, password_hash, role, plan, now],
+            "INSERT INTO users (id, email, password_hash, role, plan, disabled, created_at, updated_at,quota_override_bytes)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?6, ?7)",
+            params![id, email, password_hash, role, plan, now,body.quota_override_bytes],
         )?;
         Ok(())
     });
@@ -318,6 +344,9 @@ async fn create_user(
         email,
         role: role.into(),
         plan: plan.into(),
+        plan_name: plan_info.name,
+        quota_override_bytes: body.quota_override_bytes,
+        vault_limit_bytes: body.quota_override_bytes.unwrap_or(plan_info.limit_bytes),
         disabled: false,
         vault_bytes: 0,
         created_at: now.clone(),
@@ -338,12 +367,21 @@ async fn patch_user(
         .role
         .as_deref()
         .is_some_and(|role| !["admin", "user"].contains(&role))
-        || body
-            .plan
-            .as_deref()
-            .is_some_and(|plan| !["free", "pro"].contains(&plan))
     {
         return Err(ApiError::BadRequest("Invalid role or plan.".into()));
+    }
+    if let Some(quota) = body.quota_override_bytes {
+        plans::validate_quota(quota)?;
+    }
+    if body.reset_quota && body.quota_override_bytes.is_some() {
+        return Err(ApiError::BadRequest(
+            "Choose a quota override or reset to the plan quota.".into(),
+        ));
+    }
+    if let Some(plan) = &body.plan {
+        if !state.db.with_conn(|conn| plans::plan_exists(conn, plan))? {
+            return Err(ApiError::BadRequest("Choose an existing plan.".into()));
+        }
     }
     if body
         .password
@@ -410,6 +448,12 @@ async fn patch_user(
                 params![id, hash, now],
             )?;
         }
+        if body.reset_quota || body.quota_override_bytes.is_some() {
+            tx.execute(
+                "UPDATE users SET quota_override_bytes=?2,updated_at=?3 WHERE id=?1",
+                params![id, body.quota_override_bytes, now],
+            )?;
+        }
         if body.disabled == Some(true) || password_hash.is_some() {
             tx.execute("DELETE FROM sessions WHERE user_id=?1", params![id])?;
         }
@@ -422,5 +466,138 @@ async fn patch_user(
             "Keep at least one active administrator.".into(),
         )),
         _ => Ok(Json(serde_json::json!({ "ok": true }))),
+    }
+}
+
+#[derive(Deserialize)]
+struct CreatePlanBody {
+    id: String,
+    name: String,
+    limit_bytes: i64,
+}
+
+#[derive(Deserialize)]
+struct PatchPlanBody {
+    name: Option<String>,
+    limit_bytes: Option<i64>,
+}
+
+fn validate_plan_name(name: &str) -> ApiResult<()> {
+    if name.trim().is_empty() || name.chars().count() > 80 {
+        return Err(ApiError::BadRequest(
+            "Plan name must contain 1 to 80 characters.".into(),
+        ));
+    }
+    Ok(())
+}
+
+async fn list_plans(
+    State(state): State<Arc<AppState>>,
+    _admin: AdminUser,
+) -> ApiResult<Json<Vec<Plan>>> {
+    Ok(Json(state.db.with_conn(plans::read_plans)?))
+}
+
+async fn create_plan(
+    State(state): State<Arc<AppState>>,
+    _admin: AdminUser,
+    Json(body): Json<CreatePlanBody>,
+) -> ApiResult<Json<Plan>> {
+    let id = body.id.trim();
+    if id.is_empty()
+        || id.len() > 40
+        || !id.as_bytes()[0].is_ascii_lowercase()
+        || !id
+            .bytes()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'_' || c == b'-')
+        || ["personal", "all"].contains(&id)
+    {
+        return Err(ApiError::BadRequest("Plan ID must start with a lowercase letter and use up to 40 lowercase letters, digits, hyphens or underscores.".into()));
+    }
+    validate_plan_name(&body.name)?;
+    plans::validate_quota(body.limit_bytes)?;
+    let inserted = state.db.with_conn(|conn| {
+        Ok(conn.execute(
+            "INSERT INTO plans(id,name,limit_bytes) VALUES (?1,?2,?3) ON CONFLICT(id) DO NOTHING",
+            params![id, body.name.trim(), body.limit_bytes],
+        )?)
+    })?;
+    if inserted == 0 {
+        return Err(ApiError::Conflict(
+            "A plan with that ID already exists.".into(),
+        ));
+    }
+    Ok(Json(Plan {
+        id: id.into(),
+        name: body.name.trim().into(),
+        limit_bytes: body.limit_bytes,
+        user_count: 0,
+    }))
+}
+
+async fn patch_plan(
+    State(state): State<Arc<AppState>>,
+    _admin: AdminUser,
+    Path(id): Path<String>,
+    Json(body): Json<PatchPlanBody>,
+) -> ApiResult<Json<Plan>> {
+    if let Some(name) = &body.name {
+        validate_plan_name(name)?;
+    }
+    if let Some(bytes) = body.limit_bytes {
+        plans::validate_quota(bytes)?;
+    }
+    let plan = state
+        .db
+        .with_conn(|conn| {
+            let tx = conn.unchecked_transaction()?;
+            if let Some(name) = &body.name {
+                tx.execute(
+                    "UPDATE plans SET name=?2 WHERE id=?1",
+                    params![id, name.trim()],
+                )?;
+            }
+            if let Some(bytes) = body.limit_bytes {
+                tx.execute(
+                    "UPDATE plans SET limit_bytes=?2 WHERE id=?1",
+                    params![id, bytes],
+                )?;
+            }
+            let result = plans::find_plan(&tx, &id)?;
+            tx.commit()?;
+            Ok(result)
+        })?
+        .ok_or_else(|| ApiError::NotFound("Plan not found.".into()))?;
+    Ok(Json(plan))
+}
+
+async fn delete_plan(
+    State(state): State<Arc<AppState>>,
+    _admin: AdminUser,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    if ["free", "pro"].contains(&id.as_str()) {
+        return Err(ApiError::BadRequest(
+            "The Free and Pro defaults cannot be deleted.".into(),
+        ));
+    }
+    let result = state.db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        let Some(plan) = plans::find_plan(&tx, &id)? else {
+            return Ok(0);
+        };
+        if plan.user_count > 0 {
+            return Ok(1);
+        }
+        tx.execute("DELETE FROM plans WHERE id=?1", params![id])?;
+        tx.commit()?;
+        Ok(2)
+    })?;
+    match result {
+        0 => Err(ApiError::NotFound("Plan not found.".into())),
+        1 => Err(ApiError::Conflict(
+            "Move all users to another plan before deleting this plan.".into(),
+        )),
+        _ => Ok(Json(serde_json::json!({"ok":true}))),
     }
 }

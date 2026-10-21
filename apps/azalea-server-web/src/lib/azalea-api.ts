@@ -182,6 +182,7 @@ export async function getAccount(): Promise<{
   email: string;
   role: string;
   plan: string;
+  plan_name: string;
   vault_bytes: number;
   vault_limit_bytes: number;
 }> {
@@ -251,5 +252,5 @@ export interface AuthConfig {
   captcha_site_key: string;
 }
 export function getAuthConfig() {
-  return apiRequest<AuthConfig>("/v1/auth/config", { auth: false });
+  return apiRequest<AuthConfig>("/v1/auth/config", { auth: false, cache: "no-store" });
 }

@@ -19,10 +19,14 @@ mod cli;
 mod db;
 mod error;
 mod mail;
+mod plans;
 mod ratelimit;
 mod routes;
 mod state;
 mod updates;
+
+#[cfg(test)]
+mod admin_tests;
 
 use crate::mail::MailConfig;
 use cli::{Cli, Command};

@@ -344,7 +344,8 @@ export interface SyncStatus {
   vault_exists: boolean | null;
   remote_version: number | null;
   last_synced_version: number;
-  plan: "free" | "pro" | "personal";
+  plan: string;
+  plan_name?: string;
   role?: string | null;
   storage_limit_bytes: number;
   cloud_used_bytes: number;
