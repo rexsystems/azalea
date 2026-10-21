@@ -1,8 +1,18 @@
+export interface AdminPlan {
+  id: string;
+  name: string;
+  limit_bytes: number;
+  user_count: number;
+}
+
 export interface AdminUser {
   id: string;
   email: string;
   role: "user" | "admin" | string;
   plan: "free" | "pro" | string;
+  plan_name: string;
+  quota_override_bytes: number | null;
+  vault_limit_bytes: number;
   disabled: boolean;
   vault_bytes: number;
   created_at: string;
@@ -12,6 +22,7 @@ export interface AdminUser {
 }
 
 export interface AdminSettings {
+  plans: AdminPlan[];
   signup_enabled: boolean;
   captcha_provider: string;
   captcha_site_key: string;
@@ -30,7 +41,7 @@ export type AdminUserSort =
   | "email_asc";
 
 export type RoleFilter = "all" | "admin" | "user";
-export type PlanFilter = "all" | "free" | "pro";
+export type PlanFilter = string;
 export type StatusFilter = "all" | "active" | "disabled";
 
 export const ADMIN_USER_SORT_OPTIONS: { id: AdminUserSort; label: string }[] = [
@@ -73,9 +84,18 @@ export function fmtAdminBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export function planLimit(user: AdminUser, settings: AdminSettings | null): number {
-  if (!settings) return user.plan === "pro" ? 10_485_760 : 262_144;
-  return user.plan === "pro" ? settings.pro_limit_bytes : settings.free_limit_bytes;
+export function planLimit(
+  user: AdminUser,
+  settings: AdminSettings | null,
+): number {
+  return (
+    user.quota_override_bytes ??
+    settings?.plans?.find((plan) => plan.id === user.plan)?.limit_bytes ??
+    user.vault_limit_bytes ??
+    (user.plan === "pro"
+      ? (settings?.pro_limit_bytes ?? 10_485_760)
+      : (settings?.free_limit_bytes ?? 262_144))
+  );
 }
 
 export function usagePct(used: number, limit: number): number {
@@ -105,12 +125,16 @@ export function filterAdminUsers(
       user.email.toLowerCase().includes(q) ||
       user.id.toLowerCase().includes(q) ||
       user.role.toLowerCase().includes(q) ||
-      user.plan.toLowerCase().includes(q)
+      user.plan.toLowerCase().includes(q) ||
+      (user.plan_name ?? "").toLowerCase().includes(q)
     );
   });
 }
 
-export function sortAdminUsers(users: AdminUser[], sort: AdminUserSort): AdminUser[] {
+export function sortAdminUsers(
+  users: AdminUser[],
+  sort: AdminUserSort,
+): AdminUser[] {
   const next = [...users];
   const time = (value: string | null | undefined) => {
     if (!value) return 0;
@@ -128,15 +152,22 @@ export function sortAdminUsers(users: AdminUser[], sort: AdminUserSort): AdminUs
     case "joined_asc":
       return next.sort((a, b) => time(a.created_at) - time(b.created_at));
     case "sign_in_desc":
-      return next.sort((a, b) => time(b.last_sign_in_at) - time(a.last_sign_in_at));
+      return next.sort(
+        (a, b) => time(b.last_sign_in_at) - time(a.last_sign_in_at),
+      );
     case "email_asc":
-      return next.sort((a, b) => a.email.localeCompare(b.email, undefined, { sensitivity: "base" }));
+      return next.sort((a, b) =>
+        a.email.localeCompare(b.email, undefined, { sensitivity: "base" }),
+      );
     default:
       return next;
   }
 }
 
-export function monthBuckets(users: AdminUser[], months = 6): { label: string; count: number }[] {
+export function monthBuckets(
+  users: AdminUser[],
+  months = 6,
+): { label: string; count: number }[] {
   const now = new Date();
   const buckets: { key: string; label: string; count: number }[] = [];
   for (let i = months - 1; i >= 0; i -= 1) {

@@ -46,8 +46,6 @@ export default function InstanceSettingsPage() {
       const next = await patchAdminSettings({
         instance_name: settings.instance_name.trim(),
         signup_enabled: settings.signup_enabled,
-        free_limit_bytes: settings.free_limit_bytes,
-        pro_limit_bytes: settings.pro_limit_bytes,
         captcha_provider: settings.captcha_provider,
         captcha_site_key: settings.captcha_site_key.trim(),
         ...(clearSecret
@@ -69,7 +67,7 @@ export default function InstanceSettingsPage() {
   return (
     <AdminLayout
       title="Instance settings"
-      subtitle="Identity, registration, storage and captcha"
+      subtitle="Instance identity, registration and captcha"
     >
       {error && (
         <p className="admin-error" role="alert">
@@ -113,60 +111,11 @@ export default function InstanceSettingsPage() {
                   }
                 />
                 <p className="rex-hint">
-                  When closed, administrators can still create accounts.
+                  When closed, the signup page redirects to sign-in.
+                  Administrators can still create accounts.
                 </p>
               </div>
             </div>
-          </section>
-          <section className="rex-card">
-            <div className="rex-card-head">
-              <h2>Vault storage</h2>
-              <span>Per account</span>
-            </div>
-            <div className="server-ai-grid">
-              <label className="rex-label">
-                Free limit (KiB)
-                <input
-                  className="field"
-                  type="number"
-                  min={1}
-                  max={1048576}
-                  disabled={busy}
-                  value={settings.free_limit_bytes / 1024}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      free_limit_bytes: Math.round(
-                        Number(e.target.value) * 1024,
-                      ),
-                    })
-                  }
-                />
-              </label>
-              <label className="rex-label">
-                Pro limit (KiB)
-                <input
-                  className="field"
-                  type="number"
-                  min={1}
-                  max={1048576}
-                  disabled={busy}
-                  value={settings.pro_limit_bytes / 1024}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      pro_limit_bytes: Math.round(
-                        Number(e.target.value) * 1024,
-                      ),
-                    })
-                  }
-                />
-              </label>
-            </div>
-            <p className="rex-hint">
-              Lowering a limit does not delete existing vault data. Users must
-              reduce their vault before uploading again.
-            </p>
           </section>
           <section className="rex-card">
             <div className="rex-card-head">

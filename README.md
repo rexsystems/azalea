@@ -6,6 +6,18 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows%20%7C%20macOS-informational)
 [![Release](https://img.shields.io/github/v/release/rexsystems/azalea?label=release&color=brightgreen)](https://github.com/rexsystems/azalea/releases/latest)
 
+## Screenshots
+
+Browse the [full screenshot gallery](docs/screenshots/README.md) for desktop pages, terminal tools, settings, account flows, all 12 themes, and the self-hosted web dashboard. Screenshots show the application UI with demo data and simulated connections.
+
+| Home | Hosts |
+| --- | --- |
+| [![Home](docs/screenshots/01-home.png)](docs/screenshots/01-home.png) | [![Hosts](docs/screenshots/02-hosts.png)](docs/screenshots/02-hosts.png) |
+
+| Terminal and SFTP | Web administration |
+| --- | --- |
+| [![Terminal and SFTP](docs/screenshots/25-sftp.png)](docs/screenshots/25-sftp.png) | [![Web administration](docs/screenshots/web-08-admin-users.png)](docs/screenshots/web-08-admin-users.png) |
+
 ## Features
 
 - **SSH terminal** - multi-tab sessions, search, clickable links, local shell
@@ -18,7 +30,7 @@ Open-source SSH client for Linux, Windows, and macOS. Local-first host and key m
 - **Import / export** - Azalea backups, OpenSSH `config`, and JSON host lists
 - **Encrypted sync** (optional) - vault encrypted on your device, stored in Google Drive / OneDrive / Dropbox or your self-hosted server. See [sync](docs/cloud-sync.md)
 - **Self-hosted server** - run your own sync server with Docker, an install script, or the admin CLI. See [self-host](docs/self-host.md)
-- **Web dashboard** - login, account and admin pages for a self-hosted server (`apps/azalea-server-web`). See [web apps](docs/web.md)
+- **Web dashboard** - login, accounts, custom plans and per-user vault quotas for a self-hosted server (`apps/azalea-server-web`). See [web apps](docs/web.md)
 - **Auto-update** - signed updates on Windows, Linux (AppImage) and macOS. See [updater](docs/updater.md)
 - **Themes & settings** - Midnight / Noir, font size, connect screen
 - **Terminal AI** (opt-in) - Ask / Agent, command approval, live output, provider model catalogs and custom model IDs. See [AI setup and behavior](docs/ai.md).

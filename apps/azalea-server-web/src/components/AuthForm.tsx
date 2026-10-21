@@ -47,7 +47,12 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [checkingSession, setCheckingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileInstance | null>(null);
-  const { config, loading: configLoading, error: configError, siteKey } = useAuthConfig();
+  const {
+    config,
+    loading: configLoading,
+    error: configError,
+    siteKey,
+  } = useAuthConfig();
 
   useEffect(() => {
     let cancelled = false;
@@ -66,9 +71,19 @@ export function AuthForm({ mode }: AuthFormProps) {
   }, [router, dest]);
 
   const isSignup = mode === "signup";
+  useEffect(() => {
+    if (isSignup && config?.signup_enabled === false) {
+      router.replace(
+        next ? `/login?next=${encodeURIComponent(next)}` : "/login",
+      );
+    }
+  }, [isSignup, config?.signup_enabled, router, next]);
+
   const captchaRequired = isSignup && siteKey.length > 0;
   const ready =
-    (!isSignup || (!configLoading && !configError && config?.signup_enabled !== false)) && email.trim().length > 3 &&
+    (!isSignup ||
+      (!configLoading && !configError && config?.signup_enabled !== false)) &&
+    email.trim().length > 3 &&
     password.length >= 8 &&
     (!isSignup || password === confirm) &&
     (!captchaRequired || captchaToken !== null);
@@ -95,10 +110,30 @@ export function AuthForm({ mode }: AuthFormProps) {
     }
   };
 
-  if (checkingSession) {
+  if (isSignup && configError) {
+    return (
+      <main className="auth-unavailable">
+        <Logo size={28} />
+        <h1>Registration unavailable</h1>
+        <p role="alert">{configError}</p>
+        <Link href="/login" className="btn btn-primary">
+          Sign in
+        </Link>
+      </main>
+    );
+  }
+
+  if (
+    checkingSession ||
+    (isSignup && (configLoading || config?.signup_enabled !== true))
+  ) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <Logo size={36} className="animate-pulse" style={{ color: "var(--accent)" }} />
+        <Logo
+          size={36}
+          className="animate-pulse"
+          style={{ color: "var(--accent)" }}
+        />
       </main>
     );
   }
@@ -107,7 +142,10 @@ export function AuthForm({ mode }: AuthFormProps) {
     <main className="relative flex min-h-screen items-center justify-center overflow-clip px-6 py-16">
       <div className="hero-glow" aria-hidden />
       <div className="rise relative z-10 w-full max-w-sm">
-        <Link href="/" className="mb-10 flex items-center justify-center gap-2.5">
+        <Link
+          href="/"
+          className="mb-10 flex items-center justify-center gap-2.5"
+        >
           <Logo size={28} style={{ color: "var(--accent)" }} />
           <span
             className="text-xl font-semibold tracking-tight"
@@ -120,7 +158,10 @@ export function AuthForm({ mode }: AuthFormProps) {
         <h1 className="mb-1 text-center text-2xl font-semibold tracking-tight">
           {isSignup ? "Create your account" : "Welcome back"}
         </h1>
-        <p className="mb-8 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+        <p
+          className="mb-8 text-center text-sm"
+          style={{ color: "var(--text-muted)" }}
+        >
           {next
             ? "Sign in to connect the Azalea desktop app."
             : isSignup
@@ -129,8 +170,15 @@ export function AuthForm({ mode }: AuthFormProps) {
         </p>
 
         <form onSubmit={submit} className="space-y-3">
-          {isSignup && config?.signup_enabled === false && <p className="rex-hint">Registration is disabled on this instance. Ask its administrator for an account.</p>}
-          {isSignup && configError && <p className="admin-error">{configError}</p>}
+          {isSignup && config?.signup_enabled === false && (
+            <p className="rex-hint">
+              Registration is disabled on this instance. Ask its administrator
+              for an account.
+            </p>
+          )}
+          {isSignup && configError && (
+            <p className="admin-error">{configError}</p>
+          )}
           <input
             className="field"
             type="email"
@@ -165,7 +213,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           {captchaRequired && (
             <Turnstile
               ref={turnstileRef}
-                siteKey={siteKey}
+              siteKey={siteKey}
               onSuccess={setCaptchaToken}
               onExpire={() => setCaptchaToken(null)}
               options={{ theme: "dark" }}
@@ -176,27 +224,50 @@ export function AuthForm({ mode }: AuthFormProps) {
               {error}
             </p>
           )}
-          <button type="submit" className="btn btn-primary w-full" disabled={!ready || busy}>
+          <button
+            type="submit"
+            className="btn btn-primary w-full"
+            disabled={!ready || busy}
+          >
             {busy ? "Please wait..." : isSignup ? "Create account" : "Sign in"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+        <p
+          className="mt-6 text-center text-sm"
+          style={{ color: "var(--text-muted)" }}
+        >
           {isSignup ? (
             <>
               Already have an account?{" "}
-              <Link href={withNext("/login")} className="underline" style={{ color: "var(--text)" }}>
+              <Link
+                href={withNext("/login")}
+                className="underline"
+                style={{ color: "var(--text)" }}
+              >
                 Sign in
               </Link>
             </>
           ) : (
             <>
-              Need an account?{" "}
-              <Link href={withNext("/signup")} className="underline" style={{ color: "var(--text)" }}>
-                Sign up
-              </Link>
-              {" · "}
-              <Link href="/forgot-password" className="underline" style={{ color: "var(--text)" }}>
+              {config?.signup_enabled === true && (
+                <>
+                  Need an account?{" "}
+                  <Link
+                    href={withNext("/signup")}
+                    className="underline"
+                    style={{ color: "var(--text)" }}
+                  >
+                    Sign up
+                  </Link>
+                  {" · "}
+                </>
+              )}
+              <Link
+                href="/forgot-password"
+                className="underline"
+                style={{ color: "var(--text)" }}
+              >
                 Forgot password
               </Link>
             </>

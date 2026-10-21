@@ -22,7 +22,7 @@ export function useAuthConfig() {
         if (cancelled) return;
         if (err instanceof ApiRequestError && err.status === 404)
           setConfig({
-            signup_enabled: true,
+            signup_enabled: false,
             captcha_provider: TURNSTILE_SITE_KEY ? "turnstile" : "none",
             captcha_site_key: TURNSTILE_SITE_KEY,
           });

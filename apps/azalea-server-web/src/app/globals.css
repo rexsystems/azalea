@@ -496,6 +496,8 @@ select.field option {
 }
 
 .admin-shell {
+  --text-muted: #a6a6a6;
+  --border-strong: #777777;
   margin: 0 auto;
   min-height: 100vh;
   max-width: 78rem;
@@ -779,8 +781,8 @@ select.field option {
   color: var(--text-muted);
   font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .rex-table-card {
@@ -1029,4 +1031,60 @@ select.field option {
   .admin-filters .custom-select {
     width: 10.5rem;
   }
+}
+
+.admin-page-actions, .admin-plan-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .75rem;
+}
+.admin-page-actions { margin: 1.5rem 0; }
+.admin-plan-list { margin: 1.5rem 0; }
+.admin-plan-row, .admin-plan-create {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(6rem, 1fr) auto;
+  align-items: start;
+  gap: 1rem;
+}
+.admin-plan-row { padding: 1.4rem 0; border-top: 1px solid var(--border); }
+.admin-plan-list > .rex-hint { margin-bottom: 1rem; }
+.admin-plan-actions { justify-content: flex-end; padding-top: 1.5rem; }
+.admin-plan-assigned { display: grid; gap: .3rem; padding-top: 1.5rem; font-size: .85rem; }
+.admin-plan-assigned span { color: var(--text-muted); }
+.admin-plan-create > button { align-self: center; }
+.admin-plan-row .rex-hint { font-size: .75rem; font-weight: 400; overflow-wrap: anywhere; }
+.admin-insights { margin-top: 1.5rem; }
+.admin-insights summary { padding: 1rem 0; cursor: pointer; }
+.admin-user-quota { display: grid; gap: .85rem; border-block: 1px solid var(--border); padding: 1.25rem 0; }
+.admin-user-quota legend { padding-top: 1.25rem; font-weight: 600; }
+.admin-quota-choice { display: flex; align-items: center; gap: .65rem; font-size: .85rem; min-height: 44px; }
+.admin-quota-choice input { accent-color: var(--accent); width: 18px; height: 18px; }
+.admin-shell .field, .admin-shell .custom-select-trigger { border-color: #777; }
+.admin-shell :is(button, a, input, summary):focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.admin-shell .btn { min-height: 44px; max-width: 100%; }
+.admin-shell .server-ai-save > p { min-width: 0; }
+.admin-shell .custom-select-trigger { min-height: 44px; }
+.admin-shell .custom-select-label { white-space: normal; overflow-wrap: anywhere; }
+.admin-shell .field, .admin-shell .rex-label { min-width: 0; max-width: 100%; }
+.admin-filters { width: 100%; min-width: 0; }
+.admin-search { min-width: 0; max-width: 100%; }
+.admin-shell .approval-toggle:focus-within { outline: 2px solid #fff; outline-offset: 3px; }
+.admin-shell .rex-drawer .rex-label { color: #a6a6a6; }
+.auth-unavailable { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; padding: 2rem; text-align: center; }
+.auth-unavailable h1 { font-size: 1.5rem; font-weight: 600; }
+@media (max-width: 1000px) {
+  .admin-plan-row, .admin-plan-create { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-plan-actions { justify-content: flex-start; padding-top: 0; }
+  .admin-plan-assigned { padding-top: 0; }
+}
+@media (max-width: 560px) {
+  .admin-plan-row, .admin-plan-create { grid-template-columns: minmax(0, 1fr); }
+  .admin-plan-create > button { justify-self: start; }
+  .admin-page-actions { align-items: flex-start; flex-direction: column; }
+  .admin-create { grid-template-columns: minmax(0, 1fr); }
+  .admin-nav { width: 100%; gap: .5rem; }
+  .admin-nav .btn { min-height: 44px; padding-inline: .7rem; }
+  .admin-shell .rex-card-head { flex-wrap: wrap; }
 }

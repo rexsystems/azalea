@@ -31,7 +31,7 @@ export default function AccountPage() {
       setUser(session.user);
       try {
         const account = await getAccount();
-        setPlan(account.plan);
+        setPlan(account.plan_name || account.plan);
         setVaultBytes(account.vault_bytes);
         setLimitBytes(account.vault_limit_bytes);
         setUser({
@@ -55,7 +55,11 @@ export default function AccountPage() {
   if (!user) {
     return (
       <main className="flex min-h-screen items-center justify-center">
-        <Logo size={36} className="animate-pulse" style={{ color: "var(--accent)" }} />
+        <Logo
+          size={36}
+          className="animate-pulse"
+          style={{ color: "var(--accent)" }}
+        />
       </main>
     );
   }
@@ -73,7 +77,10 @@ export default function AccountPage() {
 
       <div
         className="mt-8 space-y-3 rounded-xl border p-4"
-        style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+        style={{
+          borderColor: "var(--border-subtle)",
+          background: "var(--bg-panel)",
+        }}
       >
         <div className="flex justify-between text-sm">
           <span style={{ color: "var(--text-muted)" }}>Plan</span>
@@ -88,15 +95,13 @@ export default function AccountPage() {
               fontWeight: 550,
             }}
           >
-            {user.role === "admin" ? "Admin" : plan === "pro" ? "Pro" : "Free"}
+            {plan}
           </span>
         </div>
-        {user.role !== "admin" ? (
-          <div className="flex justify-between text-sm">
-            <span style={{ color: "var(--text-muted)" }}>Role</span>
-            <span style={{ color: "var(--text)" }}>{user.role}</span>
-          </div>
-        ) : null}
+        <div className="flex justify-between text-sm">
+          <span style={{ color: "var(--text-muted)" }}>Role</span>
+          <span style={{ color: "var(--text)" }}>{user.role}</span>
+        </div>
         <div className="flex justify-between text-sm">
           <span style={{ color: "var(--text-muted)" }}>Vault</span>
           <span style={{ color: "var(--text)" }}>
@@ -117,7 +122,11 @@ export default function AccountPage() {
         </p>
       )}
 
-      <button className="btn btn-primary mt-6 w-full" disabled={busy} onClick={() => void signOut()}>
+      <button
+        className="btn btn-primary mt-6 w-full"
+        disabled={busy}
+        onClick={() => void signOut()}
+      >
         Sign out
       </button>
     </main>

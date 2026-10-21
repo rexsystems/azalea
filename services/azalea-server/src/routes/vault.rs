@@ -61,6 +61,7 @@ struct AccountResponse {
     plan: String,
     vault_bytes: i64,
     vault_limit_bytes: i64,
+    plan_name: String,
 }
 
 async fn get_vault(
@@ -121,8 +122,31 @@ async fn get_vault(
 async fn put_vault(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
-    Json(body): Json<PutVaultBody>,
+    request: axum::extract::Request,
 ) -> ApiResult<Json<PutVaultResponse>> {
+    let content_type = request
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if content_type != "application/json"
+        && !(content_type.starts_with("application/") && content_type.ends_with("+json"))
+    {
+        return Err(ApiError::BadRequest("Send the vault as JSON.".into()));
+    }
+    let quota = state
+        .db
+        .with_conn(|conn| crate::plans::user_quota(conn, &claims.sub))?;
+    let bytes = axum::body::to_bytes(request.into_body(), quota as usize + 65536)
+        .await
+        .map_err(|_| {
+            ApiError::PayloadTooLarge("Vault request exceeds this account's quota.".into())
+        })?;
+    let body: PutVaultBody = serde_json::from_slice(&bytes)
+        .map_err(|_| ApiError::BadRequest("Invalid vault JSON.".into()))?;
     let expected = body.expected_version.unwrap_or(0);
     let size = (body.kdf_salt.len()
         + body.verifier.len()
@@ -133,88 +157,34 @@ async fn put_vault(
             .unwrap_or(0)
         + body.ciphertext.len()) as i64;
 
-    let (plan, free_limit, pro_limit): (String, i64, i64) = state.db.with_conn(|conn| {
-        let plan: String = conn.query_row(
-            "SELECT plan FROM users WHERE id = ?1",
-            params![claims.sub],
-            |r| r.get(0),
-        )?;
-        let (free_limit, pro_limit): (i64, i64) = conn.query_row(
-            "SELECT free_limit_bytes, pro_limit_bytes FROM settings WHERE id = 1",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )?;
-        Ok((plan, free_limit, pro_limit))
-    })?;
-
-    let limit = if plan == "pro" { pro_limit } else { free_limit };
-    if size > limit {
-        return Err(ApiError::PayloadTooLarge(format!(
-            "vault exceeds limit ({size} > {limit} bytes)"
-        )));
-    }
-
-    let now = now_rfc3339();
-    let current: Option<i64> = state.db.with_conn(|conn| {
-        Ok(conn
-            .query_row(
-                "SELECT version FROM vaults WHERE user_id = ?1",
-                params![claims.sub],
-                |r| r.get(0),
-            )
-            .ok())
-    })?;
-
-    match current {
-        None => {
-            if expected != 0 {
-                return Err(ApiError::Conflict("version_conflict".into()));
-            }
-            state.db.with_conn(|conn| {
-                conn.execute(
-                    "INSERT INTO vaults (user_id, version, kdf_salt, verifier, recovery_envelope, ciphertext, updated_at)
-                     VALUES (?1, 1, ?2, ?3, ?4, ?5, ?6)",
-                    params![
-                        claims.sub,
-                        body.kdf_salt,
-                        body.verifier,
-                        body.recovery_envelope,
-                        body.ciphertext,
-                        now
-                    ],
-                )?;
-                Ok(())
-            })?;
-            Ok(Json(PutVaultResponse { version: 1 }))
+    let result = state.db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        let limit = crate::plans::user_quota(&tx, &claims.sub)?;
+        if size > limit {
+            return Ok(Err(ApiError::PayloadTooLarge(format!(
+                "vault exceeds limit ({size} > {limit} bytes)"
+            ))));
         }
-        Some(v) => {
-            if v != expected {
-                return Err(ApiError::Conflict(format!("version_conflict current={v}")));
-            }
-            let new_version = v + 1;
-            state.db.with_conn(|conn| {
-                conn.execute(
-                    "UPDATE vaults SET version = ?2, kdf_salt = ?3, verifier = ?4,
-                     recovery_envelope = ?5, ciphertext = ?6, updated_at = ?7
-                     WHERE user_id = ?1 AND version = ?8",
-                    params![
-                        claims.sub,
-                        new_version,
-                        body.kdf_salt,
-                        body.verifier,
-                        body.recovery_envelope,
-                        body.ciphertext,
-                        now,
-                        expected
-                    ],
-                )?;
-                Ok(())
-            })?;
-            Ok(Json(PutVaultResponse {
-                version: new_version,
-            }))
+        use rusqlite::OptionalExtension;
+        let current: Option<i64> = tx.query_row(
+            "SELECT version FROM vaults WHERE user_id=?1", params![claims.sub], |r| r.get(0),
+        ).optional()?;
+        if current.unwrap_or(0) != expected {
+            return Ok(Err(ApiError::Conflict("version_conflict".into())));
         }
-    }
+        let version = current.unwrap_or(0) + 1;
+        tx.execute(
+            "INSERT INTO vaults(user_id,version,kdf_salt,verifier,recovery_envelope,ciphertext,updated_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7)
+             ON CONFLICT(user_id) DO UPDATE SET version=excluded.version,kdf_salt=excluded.kdf_salt,
+             verifier=excluded.verifier,recovery_envelope=excluded.recovery_envelope,
+             ciphertext=excluded.ciphertext,updated_at=excluded.updated_at",
+            params![claims.sub,version,body.kdf_salt,body.verifier,body.recovery_envelope,body.ciphertext,now_rfc3339()],
+        )?;
+        tx.commit()?;
+        Ok(Ok(PutVaultResponse { version }))
+    })??;
+    Ok(Json(result))
 }
 
 async fn delete_vault(
@@ -232,38 +202,14 @@ async fn get_account(
     State(state): State<Arc<AppState>>,
     AuthUser(claims): AuthUser,
 ) -> ApiResult<Json<AccountResponse>> {
-    let (email, role, plan): (String, String, String) = state.db.with_conn(|conn| {
+    let account = state.db.with_conn(|conn| {
         Ok(conn.query_row(
-            "SELECT email, role, plan FROM users WHERE id = ?1",
+            "SELECT u.email,u.role,u.plan,p.name,COALESCE(u.quota_override_bytes,p.limit_bytes),
+                    COALESCE(length(v.kdf_salt)+length(v.verifier)+length(ifnull(v.recovery_envelope,''))+length(v.ciphertext),0)
+             FROM users u JOIN plans p ON p.id=u.plan LEFT JOIN vaults v ON v.user_id=u.id WHERE u.id=?1",
             params![claims.sub],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok(AccountResponse { email:r.get(0)?,role:r.get(1)?,plan:r.get(2)?,plan_name:r.get(3)?,vault_limit_bytes:r.get(4)?,vault_bytes:r.get(5)? }),
         )?)
     })?;
-
-    let vault_bytes: i64 = state.db.with_conn(|conn| {
-        Ok(conn
-            .query_row(
-                "SELECT length(kdf_salt)+length(verifier)+length(ifnull(recovery_envelope,''))+length(ciphertext)
-                 FROM vaults WHERE user_id = ?1",
-                params![claims.sub],
-                |r| r.get(0),
-            )
-            .unwrap_or(0))
-    })?;
-
-    let (free_limit, pro_limit): (i64, i64) = state.db.with_conn(|conn| {
-        Ok(conn.query_row(
-            "SELECT free_limit_bytes, pro_limit_bytes FROM settings WHERE id = 1",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )?)
-    })?;
-
-    Ok(Json(AccountResponse {
-        email,
-        role,
-        plan: plan.clone(),
-        vault_bytes,
-        vault_limit_bytes: if plan == "pro" { pro_limit } else { free_limit },
-    }))
+    Ok(Json(account))
 }

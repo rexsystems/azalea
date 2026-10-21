@@ -7,7 +7,6 @@ import {
   createAdminUser,
   getAdminSettings,
   listAdminUsers,
-  patchAdminSettings,
   patchAdminUser,
 } from "@/lib/admin-api";
 import {
@@ -28,7 +27,11 @@ import {
   type StatusFilter,
 } from "@/lib/admin-users";
 import { AdminCharts } from "@/components/admin/AdminCharts";
-import { AdminDenied, AdminLayout, AdminLoading } from "@/components/admin/AdminLayout";
+import {
+  AdminDenied,
+  AdminLayout,
+  AdminLoading,
+} from "@/components/admin/AdminLayout";
 import { EditUserDrawer } from "@/components/admin/EditUserDrawer";
 import { CustomSelect } from "@/components/CustomSelect";
 
@@ -49,16 +52,19 @@ export default function AdminPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [newRole, setNewRole] = useState<"user" | "admin">("user");
-  const [newPlan, setNewPlan] = useState<"free" | "pro">("free");
-  const [instanceName, setInstanceName] = useState("");
+  const [newPlan, setNewPlan] = useState("free");
+  const [showCreate, setShowCreate] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
   const session = typeof window === "undefined" ? null : getStoredSession();
 
   const reload = async () => {
-    const [nextUsers, nextSettings] = await Promise.all([listAdminUsers(), getAdminSettings()]);
+    const [nextUsers, nextSettings] = await Promise.all([
+      listAdminUsers(),
+      getAdminSettings(),
+    ]);
     setUsers(nextUsers);
     setSettings(nextSettings);
-    setInstanceName(nextSettings.instance_name);
   };
 
   useEffect(() => {
@@ -85,7 +91,8 @@ export default function AdminPage() {
   }, [router]);
 
   const filtered = useMemo(
-    () => sortAdminUsers(filterAdminUsers(users, query, role, plan, status), sort),
+    () =>
+      sortAdminUsers(filterAdminUsers(users, query, role, plan, status), sort),
     [users, query, role, plan, status, sort],
   );
 
@@ -93,7 +100,13 @@ export default function AdminPage() {
     const active = users.filter((user) => !user.disabled).length;
     const admins = users.filter((user) => user.role === "admin").length;
     const used = totalVaultBytes(users);
-    return { total: users.length, active, disabled: users.length - active, admins, used };
+    return {
+      total: users.length,
+      active,
+      disabled: users.length - active,
+      admins,
+      used,
+    };
   }, [users]);
 
   const run = async (fn: () => Promise<void>) => {
@@ -113,10 +126,42 @@ export default function AdminPage() {
 
   return (
     <AdminLayout
-      title={settings?.instance_name || "Admin"}
-      subtitle={`${stats.total} users · ${fmtAdminBytes(stats.used)} vault used`}
+      title="Users"
+      subtitle={`Manage access and individual quotas on ${settings?.instance_name || "this instance"}.`}
     >
-      {error && <p className="admin-error">{error}</p>}
+      {error && (
+        <p className="admin-error" role="alert">
+          {error}
+          {!editing && (
+            <button
+              className="btn btn-ghost"
+              disabled={busy}
+              onClick={() => void run(reload)}
+            >
+              Reload users
+            </button>
+          )}
+        </p>
+      )}
+      {message && (
+        <p className="admin-success" role="status">
+          {message}
+        </p>
+      )}
+      <div className="admin-page-actions">
+        <p className="rex-hint">
+          Assign shared plans or override storage for a specific account.
+        </p>
+        <button
+          className="btn btn-primary"
+          aria-expanded={showCreate}
+          aria-controls="create-user"
+          disabled={busy || !settings}
+          onClick={() => setShowCreate(!showCreate)}
+        >
+          {showCreate ? "Cancel new user" : "Add user"}
+        </button>
+      </div>
 
       <section className="admin-stats">
         <article>
@@ -141,68 +186,37 @@ export default function AdminPage() {
         </article>
       </section>
 
-      <AdminCharts users={users} />
-
-      <div className="admin-split">
-        <section className="rex-card">
-          <div className="rex-card-head">
-            <h2>Instance</h2>
-            <span>Signup and limits</span>
-          </div>
-          <div className="admin-instance">
-            <label className="rex-label">
-              Name
-              <input
-                className="field"
-                value={instanceName}
-                onChange={(event) => setInstanceName(event.target.value)}
-              />
-            </label>
-            <div className="admin-instance-actions">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={busy || !settings}
-                onClick={() =>
-                  void run(async () => {
-                    const next = await patchAdminSettings({
-                      signup_enabled: !settings?.signup_enabled,
-                    });
-                    setSettings(next);
-                  })
-                }
-              >
-                Signup: {settings?.signup_enabled ? "On" : "Off"}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={busy || !instanceName.trim()}
-                onClick={() =>
-                  void run(async () => {
-                    const next = await patchAdminSettings({ instance_name: instanceName.trim() });
-                    setSettings(next);
-                  })
-                }
-              >
-                Save name
-              </button>
-            </div>
-            <p className="rex-hint">
-              Free {fmtAdminBytes(settings?.free_limit_bytes ?? 0)} · Pro{" "}
-              {fmtAdminBytes(settings?.pro_limit_bytes ?? 0)}
-            </p>
-          </div>
-        </section>
-
-        <section className="rex-card">
+      {showCreate && (
+        <section className="rex-card" id="create-user">
           <div className="rex-card-head">
             <h2>Create user</h2>
             <span>Email and password</span>
           </div>
-          <div className="admin-create">
+          <form
+            className="admin-create"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void run(async () => {
+                await createAdminUser({
+                  email,
+                  password,
+                  role: newRole,
+                  plan: newPlan,
+                });
+                setEmail("");
+                setPassword("");
+                setShowCreate(false);
+                setMessage("User created.");
+                await reload();
+              });
+            }}
+          >
             <input
               className="field"
+              aria-label="New user email"
+              disabled={busy}
+              type="email"
+              required
               placeholder="Email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
@@ -212,12 +226,17 @@ export default function AdminPage() {
               type="password"
               autoComplete="new-password"
               spellCheck={false}
+              aria-label="New user password"
+              disabled={busy}
+              minLength={8}
+              required
               placeholder="Password (8+)"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
             <CustomSelect
               ariaLabel="New user role"
+              disabled={busy}
               value={newRole}
               onChange={setNewRole}
               options={[
@@ -227,36 +246,20 @@ export default function AdminPage() {
             />
             <CustomSelect
               ariaLabel="New user plan"
+              disabled={busy}
               value={newPlan}
               onChange={setNewPlan}
-              options={[
-                { value: "free", label: "Free" },
-                { value: "pro", label: "Pro" },
-              ]}
+              options={(settings?.plans ?? []).map((plan) => ({
+                value: plan.id,
+                label: plan.name,
+              }))}
             />
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  await createAdminUser({
-                    email,
-                    password,
-                    role: newRole,
-                    plan: newPlan,
-                  });
-                  setEmail("");
-                  setPassword("");
-                  await reload();
-                })
-              }
-            >
-              Create
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? "Creating…" : "Create user"}
             </button>
-          </div>
+          </form>
         </section>
-      </div>
+      )}
 
       <section className="rex-card rex-table-card">
         <div className="rex-card-head rex-table-toolbar">
@@ -271,6 +274,7 @@ export default function AdminPage() {
             <input
               className="field admin-search"
               placeholder="Filter email, id, plan..."
+              aria-label="Filter users"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -290,8 +294,10 @@ export default function AdminPage() {
               onChange={setPlan}
               options={[
                 { value: "all", label: "All plans" },
-                { value: "free", label: "Free" },
-                { value: "pro", label: "Pro" },
+                ...(settings?.plans ?? []).map((plan) => ({
+                  value: plan.id,
+                  label: plan.name,
+                })),
               ]}
             />
             <CustomSelect
@@ -346,21 +352,29 @@ export default function AdminPage() {
                       <td>
                         <div className="rex-user-cell">
                           <strong>{user.email}</strong>
-                          <span className="rex-mono">{user.id.slice(0, 8)}</span>
+                          <span className="rex-mono">
+                            {user.id.slice(0, 8)}
+                          </span>
                         </div>
                       </td>
                       <td>
-                        <span className={`rex-pill ${user.role === "admin" ? "danger" : ""}`}>
+                        <span
+                          className={`rex-pill ${user.role === "admin" ? "danger" : ""}`}
+                        >
                           {user.role}
                         </span>
                       </td>
                       <td>
-                        <span className={`rex-pill ${user.plan === "pro" ? "accent" : ""}`}>
-                          {user.plan}
+                        <span
+                          className={`rex-pill ${user.plan === "pro" ? "accent" : ""}`}
+                        >
+                          {user.plan_name || user.plan}
                         </span>
                       </td>
                       <td>
-                        <span className={`rex-pill ${user.disabled ? "warn" : "ok"}`}>
+                        <span
+                          className={`rex-pill ${user.disabled ? "warn" : "ok"}`}
+                        >
                           {user.disabled ? "Disabled" : "Active"}
                         </span>
                       </td>
@@ -370,23 +384,33 @@ export default function AdminPage() {
                             className="rex-meter-fill"
                             style={{
                               width: `${Math.max(user.vault_bytes ? 4 : 0, pct)}%`,
-                              background: pct >= 90 ? "var(--danger)" : "var(--accent)",
+                              background:
+                                pct >= 90 ? "var(--danger)" : "var(--accent)",
                             }}
                           />
                         </div>
                         <span>
-                          {fmtAdminBytes(user.vault_bytes)} · {pct}%
+                          {fmtAdminBytes(user.vault_bytes)} /{" "}
+                          {fmtAdminBytes(limit)}
+                          {user.quota_override_bytes != null ? " · Custom" : ""}
                         </span>
                       </td>
-                      <td title={fmtAdminDateTime(user.created_at)}>{fmtAdminDate(user.created_at)}</td>
+                      <td title={fmtAdminDateTime(user.created_at)}>
+                        {fmtAdminDate(user.created_at)}
+                      </td>
                       <td title={fmtAdminDateTime(user.last_sign_in_at)}>
-                        {user.last_sign_in_at ? fmtAdminDate(user.last_sign_in_at) : "Never"}
+                        {user.last_sign_in_at
+                          ? fmtAdminDate(user.last_sign_in_at)
+                          : "Never"}
                       </td>
                       <td>
                         <button
                           type="button"
                           className="btn btn-ghost px-3 py-1.5 text-xs"
-                          onClick={() => setEditing(user)}
+                          onClick={() => {
+                            setError(null);
+                            setEditing(user);
+                          }}
                         >
                           Edit
                         </button>
@@ -400,10 +424,16 @@ export default function AdminPage() {
         </div>
       </section>
 
+      <details className="admin-insights">
+        <summary>Storage & signup trends</summary>
+        <AdminCharts users={users} />
+      </details>
+
       <EditUserDrawer
         user={editing}
         settings={settings}
         busy={busy}
+        error={error}
         selfId={session?.user.id}
         onClose={() => setEditing(null)}
         onSave={async (input) => {
@@ -412,6 +442,7 @@ export default function AdminPage() {
             await patchAdminUser(editing.id, input);
             await reload();
             setEditing(null);
+            setMessage("User saved.");
           });
         }}
       />

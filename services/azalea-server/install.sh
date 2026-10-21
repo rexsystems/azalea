@@ -462,6 +462,8 @@ server {
   listen 80;
   server_name ${domain%%:*};
   location / {
+    client_max_body_size 1025m;
+    proxy_request_buffering off;
     proxy_pass http://127.0.0.1:${proxy_host_port};
     proxy_http_version 1.1;
     proxy_buffering off;

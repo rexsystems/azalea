@@ -1061,6 +1061,14 @@ function App() {
     }
   }, [navPage, viewingTerminal, drawerOpen, drawerPage]);
 
+  // Hosts belong to the active profile; keep the edit/add drawer from showing
+  // a host that no longer exists after an account switch.
+  useEffect(() => {
+    if (!drawerOpen) return;
+    closeDrawer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on profile id change
+  }, [activeAccount?.id]);
+
   const requestCloseTab = (tabId: string) => {
     const tab = tabs.find((t) => t.id === tabId);
     if (!tab) return;

@@ -110,7 +110,7 @@ function StoragePanel({
         <span className="text-xs font-medium" style={{ color: "var(--text)" }}>
           Vault storage
         </span>
-        <PlanBadge plan={status.plan} role={status.role} />
+        <PlanBadge plan={status.plan} planName={status.plan_name} role={status.role} />
       </div>
       <div
         className="mt-2 h-1.5 overflow-hidden rounded-full"
@@ -134,7 +134,7 @@ function StoragePanel({
       )}
       {status.storage_blocked && (
         <p className="text-xs" style={{ color: "#fbbf24" }}>
-          Your vault is too large for the {status.plan === "pro" ? "Pro" : "Free"} plan. Remove
+          Your vault is too large for the {status.plan_name || status.plan} plan. Remove
           hosts or keys locally, then sync again.
         </p>
       )}
@@ -365,7 +365,7 @@ export function SyncSection({
           ) : null}
         </div>
         {status?.logged_in && status.plan !== "personal" ? (
-          <PlanBadge plan={status.plan} role={status.role} size="md" />
+          <PlanBadge plan={status.plan} planName={status.plan_name} role={status.role} size="md" />
         ) : null}
       </div>
     </div>
@@ -475,7 +475,7 @@ export function SyncSection({
               {status.email ? maskEmail(status.email) : "Signed in"}
             </div>
             {status.plan !== "personal" ? (
-              <PlanBadge plan={status.plan} role={status.role} size="md" />
+              <PlanBadge plan={status.plan} planName={status.plan_name} role={status.role} size="md" />
             ) : null}
           </div>
           <div className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -691,7 +691,7 @@ export function SyncSection({
               Account &amp; Sync
             </h3>
             {status?.logged_in && status.plan !== "personal" && (
-              <PlanBadge plan={status.plan} role={status.role} size="md" />
+              <PlanBadge plan={status.plan} planName={status.plan_name} role={status.role} size="md" />
             )}
           </div>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
