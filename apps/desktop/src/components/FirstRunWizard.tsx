@@ -125,7 +125,7 @@ export function FirstRunWizard({
 
   const subtitle =
     step === "choose"
-      ? "Choose where encrypted sync lives — or stay local."
+      ? "Choose where encrypted sync lives - or stay local."
       : step === "selfhost"
         ? "URL of your azalea-server."
         : `Sign in to ${instanceName ?? "your server"}.`;

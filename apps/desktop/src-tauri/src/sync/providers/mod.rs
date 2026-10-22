@@ -61,8 +61,8 @@ impl PersonalProvider {
             .or_else(|| bake_key.map(str::to_string).filter(|v| !v.trim().is_empty()))
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "{} is not configured. Set it in azalea.public.env or the environment to enable {} sign-in.",
-                    env_key,
+                    "{} sign-in is unavailable in this build because the app's OAuth client ID is missing. Your local profile has not changed. Use a build with {} sign-in configured.",
+                    self.label(),
                     self.label()
                 )
             })

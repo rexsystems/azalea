@@ -84,7 +84,7 @@ fn looks_like_private_key(contents: &str) -> bool {
             .is_some_and(|l| l.starts_with("PuTTY-User-Key-File-"))
 }
 
-/// Cheap encryption check — no crypto parse. Used for ~/.ssh scans so the
+/// Cheap encryption check - no crypto parse. Used for ~/.ssh scans so the
 /// Import tab stays responsive when there are many key files.
 fn private_key_looks_encrypted(contents: &str) -> bool {
     let lower = contents.to_ascii_lowercase();
@@ -337,7 +337,7 @@ fn probe_key_candidate(
     if skip_ssh_filename(file_name) {
         return None;
     }
-    // Only read the start — enough for PEM/PPK headers. Avoids parsing every
+    // Only read the start - enough for PEM/PPK headers. Avoids parsing every
     // private key (slow RSA/crypto) when opening the Import tab.
     let mut file = fs::File::open(path).ok()?;
     let mut buf = vec![0u8; 8 * 1024];

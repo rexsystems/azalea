@@ -146,7 +146,7 @@ export async function maybeTelemetryPing(appVersion: string): Promise<void> {
     if (!res.ok) return;
     localStorage.setItem(LAST_PING_DAY_KEY, day);
   } catch {
-    /* offline / blocked — try again next launch */
+    /* offline / blocked - try again next launch */
   }
 }
 

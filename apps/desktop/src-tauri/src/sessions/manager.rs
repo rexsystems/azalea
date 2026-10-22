@@ -1398,7 +1398,7 @@ pub(super) async fn authenticate<H: client::Handler>(
         match load_key_pair(key_id) {
             Ok(key_pair) => {
                 // Prefer rsa-sha2-* when the server advertises it (RFC 8332).
-                // When EXT_INFO is absent, still try sha2-512 — modern OpenSSH
+                // When EXT_INFO is absent, still try sha2-512 - modern OpenSSH
                 // accepts it even without server-sig-algs.
                 let hash_alg = match session.best_supported_rsa_hash().await? {
                     Some(alg) => alg,

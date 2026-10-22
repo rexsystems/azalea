@@ -116,7 +116,7 @@ fn format_import_error(err: russh::keys::Error, had_passphrase: bool) -> anyhow:
             "Invalid key file: base64 decoding failed. The file may be corrupted or use an unsupported encoding."
         ),
         russh::keys::Error::CouldNotReadKey => anyhow::anyhow!(
-            "Could not read key. Supported: OpenSSH, PKCS#1, PKCS#8, SEC1 EC, PuTTY PPK — Ed25519, RSA, ECDSA (P-256/P-384/P-521)."
+            "Could not read key. Supported: OpenSSH, PKCS#1, PKCS#8, SEC1 EC, PuTTY PPK - Ed25519, RSA, ECDSA (P-256/P-384/P-521)."
         ),
         other => anyhow::anyhow!("{other}"),
     }
@@ -408,7 +408,7 @@ fn parse_via_pkcs8_pem(normalized: &str, passphrase: Option<&str>) -> anyhow::Re
 pub(crate) fn parse_private_key(pem: &str, passphrase: Option<&str>) -> anyhow::Result<PrivateKey> {
     let passphrase = passphrase.filter(|p| !p.is_empty());
 
-    // 0) PuTTY PPK (must run before PEM normalization — not PEM).
+    // 0) PuTTY PPK (must run before PEM normalization - not PEM).
     if crate::keys::ppk::looks_like_ppk(pem) {
         return crate::keys::ppk::parse_ppk(pem, passphrase);
     }
@@ -547,7 +547,7 @@ fn store_private_key_material(
     original_pem: &str,
 ) -> anyhow::Result<()> {
     // Always persist an *unencrypted* OpenSSH private key. Falling back to the
-    // original PEM is only safe when that PEM is already plaintext — never when
+    // original PEM is only safe when that PEM is already plaintext - never when
     // it was passphrase-protected (load_key_pair has no passphrase).
     if let Ok(openssh) = private_key.to_openssh(LineEnding::LF) {
         let openssh = openssh.to_string();
@@ -583,7 +583,7 @@ fn store_private_key_material(
         );
     }
     // Prefer storing a verified OpenSSH rewrite of PKCS#1/PKCS#8/PPK when the
-    // direct to_openssh path above failed the round-trip — re-parse normalized
+    // direct to_openssh path above failed the round-trip - re-parse normalized
     // plaintext and try one more encode before keeping the original bytes.
     if let Ok(parsed) = parse_private_key(&normalized, None) {
         if let Ok(openssh) = parsed.to_openssh(LineEnding::LF) {
@@ -646,7 +646,7 @@ pub fn import_private_key_with_id(
         other => anyhow::bail!("Unsupported key algorithm: {other}"),
     }
 
-    // Same signing path russh uses for SSH auth — reject keys that cannot sign.
+    // Same signing path russh uses for SSH auth - reject keys that cannot sign.
     prove_key_can_sign(&private_key, b"azalea-import-check")
         .map_err(|e| anyhow::anyhow!("Imported key failed sign check: {e}"))?;
 

@@ -1247,7 +1247,7 @@ pub async fn unlock(
         anyhow::bail!("Passphrase or recovery key required.");
     };
 
-    // Credentials already opened the verifier — ciphertext failure is AAD /
+    // Credentials already opened the verifier - ciphertext failure is AAD /
     // format mismatch (e.g. vault written on another device with a local
     // account UUID), not a wrong passphrase/recovery key.
     decrypt_vault_payload(state, &vault_key, &vault).map_err(|_| {
@@ -1268,7 +1268,7 @@ fn require_account_id(state: &SyncState) -> anyhow::Result<String> {
 }
 
 /// Server auth user id used as the canonical AAD bound identity. Must not
-/// fall back to empty — that would make AAD trivially predictable.
+/// fall back to empty - that would make AAD trivially predictable.
 fn require_user_id(state: &SyncState) -> anyhow::Result<String> {
     state
         .user_id

@@ -156,7 +156,7 @@ export default function UpdatesPage() {
             {queued
               ? "Waiting for the host manager"
               : status?.phase.replaceAll("_", " ")}{" "}
-            — this page reconnects after restart.
+            - this page reconnects after restart.
           </p>
         )}
         <div className="server-ai-toolbar">

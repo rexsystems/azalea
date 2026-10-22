@@ -1,13 +1,13 @@
 # Azalea sync
 
 Zero-knowledge sync of hosts, groups, keys, and settings across devices.
-Ciphertext only leaves the device — never the master passphrase or vault key.
+Ciphertext only leaves the device - never the master passphrase or vault key.
 
 ## Backends
 
 | Kind | Storage | Auth |
 |---|---|---|
-| **Local** | This device only | — |
+| **Local** | This device only | - |
 | **Google Drive / OneDrive / Dropbox** | App folder in the user’s own cloud | OAuth (PKCE), no API keys from the user |
 | **Self-hosted** | Your [`azalea-server`](../services/azalea-server/) | Email/password or browser PKCE |
 

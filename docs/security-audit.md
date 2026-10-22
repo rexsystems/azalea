@@ -35,7 +35,7 @@ remote network adversary; they cannot make repeated timing measurements of
 local disk-level operations. No fixed release upstream yet. We will pick up the
 fix when the `rsa` crate publishes one.
 
-**Closed — RUSTSEC-2026-015{3,4} (russh unbounded allocations).** Desktop now
+**Closed - RUSTSEC-2026-015{3,4} (russh unbounded allocations).** Desktop now
 depends on `russh` 0.63.3 / `russh-sftp` 3.0.1 from crates.io (keys live under
 `russh::keys`; the local `patches/russh` path patch was removed). Both advisories
 are fixed in russh ≥ 0.60.3. Strict KEX/cipher/MAC preferences remain in

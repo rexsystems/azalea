@@ -65,7 +65,7 @@ pub async fn connect_selfhost(
         return Err("Email and password are required".into());
     }
 
-    // Authenticate first — do not switch profiles until login succeeds.
+    // Authenticate first - do not switch profiles until login succeeds.
     let session = sync::password_login_at_url(&base_url, &email, &input.password)
         .await
         .map_err(|e| e.to_string())?;

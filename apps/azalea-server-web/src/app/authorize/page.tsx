@@ -252,7 +252,7 @@ function AuthorizeInner() {
                 className="mt-2 text-sm"
                 style={{ color: "var(--text-muted)" }}
               >
-                Return to the Azalea desktop app — you can close this tab.
+                Return to the Azalea desktop app - you can close this tab.
               </p>
             </div>
           </div>

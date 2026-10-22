@@ -827,7 +827,7 @@ export function AiPanel({
       nextObservation = await runActionsObserving(actions);
       setPendingApprove([]);
     }
-    // Soft checkpoint — not a failure. User can hit Continue.
+    // Soft checkpoint - not a failure. User can hit Continue.
     setStepLimitPaused(true);
     workPhase("stopped");
     return "done";

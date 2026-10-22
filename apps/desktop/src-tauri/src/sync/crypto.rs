@@ -188,7 +188,7 @@ pub fn vault_hash(json: &str) -> String {
 
 /// Build the AAD tag bound to a specific vault snapshot.
 ///
-/// `bound_id` is an opaque identity string — callers must pass the **server
+/// `bound_id` is an opaque identity string - callers must pass the **server
 /// auth user id** for new writes so the same vault unlocks on every device.
 /// Older vaults may still be bound to a local desktop account UUID; decrypt
 /// paths try both. Also binds vault version and kdf_salt so a malicious
