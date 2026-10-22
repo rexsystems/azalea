@@ -31,6 +31,9 @@ permissions:
 # and signer steps that actually need it, so a compromised curl or npm script
 # in an unrelated step can't read it out of the environment.
 env:
+  AZALEA_GOOGLE_CLIENT_ID: ${{ vars.AZALEA_GOOGLE_CLIENT_ID }}
+  AZALEA_MICROSOFT_CLIENT_ID: ${{ vars.AZALEA_MICROSOFT_CLIENT_ID }}
+  AZALEA_DROPBOX_CLIENT_ID: ${{ vars.AZALEA_DROPBOX_CLIENT_ID }}
   # Public R2 custom domain; used when writing updater fragment download URLs.
   UPDATER_DOWNLOAD_BASE_URL: https://updates.azalea.rexsystems.me
   R2_BUCKET: azalea-updates
@@ -103,6 +106,7 @@ jobs:
 
       - name: Build Azalea (Windows)
         env:
+          AZALEA_GOOGLE_CLIENT_SECRET: ${{ secrets.AZALEA_GOOGLE_CLIENT_SECRET }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run build:ci
@@ -240,6 +244,7 @@ jobs:
 
       - name: Build Azalea (deb + rpm + AppImage)
         env:
+          AZALEA_GOOGLE_CLIENT_SECRET: ${{ secrets.AZALEA_GOOGLE_CLIENT_SECRET }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run build:linux:ci
@@ -355,6 +360,7 @@ jobs:
 
       - name: Build Azalea (macOS .app)
         env:
+          AZALEA_GOOGLE_CLIENT_SECRET: ${{ secrets.AZALEA_GOOGLE_CLIENT_SECRET }}
           CI: "true"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}

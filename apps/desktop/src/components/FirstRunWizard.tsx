@@ -153,8 +153,8 @@ export function FirstRunWizard({
               <Choice
                 icon={<ProviderIcon provider="gdrive" size={20} />}
                 title="Google Drive"
-                description="Sign in. Vault stays encrypted in your Drive."
-                disabled={busy}
+                description="Temporarily unavailable"
+                disabled
                 onClick={() => void finishPersonal("gdrive")}
               />
               <Choice

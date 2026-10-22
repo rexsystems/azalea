@@ -40,6 +40,22 @@ API for self-host: [`sync-api-v1.md`](./sync-api-v1.md). Deploy: [`self-host.md`
 - Client IDs are baked into the app (`AZALEA_GOOGLE_CLIENT_ID`,
   `AZALEA_MICROSOFT_CLIENT_ID`, `AZALEA_DROPBOX_CLIENT_ID`). Users never paste
   secrets.
+- Release builds use the public IDs in `apps/desktop/src-tauri/azalea.public.env`.
+  GitHub Actions repository variables with the same names can override them.
+  Azalea maintainers register the provider applications once; end users only
+  sign in and approve access. Google Drive is temporarily disabled in the UI
+  and provider dispatch, including for existing profiles. Its client ID is
+  commented out. Microsoft and Dropbox registrations still need to be supplied.
+- Google Desktop clients may also require `AZALEA_GOOGLE_CLIENT_SECRET` at the
+  token endpoint. Configure the value from that Desktop client's downloaded JSON
+  as the GitHub Actions secret `AZALEA_GOOGLE_CLIENT_SECRET` for release builds,
+  or in the ignored local `.env` for development. Keep it out of committed
+  files. Both code exchange and token refresh
+  send it when configured. This distributed desktop credential is not a
+  confidential Web client secret; it remains extractable from the distributed
+  application. PKCE remains enabled.
+- Connecting a provider creates a separate profile. Copying hosts and keys from
+  the previous profile requires the user's confirmation.
 - Vault file: `azalea-vault.json` in the provider app folder / appdata.
 - Conflicts use the same keep-local / keep-remote UX as self-host (optimistic
   version in the JSON; ETag / rev when the provider supports it).

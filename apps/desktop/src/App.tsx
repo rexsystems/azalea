@@ -1321,16 +1321,6 @@ function App() {
       const previousId = activeAccount?.id ?? null;
       await closeAllSessions();
       const result = await api.connectPersonalCloud(provider);
-      const copyLocalData = previousId !== null &&
-        activeAccount?.kind === "offline" && result.vault_exists === false;
-      let copyError: unknown = null;
-      if (copyLocalData) {
-        try {
-          await api.copyAccountData(previousId, false);
-        } catch (err) {
-          copyError = err;
-        }
-      }
       setActiveAccount(result.account);
       await refreshAccounts();
       await Promise.all([
@@ -1339,23 +1329,18 @@ function App() {
         refreshKeys(),
         refreshSyncStatus(),
       ]);
-      setStatusMessage(copyError
-        ? `Connected to ${result.account.label}, but copying local data failed: ${String(copyError)}. Your data is still in the previous local profile.`
-        : `Connected to ${result.account.label}.${copyLocalData ? " Local hosts and keys copied to this profile." : " Your previous profile is available in the account menu."}`);
-      if (!copyError) {
-        openVaultDialog({
-          label: result.account.label,
-          email: result.email ?? "",
-          vaultExists: result.vault_exists,
-        });
-      }
-      if (previousId && previousId !== result.account.id && (!copyLocalData || copyError)) {
+      setStatusMessage(`Connected to ${result.account.label}. Your previous profile is available in the account menu.`);
+      openVaultDialog({
+        label: result.account.label,
+        email: result.email ?? "",
+        vaultExists: result.vault_exists,
+      });
+      if (previousId && previousId !== result.account.id) {
         setPendingCopyFromId(previousId);
       }
     },
     [
       activeAccount?.id,
-      activeAccount?.kind,
       closeAllSessions,
       openVaultDialog,
       refreshAccounts,

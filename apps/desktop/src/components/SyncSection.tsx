@@ -388,12 +388,23 @@ export function SyncSection({
       );
     }
 
+    if (accountKind === "gdrive") {
+      return (
+        <div className="space-y-3">
+          {profileCard}
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+            Google Drive is temporarily disabled. Local hosts and keys remain available.
+          </p>
+        </div>
+      );
+    }
+
     if (accountKind === "offline") {
       return (
         <div className="space-y-3">
           {profileCard}
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            This profile is local only. Hosts and keys stay on this device. Add Google Drive,
+            This profile is local only. Hosts and keys stay on this device. Add
             OneDrive, Dropbox, or Self-hosted from the switcher if you want sync.
           </p>
         </div>

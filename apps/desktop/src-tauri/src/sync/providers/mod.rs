@@ -15,6 +15,13 @@ pub enum PersonalProvider {
 }
 
 impl PersonalProvider {
+    fn ensure_enabled(self) -> anyhow::Result<()> {
+        if self == Self::GoogleDrive {
+            anyhow::bail!("Google Drive is temporarily disabled.");
+        }
+        Ok(())
+    }
+
     pub fn from_kind(kind: &AccountKind) -> Option<Self> {
         match kind {
             AccountKind::Gdrive => Some(Self::GoogleDrive),
@@ -41,6 +48,7 @@ impl PersonalProvider {
     }
 
     pub fn client_id(self) -> anyhow::Result<String> {
+        self.ensure_enabled()?;
         let (env_key, bake_key) = match self {
             Self::GoogleDrive => (
                 "AZALEA_GOOGLE_CLIENT_ID",
@@ -82,6 +90,7 @@ pub async fn fetch_vault(
     http: &reqwest::Client,
     access_token: &str,
 ) -> anyhow::Result<Option<VaultBlob>> {
+    provider.ensure_enabled()?;
     match provider {
         PersonalProvider::GoogleDrive => google::fetch_vault(http, access_token).await,
         PersonalProvider::OneDrive => onedrive::fetch_vault(http, access_token).await,
@@ -97,6 +106,7 @@ pub async fn put_vault(
     blob: &VaultBlob,
     prior_revision: Option<&str>,
 ) -> anyhow::Result<(i64, Option<String>)> {
+    provider.ensure_enabled()?;
     match provider {
         PersonalProvider::GoogleDrive => {
             google::put_vault(http, access_token, expected_version, blob, prior_revision).await
@@ -115,6 +125,7 @@ pub async fn refresh_token(
     http: &reqwest::Client,
     refresh_token: &str,
 ) -> anyhow::Result<TokenSet> {
+    provider.ensure_enabled()?;
     match provider {
         PersonalProvider::GoogleDrive => google::refresh_access(http, refresh_token).await,
         PersonalProvider::OneDrive => onedrive::refresh_access(http, refresh_token).await,
@@ -129,6 +140,7 @@ pub async fn exchange_code(
     redirect_uri: &str,
     code_verifier: &str,
 ) -> anyhow::Result<TokenSet> {
+    provider.ensure_enabled()?;
     match provider {
         PersonalProvider::GoogleDrive => {
             google::exchange_code(http, code, redirect_uri, code_verifier).await
@@ -148,6 +160,7 @@ pub fn authorize_url(
     state: &str,
     code_challenge: &str,
 ) -> anyhow::Result<String> {
+    provider.ensure_enabled()?;
     match provider {
         PersonalProvider::GoogleDrive => google::authorize_url(redirect_uri, state, code_challenge),
         PersonalProvider::OneDrive => onedrive::authorize_url(redirect_uri, state, code_challenge),

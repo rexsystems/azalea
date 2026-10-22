@@ -617,8 +617,8 @@ export function AccountSwitcher({
                   <ChoiceRow
                     icon={<ProviderIcon provider="gdrive" size={16} />}
                     title="Google Drive"
-                    description="Encrypted vault in your Drive"
-                    disabled={busy || !onConnectPersonalCloud}
+                    description="Temporarily unavailable"
+                    disabled
                     onClick={() => void addPersonalCloud("gdrive")}
                   />
                   <ChoiceRow

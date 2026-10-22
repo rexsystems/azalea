@@ -10,6 +10,17 @@ const USERINFO_URL: &str = "https://www.googleapis.com/oauth2/v3/userinfo";
 const DRIVE_FILES: &str = "https://www.googleapis.com/drive/v3/files";
 const SCOPE: &str = "https://www.googleapis.com/auth/drive.appdata openid email profile";
 
+fn desktop_client_secret() -> Option<String> {
+    std::env::var("AZALEA_GOOGLE_CLIENT_SECRET")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            option_env!("AZALEA_GOOGLE_CLIENT_SECRET")
+                .filter(|value| !value.trim().is_empty())
+                .map(str::to_owned)
+        })
+}
+
 pub fn authorize_url(
     redirect_uri: &str,
     state: &str,
@@ -43,9 +54,14 @@ async fn token_request(
     http: &reqwest::Client,
     form: &[(&str, &str)],
 ) -> anyhow::Result<(String, Option<String>, i64)> {
+    let secret = desktop_client_secret();
+    let mut form = form.to_vec();
+    if let Some(secret) = secret.as_deref() {
+        form.push(("client_secret", secret));
+    }
     let resp = http
         .post(TOKEN_URL)
-        .form(form)
+        .form(&form)
         .send()
         .await
         .map_err(|e| anyhow::anyhow!("Network error: {e}"))?;
