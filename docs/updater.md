@@ -17,9 +17,16 @@ builds/v0.1.2-build.72/
   Azalea_0.1.2+72_amd64.AppImage.sig
   Azalea_0.1.2+72_amd64.deb
   …
-  Azalea.app.tar.gz
+  Azalea_aarch64.app.tar.gz
+  Azalea_x86_64.app.tar.gz
   Azalea_0.1.2+72_aarch64.dmg
 ```
+
+macOS updater payloads must be arch-suffixed (`Azalea_aarch64.app.tar.gz` /
+`Azalea_x86_64.app.tar.gz`). Tauri emits a bare `Azalea.app.tar.gz` per target;
+CI renames before publish so arm64 and Intel do not overwrite each other in the
+flat R2 / GitHub asset folder (that collision made one arch fail signature
+verification).
 
 Each release lands in `builds/<git-tag>/`. CI keeps only the live folder (plus
 `latest.json`) so free-tier storage does not accumulate history. Manual prune:
@@ -45,8 +52,8 @@ Download URLs inside the manifest point at
 | `linux-aarch64` | ARM64 `.AppImage` / `.AppImage.tar.gz` |
 | `linux-aarch64-rpm` | ARM64 `.rpm` |
 | `linux-aarch64-deb` | ARM64 `.deb` |
-| `darwin-aarch64` | `.app.tar.gz` (Apple Silicon) |
-| `darwin-x86_64` | `.app.tar.gz` (Intel) |
+| `darwin-aarch64` | `Azalea_aarch64.app.tar.gz` (Apple Silicon) |
+| `darwin-x86_64` | `Azalea_x86_64.app.tar.gz` (Intel) |
 
 Linux x64 and ARM64 use separate native Blacksmith runners, architecture-specific
 Rust caches and release artifacts. Both publish signed AppImage, DEB and RPM

@@ -384,6 +384,30 @@ jobs:
           .github/create-macos-dmg.sh "$APP" "$DMG" "Azalea"
           echo "bundle_dir=$BUNDLE" >> "$GITHUB_OUTPUT"
 
+      # Tauri always emits Azalea.app.tar.gz for both arches. Without an arch
+      # suffix, publish's flat copy keeps only one file while latest.json still
+      # lists distinct darwin-aarch64 / darwin-x86_64 signatures → verification fails.
+      - name: Disambiguate macOS updater artifact names
+        run: |
+          BUNDLE="${{ steps.dmg.outputs.bundle_dir }}"
+          ARCH="${{ steps.meta.outputs.arch_suffix }}"
+          MACOS="$BUNDLE/macos"
+          SRC="$MACOS/Azalea.app.tar.gz"
+          DEST="$MACOS/Azalea_${ARCH}.app.tar.gz"
+          if [ ! -f "$SRC" ]; then
+            echo "Missing updater payload: $SRC"
+            ls -la "$MACOS" || true
+            exit 1
+          fi
+          if [ ! -f "${SRC}.sig" ]; then
+            echo "Missing updater signature: ${SRC}.sig"
+            ls -la "$MACOS" || true
+            exit 1
+          fi
+          mv "$SRC" "$DEST"
+          mv "${SRC}.sig" "${DEST}.sig"
+          ls -la "$MACOS"
+
       - name: Write updater fragment
         id: fragment
         run: |
@@ -445,12 +469,27 @@ jobs:
           TAG="${{ needs.version.outputs.tag }}"
           PREFIX="builds/${TAG}"
           mkdir -p "release-r2/${PREFIX}" release-gh
-          # Installers / updater payloads into versioned R2 folder
-          find artifacts -type f \( \
+          # Fail loudly if two platforms produced the same basename (silent
+          # cp -n drop caused macOS arm64/x64 updater signature mismatches).
+          mapfile -t RELEASE_FILES < <(find artifacts -type f \( \
             -name '*.exe' -o -name '*.msi' -o -name '*.nsis.zip' \
             -o -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.AppImage.tar.gz' \
             -o -name '*.dmg' -o -name '*.app.tar.gz' -o -name '*.sig' \
-          \) -exec cp -n {} "release-r2/${PREFIX}/" \;
+          \) | sort)
+          if [ "${#RELEASE_FILES[@]}" -eq 0 ]; then
+            echo "No release artifacts found under artifacts/"
+            exit 1
+          fi
+          DUPES=$(printf '%s\n' "${RELEASE_FILES[@]}" | xargs -n1 basename | sort | uniq -d)
+          if [ -n "$DUPES" ]; then
+            echo "ERROR: colliding release basenames (would silently drop an arch):"
+            echo "$DUPES"
+            printf '%s\n' "${RELEASE_FILES[@]}"
+            exit 1
+          fi
+          for f in "${RELEASE_FILES[@]}"; do
+            cp -n "$f" "release-r2/${PREFIX}/"
+          done
           cp artifacts/latest.json release-r2/latest.json
           # GitHub Releases stay flat (asset list UI); R2 gets the foldered layout.
           cp -n "release-r2/${PREFIX}/"* release-gh/ 2>/dev/null || true

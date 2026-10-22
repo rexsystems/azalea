@@ -8,6 +8,51 @@ import { execFileSync } from "node:child_process";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 
+test("signed macOS ARM64 and x64 updater payloads keep distinct filenames and signatures", async (t) => {
+  const folder = await mkdtemp(path.join(tmpdir(), "azalea-macos-release-"));
+  t.after(() => rm(folder, { recursive: true, force: true }));
+  for (const arch of ["aarch64", "x86_64"]) {
+    const bundle = path.join(folder, `macos-${arch}`, "macos");
+    await mkdir(bundle, { recursive: true });
+    const file = `Azalea_${arch}.app.tar.gz`;
+    await writeFile(path.join(bundle, file), `macos-${arch}-payload`);
+    await writeFile(path.join(bundle, `${file}.sig`), `macos-signature-${arch}`);
+    execFileSync(
+      process.execPath,
+      [
+        path.join(root, ".github/write-latest-json.mjs"),
+        "0.2.1+7",
+        path.join(folder, `macos-${arch}`),
+        `darwin-${arch}`,
+        path.join(folder, `macos-${arch}`, "latest-fragment.json"),
+      ],
+      {
+        stdio: "pipe",
+        env: {
+          ...process.env,
+          UPDATER_DOWNLOAD_BASE_URL: "https://updates.example.com",
+          UPDATER_ARTIFACT_PREFIX: "builds/v0.2.1-build.7",
+        },
+      },
+    );
+  }
+  const output = path.join(folder, "merged.json");
+  execFileSync(
+    process.execPath,
+    [path.join(root, ".github/merge-latest-json.mjs"), "0.2.1+7", folder, output],
+    { stdio: "pipe" },
+  );
+  const manifest = JSON.parse(await readFile(output, "utf8"));
+  assert.equal(Object.keys(manifest.platforms).sort().join(","), "darwin-aarch64,darwin-x86_64");
+  for (const arch of ["aarch64", "x86_64"]) {
+    const artifact = manifest.platforms[`darwin-${arch}`];
+    assert.equal(artifact.signature, `macos-signature-${arch}`);
+    assert.match(artifact.url, new RegExp(`Azalea_${arch}\\.app\\.tar\\.gz$`));
+  }
+  const basenames = ["aarch64", "x86_64"].map((arch) => `Azalea_${arch}.app.tar.gz`);
+  assert.equal(new Set(basenames).size, basenames.length);
+});
+
 test("signed Linux ARM64 and x64 artifacts retain separate updater entries after merging", async (t) => {
   const folder = await mkdtemp(path.join(tmpdir(), "azalea-arm-release-"));
   t.after(() => rm(folder, { recursive: true, force: true }));
