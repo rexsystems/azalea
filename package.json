@@ -29,7 +29,7 @@
     "test": "npm test --workspace @azalea/desktop && npm run test:dashboard && node --test .github/tests/*.test.mjs"
   },
   "overrides": {
-    "next": "16.3.8",
+    "next": "16.4.3",
     "sharp": "0.35.5",
     "source-map-js": "1.2.2",
     "nanoid": "3.3.18",

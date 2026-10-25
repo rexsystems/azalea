@@ -178,3 +178,48 @@ pub fn push_set_cookie(headers: &mut HeaderMap, cookie_value: &str) {
         headers.append(SET_COOKIE, value);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SECRET: &str = "test-secret-with-at-least-thirty-two-bytes";
+
+    #[test]
+    fn access_token_round_trip() {
+        let token = issue_access_token(SECRET, "user-1", "user@example.com", "user", 600).unwrap();
+        let claims = decode_access_token(SECRET, &token).unwrap();
+        assert_eq!(claims.sub, "user-1");
+        assert_eq!(claims.email, "user@example.com");
+        assert_eq!(claims.role, "user");
+    }
+
+    #[test]
+    fn access_token_rejects_wrong_key_and_expiration() {
+        let token = issue_access_token(SECRET, "user-1", "user@example.com", "user", 600).unwrap();
+        assert!(
+            decode_access_token("another-secret-with-at-least-thirty-two-bytes", &token).is_err()
+        );
+        let expired =
+            issue_access_token(SECRET, "user-1", "user@example.com", "user", -3600).unwrap();
+        assert!(decode_access_token(SECRET, &expired).is_err());
+    }
+
+    #[test]
+    fn access_token_rejects_different_algorithm() {
+        let claims = Claims {
+            sub: "user-1".into(),
+            email: "user@example.com".into(),
+            role: "admin".into(),
+            iat: Utc::now().timestamp(),
+            exp: (Utc::now() + Duration::minutes(10)).timestamp(),
+        };
+        let token = encode(
+            &Header::new(jsonwebtoken::Algorithm::HS512),
+            &claims,
+            &EncodingKey::from_secret(SECRET.as_bytes()),
+        )
+        .unwrap();
+        assert!(decode_access_token(SECRET, &token).is_err());
+    }
+}
