@@ -10,6 +10,7 @@ import { ChevronDown, ChevronUp, X } from "./icons";
 import "@xterm/xterm/css/xterm.css";
 import { copyText } from "../lib/clipboard";
 import type { TerminalSettings } from "../lib/settings";
+import { isTerminalLinkSafe, normalizeTerminalLink } from "../lib/terminalLinks";
 import * as api from "../lib/api";
 
 const SEARCH_DECORATIONS = {
@@ -64,29 +65,6 @@ const MOBILE_KEY_BUTTONS: { label: string; data: string; title: string }[] = [
   { label: "←", data: "\x1b[D", title: "Left" },
   { label: "→", data: "\x1b[C", title: "Right" },
 ];
-
-/**
- * Only allow safe URL schemes to escape the terminal into the user's browser.
- * A compromised remote shell can print arbitrary OSC 8 hyperlinks or naked
- * URLs; without this check it could inject `file:///Users/me/.ssh/id_ed25519`
- * or `javascript:...` links that would exfiltrate data the moment the user
- * clicks. `mailto:` is allowed because it's a common, low-risk external
- * launcher; `http://` is dropped in favor of `https://` to prevent
- * network-attacker downgrade.
- */
-function isTerminalLinkSafe(uri: string): boolean {
-  if (typeof uri !== "string" || !uri) return false;
-  const trimmed = uri.trim();
-  if (trimmed.length > 4096) return false;
-  const lower = trimmed.toLowerCase();
-  return (
-    lower.startsWith("https://") ||
-    lower.startsWith("mailto:") ||
-    // Some shells emit `www.` shortcuts; xterm turns those into `http://www.`
-    // which we allow through as https:// upgrade.
-    lower.startsWith("http://www.")
-  );
-}
 
 function encodeBytes(data: Uint8Array): string {
   let binary = "";
@@ -582,18 +560,25 @@ function xtermPalette() {
 }
 
 function syncTerminalFit(term: XTerm, fitAddon: FitAddon) {
-  if (!term.element) return;
+  // After dispose (or before open), element is gone — FitAddon would still
+  // reach `_renderService.dimensions` and throw when `_renderer` is empty.
+  if (!term.element?.parentElement) return;
 
   const container = term.element.parentElement;
-  if (container) {
-    const rect = container.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
-  }
+  const rect = container.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+
+  // RenderService.dimensions reads `_renderer.value.dimensions`; skip until
+  // the renderer exists (hidden tabs / mid-dispose races on WebKit).
+  const renderService = (
+    term as unknown as { _core?: { _renderService?: { dimensions?: unknown } } }
+  )._core?._renderService;
+  if (!renderService?.dimensions) return;
 
   try {
     fitAddon.fit();
   } catch {
-    // xterm is not fully initialized yet (hidden container, etc.)
+    // xterm not fully initialized yet (hidden container, etc.)
   }
 }
 
@@ -679,6 +664,8 @@ export const TerminalView = memo(function TerminalView({
       lineHeight: 1.15,
       letterSpacing: 0,
       allowTransparency: false,
+      // SearchAddon uses registerDecoration / markers (xterm proposed API).
+      allowProposedApi: true,
       rightClickSelectsWord: !settingsRef.current.rightClickToPaste,
       theme: xtermPalette(),
     });
@@ -695,7 +682,7 @@ export const TerminalView = memo(function TerminalView({
         // plugin - never `file://`, `javascript:`, `data:`, `ssh://`, or any
         // other scheme that a hostile shell could weaponize.
         if (!isTerminalLinkSafe(uri)) return;
-        void openUrl(uri);
+        void openUrl(normalizeTerminalLink(uri)).catch(() => undefined);
       }),
     );
     term.attachCustomKeyEventHandler((event) => {
@@ -890,15 +877,23 @@ export const TerminalView = memo(function TerminalView({
     const search = searchRef.current;
     if (!search) return;
     if (!query) {
-      search.clearDecorations();
+      try {
+        search.clearDecorations();
+      } catch {
+        // Terminal may already be disposed.
+      }
       return;
     }
     const options = {
       incremental,
       decorations: SEARCH_DECORATIONS,
     };
-    if (direction === "next") search.findNext(query, options);
-    else search.findPrevious(query, options);
+    try {
+      if (direction === "next") search.findNext(query, options);
+      else search.findPrevious(query, options);
+    } catch {
+      // Ignore search failures on a mid-dispose terminal.
+    }
   };
 
   const closeSearch = () => {

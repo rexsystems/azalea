@@ -10,7 +10,11 @@ import type { FileEntry, SftpTransferProgress } from "@azalea/shared";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { open as openFileDialog, save as saveFileDialog } from "@tauri-apps/plugin-dialog";
+import {
+  confirm as confirmDialog,
+  open as openFileDialog,
+  save as saveFileDialog,
+} from "@tauri-apps/plugin-dialog";
 import {
   ArrowUp,
   Copy,
@@ -604,8 +608,21 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
             <button
               type="button"
               onClick={() => {
-                if (editor.dirty && !confirm("Discard unsaved changes?")) return;
-                setEditor(null);
+                void (async () => {
+                  // Do not use window.confirm: tauri-plugin-dialog overrides it to
+                  // invoke plugin:dialog|confirm, which is not registered (only
+                  // message/open/save are). Use the package confirm() helper.
+                  if (editor.dirty) {
+                    const ok = await confirmDialog("Discard unsaved changes?", {
+                      title: "Unsaved changes",
+                      kind: "warning",
+                      okLabel: "Discard",
+                      cancelLabel: "Keep editing",
+                    });
+                    if (!ok) return;
+                  }
+                  setEditor(null);
+                })();
               }}
               className="hover-subtle rounded p-1.5"
               style={{ color: "var(--text-muted)" }}
