@@ -6,6 +6,19 @@ import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { TitleBar } from "./TitleBar";
 import { Logo } from "./Logo";
 import { AccountSwitcher } from "./AccountSwitcher";
+import { WorkbenchTitleBar } from "./workbench/WorkbenchTitleBar";
+import { WorkbenchSidebar } from "./workbench/WorkbenchSidebar";
+import type { UiMode } from "../lib/appearance";
+
+const SIDEBAR_COLLAPSED_KEY = "azalea-sidebar-collapsed";
+
+function readSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
 
 export type NavPage = "home" | "hosts" | "keys" | "settings";
 
@@ -50,6 +63,16 @@ interface AppShellProps {
   isMobile?: boolean;
   /** When true on mobile, hide bottom nav for a full-bleed terminal. */
   immersive?: boolean;
+  /** Interface mode. New and Minimal use the workbench layout on desktop. */
+  uiMode?: UiMode;
+  /** Workbench only: sessions and hosts lists rendered in the sidebar. */
+  sidebarContent?: ReactNode;
+  /** Workbench only: status line rendered under the work area. */
+  footer?: ReactNode;
+  /** Workbench only: opens the command palette from the title bar. */
+  onOpenPalette?: () => void;
+  /** Workbench only: a terminal is in front, so no nav page is current. */
+  viewingTerminal?: boolean;
 }
 
 const primaryNav: { id: NavPage; label: string; icon: AppIcon }[] = [
@@ -137,8 +160,22 @@ export function AppShell({
   sidePanel,
   isMobile = false,
   immersive = false,
+  uiMode = "legacy",
+  sidebarContent,
+  footer,
+  onOpenPalette,
+  viewingTerminal = false,
 }: AppShellProps) {
   const [appVersion, setAppVersion] = useState("…");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
+  // Minimal UI folds the sidebar while a terminal is in front. Expanding it
+  // there lasts until the user leaves or re-enters the terminal.
+  const [terminalPeek, setTerminalPeek] = useState(false);
+  const [peekTerminalState, setPeekTerminalState] = useState(viewingTerminal);
+  if (peekTerminalState !== viewingTerminal) {
+    setPeekTerminalState(viewingTerminal);
+    setTerminalPeek(false);
+  }
 
   useEffect(() => {
     void getVersion().then(setAppVersion).catch(() => setAppVersion("-"));
@@ -230,6 +267,53 @@ export function AppShell({
             </div>
           </nav>
         )}
+      </div>
+    );
+  }
+
+  if (uiMode !== "legacy") {
+    // Minimal keeps the terminal as wide as possible: the sidebar folds to a
+    // rail while a session is in front, without changing the saved choice.
+    const autoRail = uiMode === "minimal" && viewingTerminal;
+    const collapsed = autoRail ? !terminalPeek : sidebarCollapsed;
+    const toggleCollapsed = () => {
+      if (autoRail) {
+        setTerminalPeek((peek) => !peek);
+        return;
+      }
+      const next = !collapsed;
+      setSidebarCollapsed(next);
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // Not persisting the rail state is harmless.
+      }
+    };
+
+    return (
+      <div className="app-shell-root wb-shell flex h-full select-none flex-col overflow-hidden">
+        <WorkbenchTitleBar onOpenPalette={() => onOpenPalette?.()} />
+        <div className="flex min-h-0 flex-1">
+          <WorkbenchSidebar
+            collapsed={collapsed}
+            onToggleCollapsed={toggleCollapsed}
+            activePage={viewingTerminal ? null : activePage}
+            onNavigate={onNavigate}
+            accountSlot={switcher}
+            version={appVersion === "-" ? "" : `v${appVersion}`}
+          >
+            {sidebarContent}
+          </WorkbenchSidebar>
+
+          <main className="wb-main" aria-label="Work area">
+            {showTabs && tabBar}
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+              {sidePanel}
+            </div>
+            {footer}
+          </main>
+        </div>
       </div>
     );
   }

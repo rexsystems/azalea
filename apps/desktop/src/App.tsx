@@ -21,6 +21,10 @@ import {
   SquareTerminal,
   Message,
 } from "./components/icons";
+import { Inspector, PanelLoading, type InspectorView } from "./components/workbench/Inspector";
+import { SessionFooter } from "./components/workbench/SessionFooter";
+import { SidebarHosts, SidebarSessions } from "./components/workbench/WorkbenchSidebar";
+import { WorkbenchTabs, type WorkbenchTool } from "./components/workbench/WorkbenchTabs";
 import * as api from "./lib/api";
 import type { HostFormValues } from "./lib/utils";
 import { looksLikeUnreachableError, parseQuickConnect, wolBroadcastForHost } from "./lib/utils";
@@ -479,8 +483,18 @@ function App() {
     });
   }, [tabs, activeTabId]);
 
+  /** Last grid size per session, shown in the workbench status line. */
+  const [terminalSizes, setTerminalSizes] = useState<
+    Record<string, { cols: number; rows: number }>
+  >({});
+
   const handleTerminalResize = useCallback((sessionId: string, cols: number, rows: number) => {
     void api.resizeTerminal(sessionId, cols, rows);
+    setTerminalSizes((prev) => {
+      const current = prev[sessionId];
+      if (current && current.cols === cols && current.rows === rows) return prev;
+      return { ...prev, [sessionId]: { cols, rows } };
+    });
   }, []);
 
   const sendCommandToTerminal = useCallback((sessionId: string, command: string) => {
@@ -661,6 +675,12 @@ function App() {
   const removeTab = useCallback((tabId: string) => {
     setFilesPanelSessionId((current) => (current === tabId ? null : current));
     setAiPanelSessionId((current) => (current === tabId ? null : current));
+    setTerminalSizes((prev) => {
+      if (!(tabId in prev)) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
     reconnectAttemptsRef.current.delete(tabId);
     setReconnectUi((prev) => {
       if (!(tabId in prev)) return prev;
@@ -1055,6 +1075,22 @@ function App() {
     setDrawerInitial(undefined);
     setDefaultGroupId(null);
     setDrawerPage(navPage);
+    setDrawerOpen(true);
+  };
+
+  /**
+   * The workbench sidebar can add or edit a host from anywhere, including
+   * while a terminal is in front. The drawer belongs to a page, so bring one
+   * forward first (Settings has no host context, so Hosts is used there).
+   */
+  const openHostDrawerFromSidebar = (host: Host | null) => {
+    const page: NavPage = navPage === "settings" ? "hosts" : navPage;
+    if (page !== navPage) setNavPage(page);
+    setViewingTerminal(false);
+    setEditingHost(host);
+    setDrawerInitial(undefined);
+    setDefaultGroupId(null);
+    setDrawerPage(page);
     setDrawerOpen(true);
   };
 
@@ -2188,6 +2224,42 @@ function App() {
     );
   };
 
+  // New and Minimal UI on desktop use the workbench shell; phones and Legacy
+  // UI keep the original layout.
+  const workbench = !isMobile && uiMode !== "legacy";
+  const activeIsLocal = activeTab ? api.isLocalSession(activeTab.id) : false;
+  const inspectorViews: InspectorView[] =
+    viewingTerminal && activeTab
+      ? [
+          ...(!activeIsLocal ? (["files"] as const) : []),
+          ...(aiEnabled ? (["assistant"] as const) : []),
+          ...(!activeIsLocal ? (["forwards"] as const) : []),
+        ]
+      : [];
+  const requestedInspectorView: InspectorView | null = filesPanelOpen
+    ? "files"
+    : aiOpen && aiEnabled
+      ? "assistant"
+      : forwardsOpen
+        ? "forwards"
+        : null;
+  const inspectorView =
+    requestedInspectorView && inspectorViews.includes(requestedInspectorView)
+      ? requestedInspectorView
+      : null;
+
+  /** The workbench shows one panel at a time; choosing one replaces the other. */
+  const showInspectorView = (view: InspectorView | null) => {
+    if (!activeTabId) return;
+    setFilesPanelSessionId(view === "files" ? activeTabId : null);
+    setAiPanelSessionId(view === "assistant" ? activeTabId : null);
+    setForwardsOpen(view === "forwards");
+  };
+
+  const toggleInspectorView = (view: InspectorView) => {
+    showInspectorView(inspectorView === view ? null : view);
+  };
+
   const displayTabs = useMemo(() => {
     const hostCounts = new Map<string, number>();
     const mapped = tabs
@@ -2401,6 +2473,175 @@ function App() {
     </div>
   ) : null;
 
+  const renderFilesPanel = (sessionId: string, embedded: boolean) => (
+    <Suspense fallback={embedded ? <PanelLoading label="Loading files" /> : null}>
+      <FileBrowserPanel
+        key={sessionId}
+        sessionId={sessionId}
+        embedded={embedded}
+        onClose={() => setFilesPanelSessionId(null)}
+        onCdTerminal={(path) =>
+          sendCommandToTerminal(
+            sessionId,
+            `cd '${path.replace(/'/g, "'\\''")}'`,
+          )
+        }
+      />
+    </Suspense>
+  );
+
+  const renderAiPanel = (sessionId: string, tab: TabSession, embedded: boolean) => (
+    <Suspense fallback={embedded ? <PanelLoading label="Loading assistant" /> : null}>
+      <AiPanel
+        key={sessionId}
+        sessionId={sessionId}
+        embedded={embedded}
+        hostLabel={tab.title}
+        osId={hosts.find((h) => h.id === tab.hostId)?.os_id}
+        onInsertCommand={(command) =>
+          insertTextToTerminal(sessionId, command)
+        }
+        onRunCommand={(command) =>
+          sendCommandToTerminal(sessionId, command)
+        }
+        onWriteFile={
+          api.isLocalSession(sessionId)
+            ? undefined
+            : async (path, contents) => {
+                await api.sftpWriteText(sessionId, path, contents);
+              }
+        }
+        onClose={() => setAiPanelSessionId(null)}
+        getTerminalContext={() =>
+          terminalContextRef.current[sessionId] ?? ""
+        }
+      />
+    </Suspense>
+  );
+
+  const workbenchTabs = displayTabs.map((tab) => ({
+    id: tab.id,
+    title: tab.title,
+    status: tab.status,
+    isLocal: api.isLocalSession(tab.id),
+    splitWithId: tab.splitWithId,
+  }));
+
+  const workbenchTools: WorkbenchTool[] = [
+    {
+      id: "local",
+      icon: SquareTerminal,
+      label: "Local terminal",
+      onClick: () => void openLocalTerminal(),
+    },
+    ...(viewingTerminal && activeTab
+      ? [
+          ...(!activeIsLocal
+            ? [
+                {
+                  id: "files",
+                  icon: FolderTree,
+                  label: "Files",
+                  pressed: inspectorView === "files",
+                  onClick: () => toggleInspectorView("files"),
+                },
+              ]
+            : []),
+          ...(aiEnabled
+            ? [
+                {
+                  id: "assistant",
+                  icon: Message,
+                  label: "Assistant",
+                  pressed: inspectorView === "assistant",
+                  onClick: () => toggleInspectorView("assistant"),
+                },
+              ]
+            : []),
+          ...(!activeIsLocal
+            ? [
+                {
+                  id: "forwards",
+                  icon: ArrowLeftRight,
+                  label: "Forwards",
+                  pressed: inspectorView === "forwards",
+                  detail: activeForwardCount > 0 ? `${activeForwardCount} running` : undefined,
+                  badge: activeForwardCount,
+                  onClick: () => toggleInspectorView("forwards"),
+                },
+              ]
+            : []),
+          {
+            id: "snippets",
+            icon: FileCode,
+            label: "Snippets",
+            expanded: snippetsOpen,
+            popoverTrigger: true,
+            onClick: () => setSnippetsOpen((v) => !v),
+          },
+          {
+            id: "split",
+            icon: Columns2,
+            label: activeTab.splitWithId ? "Unsplit" : "Split",
+            pressed: Boolean(activeTab.splitWithId),
+            onClick: () => splitActiveTab(),
+          },
+          {
+            id: "popout",
+            icon: ExternalLink,
+            label: "Pop out",
+            onClick: () => popOutActiveTab(),
+          },
+        ]
+      : []),
+  ];
+
+  const renderWorkbenchSidebar = () => (
+    <>
+      <SidebarSessions
+        sessions={displayTabs.map((tab) => {
+          const raw = tabs.find((t) => t.id === tab.id);
+          return {
+            id: tab.id,
+            title: tab.title,
+            status: tab.status,
+            isLocal: api.isLocalSession(tab.id),
+            osId: raw ? hosts.find((h) => h.id === raw.hostId)?.os_id : null,
+          };
+        })}
+        activeSessionId={viewingTerminal ? activeTabId : null}
+        onSelect={handleSelectTab}
+        onClose={requestCloseTab}
+        onOpenLocalTerminal={() => void openLocalTerminal()}
+      />
+      <SidebarHosts
+        hosts={hosts}
+        groups={groups}
+        loading={hostsLoading}
+        connectingHostId={connectingHostId}
+        onConnect={(host) => void connectToHost(host)}
+        onEdit={(host) => openHostDrawerFromSidebar(host)}
+        onAdd={() => openHostDrawerFromSidebar(null)}
+      />
+    </>
+  );
+
+  const renderWorkbenchFooter = () => {
+    const session =
+      viewingTerminal && activeTab
+        ? {
+            isLocal: activeIsLocal,
+            username: activeTab.username,
+            hostname: activeTab.hostname,
+            port: activeTab.port,
+            status: activeTab.status,
+            cols: terminalSizes[activeTab.id]?.cols,
+            rows: terminalSizes[activeTab.id]?.rows,
+          }
+        : null;
+    return <SessionFooter session={session} statusMessage={statusMessage} />;
+  };
+
   const renderMain = () => (
     <div className="relative flex min-h-0 flex-1 flex-col">
       {hasTabs && (
@@ -2564,7 +2805,7 @@ function App() {
               />
             )}
 
-            {viewingTerminal && forwardsOpen && activeTab && (
+            {!workbench && viewingTerminal && forwardsOpen && activeTab && (
               <ForwardsPopover
                 hostId={activeTab.hostId}
                 sessionId={activeTab.id}
@@ -2574,55 +2815,43 @@ function App() {
             )}
           </div>
 
-          {viewingTerminal &&
+          {!workbench &&
+            viewingTerminal &&
             filesPanelSessionId &&
             activeTab &&
-            filesPanelSessionId === activeTab.id && (
-            <Suspense fallback={null}>
-              <FileBrowserPanel
-                key={filesPanelSessionId}
-                sessionId={filesPanelSessionId}
-                onClose={() => setFilesPanelSessionId(null)}
-                onCdTerminal={(path) =>
-                  sendCommandToTerminal(
-                    filesPanelSessionId,
-                    `cd '${path.replace(/'/g, "'\\''")}'`,
-                  )
-                }
-              />
-            </Suspense>
-          )}
+            filesPanelSessionId === activeTab.id &&
+            renderFilesPanel(filesPanelSessionId, false)}
 
-          {viewingTerminal &&
+          {!workbench &&
+            viewingTerminal &&
             aiEnabled &&
             aiPanelSessionId &&
             activeTab &&
-            aiPanelSessionId === activeTab.id && (
-            <Suspense fallback={null}>
-              <AiPanel
-                key={aiPanelSessionId}
-                sessionId={aiPanelSessionId}
-                hostLabel={activeTab.title}
-                osId={hosts.find((h) => h.id === activeTab.hostId)?.os_id}
-                onInsertCommand={(command) =>
-                  insertTextToTerminal(aiPanelSessionId, command)
-                }
-                onRunCommand={(command) =>
-                  sendCommandToTerminal(aiPanelSessionId, command)
-                }
-                onWriteFile={
-                  api.isLocalSession(aiPanelSessionId)
-                    ? undefined
-                    : async (path, contents) => {
-                        await api.sftpWriteText(aiPanelSessionId, path, contents);
-                      }
-                }
-                onClose={() => setAiPanelSessionId(null)}
-                getTerminalContext={() =>
-                  terminalContextRef.current[aiPanelSessionId] ?? ""
-                }
-              />
-            </Suspense>
+            aiPanelSessionId === activeTab.id &&
+            renderAiPanel(aiPanelSessionId, activeTab, false)}
+
+          {workbench && inspectorView && activeTab && (
+            <Inspector
+              view={inspectorView}
+              views={inspectorViews}
+              onViewChange={showInspectorView}
+              onClose={() => showInspectorView(null)}
+              contextLabel={activeTab.title}
+              forwardCount={activeForwardCount}
+            >
+              {inspectorView === "files" && renderFilesPanel(activeTab.id, true)}
+              {inspectorView === "assistant" && renderAiPanel(activeTab.id, activeTab, true)}
+              {inspectorView === "forwards" && (
+                <ForwardsPopover
+                  key={activeTab.id}
+                  variant="panel"
+                  hostId={activeTab.hostId}
+                  sessionId={activeTab.id}
+                  onClose={() => setForwardsOpen(false)}
+                  onStatus={setStatusMessage}
+                />
+              )}
+            </Inspector>
           )}
         </div>
       )}
@@ -2691,7 +2920,21 @@ function App() {
         showTabs={hasTabs && (viewingTerminal || !isMobile)}
         isMobile={isMobile}
         immersive={isMobile && viewingTerminal}
+        uiMode={uiMode}
+        viewingTerminal={viewingTerminal}
+        onOpenPalette={() => setCommandPaletteOpen(true)}
+        sidebarContent={workbench ? renderWorkbenchSidebar() : undefined}
+        footer={workbench ? renderWorkbenchFooter() : undefined}
         tabBar={
+          workbench ? (
+            <WorkbenchTabs
+              tabs={workbenchTabs}
+              activeTabId={viewingTerminal ? activeTabId : null}
+              onSelectTab={handleSelectTab}
+              onCloseTab={requestCloseTab}
+              tools={workbenchTools}
+            />
+          ) : (
           <TabBar
             tabs={displayTabs}
             activeTabId={viewingTerminal ? activeTabId : null}
@@ -2808,6 +3051,7 @@ function App() {
               </button>
             ))}
           />
+          )
         }
         sidePanel={
           <AddServerDrawer
