@@ -9,8 +9,19 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import { ChevronDown, ChevronUp, X } from "./icons";
 import "@xterm/xterm/css/xterm.css";
 import { copyText } from "../lib/clipboard";
-import type { TerminalSettings } from "../lib/settings";
+import type { TerminalFontId, TerminalSettings } from "../lib/settings";
 import { isTerminalLinkSafe, normalizeTerminalLink } from "../lib/terminalLinks";
+import {
+  isLightUiTheme,
+  terminalPaletteTheme,
+  type TerminalPaletteId,
+} from "../lib/terminalPalettes";
+import {
+  TERMINAL_CWD_EVENT,
+  cwdFromOsc7,
+  cwdFromTitle,
+  type TerminalCwdDetail,
+} from "../lib/sessionInfo";
 import * as api from "../lib/api";
 
 const SEARCH_DECORATIONS = {
@@ -42,6 +53,12 @@ const TERMINAL_FONT_FAMILY = [
 ]
   .map((name) => (name.includes(" ") ? `"${name}"` : name))
   .join(", ");
+
+const FONT_STACKS: Record<TerminalFontId, string> = {
+  nerd: TERMINAL_FONT_FAMILY,
+  jetbrains: `"JetBrains Mono", monospace`,
+  system: `ui-monospace, "Cascadia Mono", "SF Mono", Menlo, monospace`,
+};
 
 interface TerminalProps {
   sessionId: string;
@@ -331,6 +348,31 @@ function terminalBgColor(): string {
   return getComputedStyle(document.documentElement)
     .getPropertyValue("--terminal-bg")
     .trim() || "#14171d";
+}
+
+/** True when the New or Minimal interface is active (Legacy keeps its own look). */
+function workbenchUi(): boolean {
+  const ui = document.documentElement.dataset.ui;
+  return ui === "new" || ui === "minimal";
+}
+
+/**
+ * Legacy rows are tight; the workbench uses 13 px type on 20 px rows. xterm
+ * multiplies the font's own cell height (about 1.3 em for JetBrains Mono), so
+ * 1.2 here gives the 1.55 em rows of the design.
+ */
+function terminalLineHeight(): number {
+  return workbenchUi() ? 1.2 : 1.15;
+}
+
+function terminalTheme(palette: TerminalPaletteId) {
+  if (!workbenchUi()) return xtermPalette();
+  const light = isLightUiTheme(document.documentElement.dataset.theme);
+  const theme = terminalPaletteTheme(palette, light);
+  if (palette !== "azalea") return theme;
+  // The Azalea scheme sits on the window's own terminal surface (black in Noir).
+  const background = terminalBgColor();
+  return { ...theme, background, cursorAccent: background };
 }
 
 function xtermPalette() {
@@ -685,6 +727,7 @@ export const TerminalView = memo(function TerminalView({
   bootstrapLocal = false,
   showMobileKeys = false,
   onStatusChange,
+  onResize,
 }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
@@ -695,6 +738,7 @@ export const TerminalView = memo(function TerminalView({
   const [searchQuery, setSearchQuery] = useState("");
   const settingsRef = useRef(settings);
   const onStatusChangeRef = useRef(onStatusChange);
+  const onResizeRef = useRef(onResize);
   const activeRef = useRef(active);
   const bootstrapLocalRef = useRef(bootstrapLocal);
   const sizedRef = useRef(false);
@@ -702,6 +746,7 @@ export const TerminalView = memo(function TerminalView({
 
   settingsRef.current = settings;
   onStatusChangeRef.current = onStatusChange;
+  onResizeRef.current = onResize;
   activeRef.current = active;
   bootstrapLocalRef.current = bootstrapLocal;
 
@@ -712,15 +757,15 @@ export const TerminalView = memo(function TerminalView({
     const term = new XTerm({
       cursorBlink: true,
       scrollback: 8000,
-      fontFamily: TERMINAL_FONT_FAMILY,
+      fontFamily: FONT_STACKS[settingsRef.current.fontFamily],
       fontSize: settingsRef.current.fontSize,
-      lineHeight: 1.15,
+      lineHeight: terminalLineHeight(),
       letterSpacing: 0,
       allowTransparency: false,
       // SearchAddon uses registerDecoration / markers (xterm proposed API).
       allowProposedApi: true,
       rightClickSelectsWord: !settingsRef.current.rightClickToPaste,
-      theme: xtermPalette(),
+      theme: terminalTheme(settingsRef.current.palette),
     });
 
     const fitAddon = new FitAddon();
@@ -749,9 +794,28 @@ export const TerminalView = memo(function TerminalView({
       // App-level shortcuts: let them bubble instead of going to the shell.
       if (event.ctrlKey && key === "tab") return false;
       if (event.ctrlKey && event.shiftKey && (key === "w" || key === "t")) return false;
+      // Workbench panels and the command palette. Shift-chords and Ctrl+/ or Ctrl+,
+      // carry no common meaning in shells, so taking them costs nothing there.
+      if (workbenchUi() && event.ctrlKey && !event.altKey) {
+        if (event.shiftKey && "fapb".includes(key) && key.length === 1) return false;
+        if (!event.shiftKey && (key === "/" || key === ",")) return false;
+      }
       return true;
     });
     term.open(container);
+
+    const announceCwd = (cwd: string | null) => {
+      if (!cwd) return;
+      const detail: TerminalCwdDetail = { sessionId, cwd };
+      window.dispatchEvent(new CustomEvent(TERMINAL_CWD_EVENT, { detail }));
+    };
+    // OSC 7 (file://host/path) is exact; the window title is a fallback for
+    // shells that only print "user@host: path" there.
+    const osc7Disposable = term.parser.registerOscHandler(7, (payload) => {
+      announceCwd(cwdFromOsc7(payload));
+      return false;
+    });
+    const titleDisposable = term.onTitleChange((title) => announceCwd(cwdFromTitle(title)));
 
     termRef.current = term;
     fitRef.current = fitAddon;
@@ -810,6 +874,11 @@ export const TerminalView = memo(function TerminalView({
     });
     resizeObserver.observe(container);
 
+    // Report the grid size so the status line can show cols×rows.
+    const sizeDisposable = term.onResize(({ cols, rows }) => {
+      onResizeRef.current(sessionId, cols, rows);
+    });
+
     const dataDisposable = term.onData((data) => {
       void api
         .writeTerminal(sessionId, encodeBytes(new TextEncoder().encode(data)))
@@ -860,13 +929,17 @@ export const TerminalView = memo(function TerminalView({
       if (!sizedRef.current) {
         sizedRef.current = true;
         await attachBackend(term, fitAddon, sessionId, container);
+        if (!cancelled) onResizeRef.current(sessionId, term.cols, term.rows);
       }
     })();
 
     return () => {
       cancelled = true;
+      sizeDisposable.dispose();
       dataDisposable.dispose();
       selectionDisposable.dispose();
+      osc7Disposable.dispose();
+      titleDisposable.dispose();
       unlistenOutput?.();
       unlistenStatus?.();
       container.removeEventListener("mousedown", onSelectMouseDown);
@@ -891,15 +964,27 @@ export const TerminalView = memo(function TerminalView({
     term.options.rightClickSelectsWord = !settings.rightClickToPaste;
   }, [settings.rightClickToPaste]);
 
-  // Follow theme and interface switches live instead of only at mount.
+  // Follow theme, palette and interface switches live instead of only at mount.
   useEffect(() => {
-    const observer = new MutationObserver(() => {
+    const apply = () => {
       const term = termRef.current;
-      if (term) term.options.theme = xtermPalette();
+      if (!term) return;
+      term.options.theme = terminalTheme(settings.palette);
+      const lineHeight = terminalLineHeight();
+      if (term.options.lineHeight !== lineHeight) {
+        term.options.lineHeight = lineHeight;
+        const fitAddon = fitRef.current;
+        if (fitAddon) syncTerminalFit(term, fitAddon);
+      }
+    };
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme", "data-ui"],
     });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     return () => observer.disconnect();
-  }, []);
+  }, [settings.palette]);
 
   // When select-to-copy is turned on, copy any existing selection immediately.
   useEffect(() => {
@@ -915,14 +1000,16 @@ export const TerminalView = memo(function TerminalView({
     const fitAddon = fitRef.current;
     if (!term || !fitAddon) return;
 
-    if (term.options.fontSize !== settings.fontSize) {
+    const fontFamily = FONT_STACKS[settings.fontFamily];
+    if (term.options.fontSize !== settings.fontSize || term.options.fontFamily !== fontFamily) {
       term.options.fontSize = settings.fontSize;
+      term.options.fontFamily = fontFamily;
       syncTerminalFit(term, fitAddon);
       if (active) {
         void api.resizeTerminal(sessionId, term.cols, term.rows).catch(() => undefined);
       }
     }
-  }, [settings.fontSize, sessionId, active]);
+  }, [settings.fontSize, settings.fontFamily, sessionId, active]);
 
   useEffect(() => {
     const term = termRef.current;
@@ -932,6 +1019,7 @@ export const TerminalView = memo(function TerminalView({
 
     void attachBackend(term, fitAddon, sessionId, container).then(() => {
       syncTerminalFit(term, fitAddon);
+      onResizeRef.current(sessionId, term.cols, term.rows);
       term.focus();
     });
   }, [active, sessionId]);

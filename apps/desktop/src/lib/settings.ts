@@ -1,29 +1,69 @@
+import { isTerminalPaletteId, type TerminalPaletteId } from "./terminalPalettes";
+
 export interface TerminalSettings {
   selectToCopy: boolean;
   rightClickToPaste: boolean;
   fontSize: number;
+  /** Color scheme in the New and Minimal interfaces. Legacy keeps its own. */
+  palette: TerminalPaletteId;
+  fontFamily: TerminalFontId;
+}
+
+/**
+ * "nerd" prefers an installed Nerd Font so prompt icons render, then falls
+ * back to the bundled JetBrains Mono. "jetbrains" always uses the bundled font.
+ */
+export type TerminalFontId = "nerd" | "jetbrains" | "system";
+
+export const terminalFonts: { id: TerminalFontId; label: string }[] = [
+  { id: "nerd", label: "Nerd Font, then JetBrains Mono" },
+  { id: "jetbrains", label: "JetBrains Mono" },
+  { id: "system", label: "System monospace" },
+];
+
+function isTerminalFontId(value: unknown): value is TerminalFontId {
+  return value === "nerd" || value === "jetbrains" || value === "system";
 }
 
 export const defaultTerminalSettings: TerminalSettings = {
   selectToCopy: true,
   rightClickToPaste: true,
   fontSize: 16,
+  palette: "azalea",
+  fontFamily: "nerd",
 };
 
 const STORAGE_KEY = "azalea-terminal-settings";
 
+/** New and Minimal use a denser 13px terminal; Legacy keeps its 16px default. */
+function defaultTerminalFontSize(): number {
+  const ui = document.documentElement.dataset.ui;
+  return ui === "new" || ui === "minimal" ? 13 : defaultTerminalSettings.fontSize;
+}
+
+/** Defaults for the interface in use. Read after the appearance is applied. */
+export function currentDefaultTerminalSettings(): TerminalSettings {
+  return { ...defaultTerminalSettings, fontSize: defaultTerminalFontSize() };
+}
+
 export function getStoredTerminalSettings(): TerminalSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultTerminalSettings;
+    if (!raw) return currentDefaultTerminalSettings();
     const parsed = JSON.parse(raw) as Partial<TerminalSettings>;
     return {
       selectToCopy: parsed.selectToCopy ?? defaultTerminalSettings.selectToCopy,
       rightClickToPaste: parsed.rightClickToPaste ?? defaultTerminalSettings.rightClickToPaste,
-      fontSize: clampFontSize(parsed.fontSize ?? defaultTerminalSettings.fontSize),
+      fontSize: clampFontSize(parsed.fontSize ?? defaultTerminalFontSize()),
+      palette: isTerminalPaletteId(parsed.palette)
+        ? parsed.palette
+        : defaultTerminalSettings.palette,
+      fontFamily: isTerminalFontId(parsed.fontFamily)
+        ? parsed.fontFamily
+        : defaultTerminalSettings.fontFamily,
     };
   } catch {
-    return defaultTerminalSettings;
+    return currentDefaultTerminalSettings();
   }
 }
 

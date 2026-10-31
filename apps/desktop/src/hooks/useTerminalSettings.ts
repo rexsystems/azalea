@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import {
-  defaultTerminalSettings,
+  currentDefaultTerminalSettings,
   getStoredTerminalSettings,
   setStoredTerminalSettings,
   type TerminalSettings,
@@ -20,8 +20,9 @@ export function useTerminalSettings() {
   }, []);
 
   const resetTerminalSettings = useCallback(() => {
-    setTerminalSettings(defaultTerminalSettings);
-    setStoredTerminalSettings(defaultTerminalSettings);
+    const defaults = currentDefaultTerminalSettings();
+    setTerminalSettings(defaults);
+    setStoredTerminalSettings(defaults);
   }, []);
 
   return { terminalSettings, updateTerminalSettings, resetTerminalSettings };
