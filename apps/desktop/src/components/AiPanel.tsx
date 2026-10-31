@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -73,6 +74,14 @@ import {
 import { Button } from "./ui/Button";
 import { Checkbox } from "./ui/Checkbox";
 import { Select } from "./ui/Select";
+import { InspectorActions } from "./workbench/Inspector";
+import {
+  WbChevronDown,
+  WbChevronLeft,
+  WbPlus,
+  WbSend,
+  WbTerminal,
+} from "./workbench/wbIcons";
 
 interface AiPanelProps {
   sessionId: string;
@@ -88,6 +97,11 @@ interface AiPanelProps {
 }
 
 type PanelView = "chat" | "history" | "memory";
+
+/** Non-empty lines in a terminal excerpt. */
+function countLines(text: string): number {
+  return text.trim().split("\n").filter(Boolean).length;
+}
 
 function formatRelativeTime(ts: number): string {
   const diff = Date.now() - ts;
@@ -105,6 +119,8 @@ const WIDTH_KEY = "azalea.ai.panelWidth";
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 560;
 const DEFAULT_WIDTH = 400;
+/** The New and Minimal inspector is wider so command output fits. */
+const DEFAULT_WIDTH_EMBEDDED = 440;
 const MAX_AGENT_STEPS = 8;
 
 function shortAiError(raw: string): string {
@@ -146,10 +162,10 @@ export function AiPanel({
 }: AiPanelProps) {
   const [prefs, setPrefsState] = useState(() => getAiPrefs());
   const [width, setWidth] = useState(() => {
-    const stored = Number(localStorage.getItem(WIDTH_KEY));
-    return Number.isFinite(stored)
-      ? Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, stored))
-      : DEFAULT_WIDTH;
+    const raw = localStorage.getItem(WIDTH_KEY);
+    const stored = raw ? Number(raw) : Number.NaN;
+    if (Number.isFinite(stored)) return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, stored));
+    return embedded ? DEFAULT_WIDTH_EMBEDDED : DEFAULT_WIDTH;
   });
   const [threads, setThreads] = useState<AiChatThread[]>(() =>
     listAllAiThreads(),
@@ -192,6 +208,7 @@ export function AiPanel({
   const listRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
   const composerRef = useRef<HTMLDivElement>(null);
+  const settingsAnchorRef = useRef<HTMLSpanElement>(null);
   const abortAgentRef = useRef(false);
   const commandAbortRef = useRef<AbortController | null>(null);
   const operationRef = useRef(false);
@@ -414,16 +431,20 @@ export function AiPanel({
       ) {
         return;
       }
-      if (
-        composerRef.current &&
-        target &&
-        !composerRef.current.contains(target)
-      ) {
-        setSettingsOpen(false);
-      }
+      const inside = [composerRef.current, settingsAnchorRef.current].some(
+        (el) => el && target instanceof Node && el.contains(target),
+      );
+      if (target && !inside) setSettingsOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSettingsOpen(false);
     };
     window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [settingsOpen]);
 
   const startNewChat = () => {
@@ -851,11 +872,15 @@ export function AiPanel({
     searchCacheRef.current.clear();
     searchCountRef.current = 0;
 
+    const contextLines = prefsRef.current.includeTerminalContext
+      ? countLines(getTerminalContext?.() ?? "")
+      : 0;
     const userMsg: AiChatMessageStored = {
       id: `u-${Date.now()}`,
       role: "user",
       content: text,
       createdAt: Date.now(),
+      ...(contextLines ? { contextLines } : {}),
     };
     const assistantId = `a-${Date.now()}`;
     const assistantMsg: AiChatMessageStored = {
@@ -1131,6 +1156,7 @@ export function AiPanel({
           : undefined
       }
       onSaveSnippet={(command) => void saveSnippetFromChat(command)}
+      layout={embedded ? "workbench" : "card"}
       pendingApprove={pending ? pendingApprove : []}
       onApprove={(action) => void approveAction(action)}
       disabled={busy}
@@ -1165,17 +1191,213 @@ export function AiPanel({
       </div>
     ) : null;
 
+  const settingsBody = (
+    <div className="min-h-0 space-y-2 overflow-y-auto p-2.5">
+      {embedded && (
+        <>
+          <Select
+            label="Mode"
+            size="sm"
+            value={prefs.mode}
+            disabled={busy}
+            options={[
+              { value: "ask", label: "Ask" },
+              { value: "agent", label: "Agent" },
+            ]}
+            onChange={(mode) => patchPrefs({ mode: mode as AiMode })}
+          />
+          <Select
+            label="Model"
+            size="sm"
+            value={prefs.model}
+            disabled={busy}
+            placeholder="Select model"
+            options={modelOptions.map((m) => ({ value: m.id, label: m.label }))}
+            onChange={(model) => patchPrefs({ model })}
+          />
+        </>
+      )}
+      <Select
+        label="Provider"
+        size="sm"
+        disabled={busy}
+        value={prefs.providerId}
+        options={AI_PROVIDERS.map((p) => ({
+          value: p.id,
+          label: p.name,
+        }))}
+        onChange={(id) => {
+          patchPrefs({
+            providerId: id as AiProviderId,
+          });
+        }}
+      />
+      {regionOptions.length > 0 && (
+        <Select
+          label="Region"
+          size="sm"
+          disabled={busy}
+          value={prefs.region}
+          options={regionOptions}
+          onChange={(region) => patchPrefs({ region })}
+        />
+      )}
+      {prefs.mode === "agent" && (
+        <div className="space-y-1">
+          <Select
+            label="Access"
+            size="sm"
+            disabled={busy}
+            value={prefs.access}
+            options={[
+              {
+                value: "confirm",
+                label: "Confirm each command",
+              },
+              { value: "full", label: "Full access" },
+            ]}
+            onChange={(access) =>
+              patchPrefs({ access: access as AiAccess })
+            }
+          />
+          {prefs.access === "full" && (
+            <p
+              className="text-[11px] leading-snug"
+              style={{ color: "#fca5a5" }}
+            >
+              Runs commands and file writes without asking.
+            </p>
+          )}
+        </div>
+      )}
+      <Checkbox
+        size="sm"
+        label="Web search"
+        checked={prefs.webSearchEnabled}
+        disabled={busy}
+        onChange={(webSearchEnabled) =>
+          patchPrefs({ webSearchEnabled })
+        }
+      />
+      <Checkbox
+        size="sm"
+        label="Include terminal context"
+        checked={prefs.includeTerminalContext}
+        onChange={(checked) =>
+          patchPrefs({ includeTerminalContext: checked })
+        }
+      />
+      {embedded && (
+        <>
+          <button
+            type="button"
+            className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
+            style={{ color: "var(--text-secondary)" }}
+            onClick={() => {
+              refreshThreads();
+              setPanelView("history");
+              setSettingsOpen(false);
+            }}
+          >
+            <Clock size={13} />
+            Old chats
+          </button>
+          <button
+            type="button"
+            className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
+            style={{ color: "var(--text-secondary)" }}
+            onClick={() => {
+              refreshMemory();
+              setPanelView("memory");
+              setSettingsOpen(false);
+            }}
+          >
+            <Brain size={13} />
+            Memory
+          </button>
+        </>
+      )}
+      <button
+        type="button"
+        className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
+        style={{ color: "var(--text-secondary)" }}
+        onClick={() => {
+          const current = getAiThread(threadId);
+          void exportThread(current);
+          setSettingsOpen(false);
+        }}
+      >
+        <Download size={13} />
+        Export this chat
+      </button>
+      <button
+        type="button"
+        className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
+        style={{ color: "var(--text-secondary)" }}
+        onClick={() => {
+          void exportThread(null, true);
+          setSettingsOpen(false);
+        }}
+      >
+        <Download size={13} />
+        Export all chats
+      </button>
+      {provider.supportsModelList && (
+        <button
+          type="button"
+          className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
+          style={{ color: "var(--text-secondary)" }}
+          disabled={loadingModels}
+          onClick={refreshModels}
+        >
+          {loadingModels ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <RefreshCw size={13} />
+          )}
+          Refresh models
+        </button>
+      )}
+      {modelsError && (
+        <p
+          className="break-words text-[11px] leading-snug"
+          style={{ color: "#f87171" }}
+          title={modelsError}
+        >
+          {shortAiError(modelsError)}
+        </p>
+      )}
+      {threads.some((t) => t.id === threadId) && (
+        <button
+          type="button"
+          className="text-[11px]"
+          style={{ color: "var(--text-muted)" }}
+          onClick={() => {
+            removeThread(threadId);
+            setSettingsOpen(false);
+          }}
+        >
+          Delete this chat
+        </button>
+      )}
+    </div>
+  );
+
+  const terminalContextLines = embedded
+    ? countLines(getTerminalContext?.() ?? "")
+    : 0;
+
   return (
     <aside
       aria-label="Assistant"
       className={
         embedded
-          ? "relative flex h-full min-w-0 flex-1 flex-col"
+          ? "wb-ai"
           : "relative flex h-full shrink-0 flex-col border-l"
       }
       style={
         embedded
-          ? { background: "var(--bg-panel)" }
+          ? undefined
           : {
               width,
               background: "var(--bg-panel)",
@@ -1193,6 +1415,60 @@ export function AiPanel({
         />
       )}
 
+      {embedded && (
+        <InspectorActions>
+          <span className="wb-ai-menu" ref={settingsAnchorRef}>
+            <button
+              type="button"
+              className="wb-btn"
+              data-variant="ghost"
+              aria-haspopup="dialog"
+              aria-expanded={settingsOpen}
+              aria-label="Choose model and chat settings"
+              title={`${prefs.mode === "agent" ? "Agent" : "Ask"} · ${modelLabel}`}
+              onClick={() => setSettingsOpen((v) => !v)}
+            >
+              <span className="wb-ai-model">{modelLabel || "Select model"}</span>
+              <WbChevronDown />
+            </button>
+            {settingsOpen && (
+              <div
+                className="wb-ai-popover"
+                role="dialog"
+                aria-label="Chat settings"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                {settingsBody}
+              </div>
+            )}
+          </span>
+          <button
+            type="button"
+            className="wb-ib"
+            aria-label="New conversation"
+            title="New conversation"
+            onClick={startNewChat}
+          >
+            <WbPlus />
+          </button>
+        </InspectorActions>
+      )}
+
+      {embedded && panelView !== "chat" && (
+        <div className="wb-ai-subhead">
+          <button type="button" className="wb-btn" data-variant="ghost" onClick={() => setPanelView("chat")}>
+            <WbChevronLeft />
+            Chat
+          </button>
+          <span className="wb-muted">
+            {panelView === "history"
+              ? "Old chats, saved on this PC only"
+              : `Memory · ${memoryNotes.length} note${memoryNotes.length === 1 ? "" : "s"}`}
+          </span>
+        </div>
+      )}
+
+      {!embedded && (
       <header
         className="flex items-center justify-between gap-2 border-b px-3 py-2.5"
         style={{ borderColor: "var(--border-subtle)" }}
@@ -1285,6 +1561,7 @@ export function AiPanel({
           )}
         </div>
       </header>
+      )}
 
       {panelView === "history" ? (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -1494,9 +1771,24 @@ export function AiPanel({
       ) : (
         <div
           ref={listRef}
-          className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3.5 py-4"
+          className={
+            embedded
+              ? "wb-ai-thread"
+              : "min-h-0 flex-1 space-y-5 overflow-y-auto px-3.5 py-4"
+          }
         >
-          {messages.length === 0 && (
+          {messages.length === 0 && embedded && (
+            <div className="wb-ai-empty">
+              <p className="wb-ai-empty-title">Ask about {hostLabel ?? "this session"}</p>
+              <p className="wb-muted">
+                Explain an error, or describe what you want and get a command to review.
+                {prefs.mode === "agent"
+                  ? " Agent mode runs commands and reads their output."
+                  : " Nothing runs until you insert it and press Enter."}
+              </p>
+            </div>
+          )}
+          {messages.length === 0 && !embedded && (
             <div className="space-y-2 pt-8 text-center">
               <div
                 className="text-[15px] font-semibold"
@@ -1533,15 +1825,17 @@ export function AiPanel({
               return (
                 <div
                   key={`run-${entry.work.userMessageId}`}
-                  className="space-y-3"
+                  className={embedded ? "wb-ai-reply" : "space-y-3"}
                   aria-busy={current && busy}
                 >
-                  <div
-                    className="text-[11px] font-semibold"
-                    style={{ color: "var(--text-secondary)" }}
-                  >
-                    Azalea
-                  </div>
+                  {!embedded && (
+                    <div
+                      className="text-[11px] font-semibold"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      Azalea
+                    </div>
+                  )}
                   <AiWorkDetails
                     work={entry.work}
                     liveText={
@@ -1594,6 +1888,38 @@ export function AiPanel({
               item.role === "user" &&
               (item.content.startsWith("Command output:") ||
                 item.content.startsWith("Action results:"));
+            if (embedded) {
+              if (isObs) {
+                const lines = item.content.split("\n").length - 1;
+                return (
+                  <details key={item.id} className="wb-ai-obs">
+                    <summary className="wb-chip">
+                      <WbTerminal />
+                      Read {lines} line{lines === 1 ? "" : "s"}
+                      {hostLabel ? ` from ${hostLabel}` : ""}
+                    </summary>
+                    <AiMarkdown text={item.content} layout="workbench" />
+                  </details>
+                );
+              }
+              return item.role === "user" ? (
+                <Fragment key={item.id}>
+                  <div className="wb-ai-user">{item.content}</div>
+                  {item.contextLines ? (
+                    <span className="wb-chip wb-ai-obs">
+                      <WbTerminal />
+                      Read {item.contextLines} line
+                      {item.contextLines === 1 ? "" : "s"}
+                      {hostLabel ? ` from ${hostLabel}` : ""}
+                    </span>
+                  ) : null}
+                </Fragment>
+              ) : (
+                <div key={item.id} className="wb-ai-reply">
+                  {renderAiContent(item.content)}
+                </div>
+              );
+            }
             return (
               <div key={item.id} className="space-y-2.5">
                 <div
@@ -1672,7 +1998,79 @@ export function AiPanel({
         </div>
       )}
 
-      {panelView === "chat" && (
+      {panelView === "chat" && embedded && (
+        <div ref={composerRef} className="wb-ai-composer">
+          {getTerminalContext && (
+            <div className="wb-ai-chips">
+              <button
+                type="button"
+                className="wb-chip"
+                aria-pressed={prefs.includeTerminalContext}
+                title={
+                  prefs.includeTerminalContext
+                    ? "Sent with your message. Click to leave it out."
+                    : "Click to send recent terminal output with your message."
+                }
+                onClick={() =>
+                  patchPrefs({ includeTerminalContext: !prefs.includeTerminalContext })
+                }
+              >
+                <WbTerminal />
+                {prefs.includeTerminalContext
+                  ? `Terminal output: last ${terminalContextLines} line${
+                      terminalContextLines === 1 ? "" : "s"
+                    }`
+                  : "Terminal output: off"}
+              </button>
+            </div>
+          )}
+          <div className="wb-ai-box">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+              rows={2}
+              aria-label="Message"
+              placeholder={
+                prefs.mode === "agent"
+                  ? "Tell Agent what to do on this session"
+                  : "Ask about this session, or describe a command"
+              }
+              className="wb-ai-input"
+            />
+            <div className="wb-ai-box-foot">
+              <span className="wb-muted">
+                Sent to {provider.name} only when you press Enter
+              </span>
+              {busy ? (
+                <button type="button" className="wb-btn" onClick={stop} aria-label="Stop">
+                  <Square size={12} />
+                  Stop
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="wb-btn"
+                  data-variant="pri"
+                  disabled={!input.trim()}
+                  aria-label="Send message"
+                  onClick={() => void send()}
+                >
+                  <WbSend />
+                  Send
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {panelView === "chat" && !embedded && (
         <div
           ref={composerRef}
           className="border-t p-3"
@@ -1757,141 +2155,7 @@ export function AiPanel({
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                   >
-                    <div className="min-h-0 space-y-2 overflow-y-auto p-2.5">
-                      <Select
-                        label="Provider"
-                        size="sm"
-                        disabled={busy}
-                        value={prefs.providerId}
-                        options={AI_PROVIDERS.map((p) => ({
-                          value: p.id,
-                          label: p.name,
-                        }))}
-                        onChange={(id) => {
-                          patchPrefs({
-                            providerId: id as AiProviderId,
-                          });
-                        }}
-                      />
-                      {regionOptions.length > 0 && (
-                        <Select
-                          label="Region"
-                          size="sm"
-                          disabled={busy}
-                          value={prefs.region}
-                          options={regionOptions}
-                          onChange={(region) => patchPrefs({ region })}
-                        />
-                      )}
-                      {prefs.mode === "agent" && (
-                        <div className="space-y-1">
-                          <Select
-                            label="Access"
-                            size="sm"
-                            disabled={busy}
-                            value={prefs.access}
-                            options={[
-                              {
-                                value: "confirm",
-                                label: "Confirm each command",
-                              },
-                              { value: "full", label: "Full access" },
-                            ]}
-                            onChange={(access) =>
-                              patchPrefs({ access: access as AiAccess })
-                            }
-                          />
-                          {prefs.access === "full" && (
-                            <p
-                              className="text-[11px] leading-snug"
-                              style={{ color: "#fca5a5" }}
-                            >
-                              Runs commands and file writes without asking.
-                            </p>
-                          )}
-                        </div>
-                      )}
-                      <Checkbox
-                        size="sm"
-                        label="Web search"
-                        checked={prefs.webSearchEnabled}
-                        disabled={busy}
-                        onChange={(webSearchEnabled) =>
-                          patchPrefs({ webSearchEnabled })
-                        }
-                      />
-                      <Checkbox
-                        size="sm"
-                        label="Include terminal context"
-                        checked={prefs.includeTerminalContext}
-                        onChange={(checked) =>
-                          patchPrefs({ includeTerminalContext: checked })
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
-                        style={{ color: "var(--text-secondary)" }}
-                        onClick={() => {
-                          const current = getAiThread(threadId);
-                          void exportThread(current);
-                          setSettingsOpen(false);
-                        }}
-                      >
-                        <Download size={13} />
-                        Export this chat
-                      </button>
-                      <button
-                        type="button"
-                        className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
-                        style={{ color: "var(--text-secondary)" }}
-                        onClick={() => {
-                          void exportThread(null, true);
-                          setSettingsOpen(false);
-                        }}
-                      >
-                        <Download size={13} />
-                        Export all chats
-                      </button>
-                      {provider.supportsModelList && (
-                        <button
-                          type="button"
-                          className="hover-subtle flex w-full items-center gap-2 rounded-lg px-2 py-1 text-[12px]"
-                          style={{ color: "var(--text-secondary)" }}
-                          disabled={loadingModels}
-                          onClick={refreshModels}
-                        >
-                          {loadingModels ? (
-                            <Loader2 size={13} className="animate-spin" />
-                          ) : (
-                            <RefreshCw size={13} />
-                          )}
-                          Refresh models
-                        </button>
-                      )}
-                      {modelsError && (
-                        <p
-                          className="break-words text-[11px] leading-snug"
-                          style={{ color: "#f87171" }}
-                          title={modelsError}
-                        >
-                          {shortAiError(modelsError)}
-                        </p>
-                      )}
-                      {threads.some((t) => t.id === threadId) && (
-                        <button
-                          type="button"
-                          className="text-[11px]"
-                          style={{ color: "var(--text-muted)" }}
-                          onClick={() => {
-                            removeThread(threadId);
-                            setSettingsOpen(false);
-                          }}
-                        >
-                          Delete this chat
-                        </button>
-                      )}
-                    </div>
+                    {settingsBody}
                   </div>
                 )}
 

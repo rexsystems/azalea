@@ -456,6 +456,8 @@ export interface AiChatMessageStored {
   content: string;
   createdAt: number;
   internal?: boolean;
+  /** Lines of terminal output sent along with this message, if any. */
+  contextLines?: number;
   work?: AiWorkSummary;
 }
 

@@ -8,7 +8,15 @@ import {
   type AiPendingAction,
 } from "../lib/ai";
 import { copyText } from "../lib/clipboard";
+import { isReadOnlyCommand } from "../lib/commandRisk";
 import { Button } from "./ui/Button";
+import {
+  WbCopy,
+  WbInsert,
+  WbShield,
+  WbSnippet,
+  WbWarn,
+} from "./workbench/wbIcons";
 
 function CopyCode({ code }: { code: string }) {
   const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
@@ -39,6 +47,31 @@ function CopyCode({ code }: { code: string }) {
   );
 }
 
+/** Copy button styled for the workbench command card. */
+function CopyCommand({ code }: { code: string }) {
+  const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
+  useEffect(() => {
+    if (status === "idle") return;
+    const timer = window.setTimeout(() => setStatus("idle"), 2000);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+  return (
+    <button
+      type="button"
+      className="wb-btn"
+      aria-live="polite"
+      onClick={() => {
+        void copyText(code)
+          .then(() => setStatus("copied"))
+          .catch(() => setStatus("failed"));
+      }}
+    >
+      <WbCopy />
+      {status === "copied" ? "Copied" : status === "failed" ? "Copy failed" : "Copy"}
+    </button>
+  );
+}
+
 function actionHeaders() {
   return (tree: Root) => {
     const walk = (node: Nodes) => {
@@ -65,6 +98,7 @@ export function AiMarkdown({
   pendingApprove,
   onApprove,
   disabled = false,
+  layout = "card",
 }: {
   text: string;
   onRunCommand?: (command: string) => void;
@@ -74,12 +108,18 @@ export function AiMarkdown({
   pendingApprove?: AiPendingAction[];
   onApprove?: (action: AiPendingAction) => void;
   disabled?: boolean;
+  /** "workbench" renders code blocks as the inspector's command cards. */
+  layout?: "card" | "workbench";
 }) {
   const heading = "select-text font-semibold leading-snug";
   return (
     <div
-      className="ai-markdown space-y-3 text-[14px] leading-[1.7] break-words"
-      style={{ color: "var(--text)" }}
+      className={
+        layout === "workbench"
+          ? "ai-markdown wb-md"
+          : "ai-markdown space-y-3 text-[14px] leading-[1.7] break-words"
+      }
+      style={layout === "workbench" ? undefined : { color: "var(--text)" }}
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm, actionHeaders]}
@@ -160,17 +200,20 @@ export function AiMarkdown({
               {children}
             </td>
           ),
-          code: ({ children, className, node: _node, ...props }) => (
-            <code
-              {...props}
-              className={
-                className || "rounded px-1 py-0.5 font-mono text-[12px]"
-              }
-              style={{ background: "var(--bg-card)" }}
-            >
-              {children}
-            </code>
-          ),
+          code: ({ children, className, node: _node, ...props }) =>
+            layout === "workbench" ? (
+              <code {...props} className={className || "wb-mono wb-code"}>
+                {children}
+              </code>
+            ) : (
+              <code
+                {...props}
+                className={className || "rounded px-1 py-0.5 font-mono text-[12px]"}
+                style={{ background: "var(--bg-card)" }}
+              >
+                {children}
+              </code>
+            ),
           pre: ({ children }) => {
             if (!isValidElement(children)) return <pre>{children}</pre>;
             const props = children.props as {
@@ -196,6 +239,85 @@ export function AiMarkdown({
             const snippetLabel = isSnippet
               ? lang.replace(/^snippet\s*/i, "").trim() || "snippet"
               : null;
+            if (layout === "workbench") {
+              const shell = action?.type === "shell" ? action.command : null;
+              const readOnly = shell != null && isReadOnlyCommand(shell);
+              const kind = writePath
+                ? `write ${writePath}`
+                : snippetLabel
+                  ? `snippet${snippetLabel === "snippet" ? "" : ` · ${snippetLabel}`}`
+                  : lang || "code";
+              return (
+                <div className="wb-cmd">
+                  <div className="wb-cmd-head">
+                    {shell != null || writePath ? (
+                      <span className="wb-cmd-risk" data-tone={readOnly ? "ok" : "warn"}>
+                        {readOnly ? <WbShield /> : <WbWarn />}
+                        {readOnly ? "Read only" : writePath ? "Writes a file" : "Check before running"}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+                    <span className="wb-muted">{kind}</span>
+                  </div>
+                  <pre className="wb-cmd-code wb-mono">{code}</pre>
+                  <div className="wb-cmd-actions">
+                    {awaiting ? (
+                      <button
+                        type="button"
+                        className="wb-btn"
+                        data-variant="pri"
+                        disabled={disabled || awaiting !== pendingApprove?.[0]}
+                        onClick={() => onApprove?.(awaiting)}
+                      >
+                        Approve
+                      </button>
+                    ) : (
+                      <>
+                        {shell != null && onInsertCommand && (
+                          <button
+                            type="button"
+                            className="wb-btn"
+                            data-variant="pri"
+                            disabled={disabled}
+                            onClick={() => onInsertCommand(shell)}
+                          >
+                            <WbInsert />
+                            Insert in terminal
+                          </button>
+                        )}
+                        {action?.type === "write" && onWriteFile && (
+                          <button
+                            type="button"
+                            className="wb-btn"
+                            data-variant="pri"
+                            disabled={disabled}
+                            onClick={() => onWriteFile(action.path, action.content)}
+                          >
+                            Write file
+                          </button>
+                        )}
+                      </>
+                    )}
+                    <CopyCommand code={code} />
+                    {shell != null && onSaveSnippet && !awaiting && (
+                      <button
+                        type="button"
+                        className="wb-ib"
+                        aria-label="Save as snippet"
+                        title="Save as snippet"
+                        onClick={() => onSaveSnippet(shell)}
+                      >
+                        <WbSnippet />
+                      </button>
+                    )}
+                    {shell != null && onInsertCommand && !awaiting && (
+                      <span className="wb-cmd-note">You press Enter</span>
+                    )}
+                  </div>
+                </div>
+              );
+            }
             return (
               <div
                 className="overflow-hidden rounded-xl border"
