@@ -83,6 +83,8 @@ interface AiPanelProps {
   onWriteFile?: (path: string, contents: string) => Promise<void>;
   onClose: () => void;
   getTerminalContext?: () => string;
+  /** Rendered inside the workbench inspector, which owns width, resizing and closing. */
+  embedded?: boolean;
 }
 
 type PanelView = "chat" | "history" | "memory";
@@ -140,6 +142,7 @@ export function AiPanel({
   onWriteFile,
   onClose,
   getTerminalContext,
+  embedded = false,
 }: AiPanelProps) {
   const [prefs, setPrefsState] = useState(() => getAiPrefs());
   const [width, setWidth] = useState(() => {
@@ -1164,20 +1167,31 @@ export function AiPanel({
 
   return (
     <aside
-      className="relative flex h-full shrink-0 flex-col border-l"
-      style={{
-        width,
-        background: "var(--bg-panel)",
-        borderColor: "var(--border-subtle)",
-      }}
+      aria-label="Assistant"
+      className={
+        embedded
+          ? "relative flex h-full min-w-0 flex-1 flex-col"
+          : "relative flex h-full shrink-0 flex-col border-l"
+      }
+      style={
+        embedded
+          ? { background: "var(--bg-panel)" }
+          : {
+              width,
+              background: "var(--bg-panel)",
+              borderColor: "var(--border-subtle)",
+            }
+      }
     >
-      <div
-        className="absolute top-0 bottom-0 left-0 z-10 w-1 cursor-col-resize"
-        onPointerDown={onResizePointerDown}
-        onPointerMove={onResizePointerMove}
-        onPointerUp={onResizePointerUp}
-        style={{ background: "transparent" }}
-      />
+      {!embedded && (
+        <div
+          className="absolute top-0 bottom-0 left-0 z-10 w-1 cursor-col-resize"
+          onPointerDown={onResizePointerDown}
+          onPointerMove={onResizePointerMove}
+          onPointerUp={onResizePointerUp}
+          style={{ background: "transparent" }}
+        />
+      )}
 
       <header
         className="flex items-center justify-between gap-2 border-b px-3 py-2.5"
@@ -1219,6 +1233,7 @@ export function AiPanel({
                 panelView === "history" ? "var(--bg-card)" : "transparent",
             }}
             title="Old chats"
+            aria-label="Old chats"
             onClick={() => {
               refreshThreads();
               setPanelView((v) => (v === "history" ? "chat" : "history"));
@@ -1237,6 +1252,7 @@ export function AiPanel({
                 panelView === "memory" ? "var(--bg-card)" : "transparent",
             }}
             title="Memory"
+            aria-label="Memory"
             onClick={() => {
               refreshMemory();
               setPanelView((v) => (v === "memory" ? "chat" : "memory"));
@@ -1250,19 +1266,23 @@ export function AiPanel({
             className="hover-subtle rounded-lg p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="New chat"
+            aria-label="New chat"
             onClick={startNewChat}
           >
             <Plus size={15} />
           </button>
-          <button
-            type="button"
-            className="hover-subtle rounded-lg p-1.5"
-            style={{ color: "var(--text-muted)" }}
-            title="Close"
-            onClick={onClose}
-          >
-            <X size={15} />
-          </button>
+          {!embedded && (
+            <button
+              type="button"
+              className="hover-subtle rounded-lg p-1.5"
+              style={{ color: "var(--text-muted)" }}
+              title="Close"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              <X size={15} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -1345,6 +1365,7 @@ export function AiPanel({
                       className="hover-subtle shrink-0 rounded-lg p-1.5 opacity-60 hover:opacity-100"
                       style={{ color: "var(--text-muted)" }}
                       title="Export chat"
+                      aria-label="Export chat"
                       onClick={() => void exportThread(t)}
                     >
                       <Download size={14} />
@@ -1354,6 +1375,7 @@ export function AiPanel({
                       className="hover-subtle shrink-0 rounded-lg p-1.5 opacity-60 hover:opacity-100"
                       style={{ color: "var(--text-muted)" }}
                       title="Delete chat"
+                      aria-label="Delete chat"
                       onClick={() => removeThread(t.id)}
                     >
                       <Trash2 size={14} />
@@ -1456,6 +1478,7 @@ export function AiPanel({
                     className="hover-subtle shrink-0 rounded-lg p-1.5"
                     style={{ color: "var(--text-muted)" }}
                     title="Forget"
+                    aria-label="Forget"
                     onClick={() => {
                       deleteAiMemory(note.id);
                       refreshMemory();
@@ -1720,6 +1743,7 @@ export function AiPanel({
                   className="hover-subtle rounded-lg p-1.5"
                   style={{ color: "var(--text-muted)" }}
                   title="Chat settings"
+                  aria-label="Chat settings"
                   onClick={() => setSettingsOpen((v) => !v)}
                 >
                   <Settings size={15} />
@@ -1880,6 +1904,7 @@ export function AiPanel({
                       color: "var(--text)",
                     }}
                     title="Stop"
+                    aria-label="Stop"
                     onClick={stop}
                   >
                     <Square size={12} />
@@ -1898,6 +1923,7 @@ export function AiPanel({
                     }}
                     disabled={!input.trim()}
                     title="Send"
+                    aria-label="Send"
                     onClick={() => void send()}
                   >
                     <ArrowUp size={14} />

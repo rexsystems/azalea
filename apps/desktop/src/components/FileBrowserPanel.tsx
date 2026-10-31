@@ -39,6 +39,11 @@ interface FileBrowserPanelProps {
   sessionId: string;
   onClose: () => void;
   onCdTerminal: (path: string) => void;
+  /**
+   * Rendered inside the workbench inspector, which owns the width, the
+   * resize handle, the title and closing.
+   */
+  embedded?: boolean;
 }
 
 interface UploadState {
@@ -168,7 +173,12 @@ function sortEntries(entries: FileEntry[]): FileEntry[] {
   });
 }
 
-export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrowserPanelProps) {
+export function FileBrowserPanel({
+  sessionId,
+  onClose,
+  onCdTerminal,
+  embedded = false,
+}: FileBrowserPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [path, setPath] = useState<string | null>(null);
   const [entries, setEntries] = useState<FileEntry[]>([]);
@@ -534,13 +544,22 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
   return (
     <div
       ref={panelRef}
-      className="file-browser-panel relative flex h-full shrink-0 flex-col border-l"
-      style={{
-        width,
-        background: "var(--bg-panel)",
-        borderColor: "var(--border-subtle)",
-      }}
+      className={
+        embedded
+          ? "file-browser-panel relative flex h-full min-w-0 flex-1 flex-col"
+          : "file-browser-panel relative flex h-full shrink-0 flex-col border-l"
+      }
+      style={
+        embedded
+          ? { background: "var(--bg-panel)" }
+          : {
+              width,
+              background: "var(--bg-panel)",
+              borderColor: "var(--border-subtle)",
+            }
+      }
     >
+      {!embedded && (
       <div
         role="separator"
         aria-orientation="vertical"
@@ -555,8 +574,9 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
         <div className="file-browser-resize-line absolute inset-y-0 left-0 w-px" />
         <div className="absolute inset-y-0 -left-1 w-3" />
       </div>
+      )}
 
-      {resizing && (
+      {resizing && !embedded && (
         <div
           className="pointer-events-none absolute left-3 top-1/2 z-50 -translate-y-1/2 rounded-full border px-2.5 py-1 font-mono text-[11px] font-semibold tabular-nums shadow-lg"
           style={{
@@ -627,6 +647,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
               className="hover-subtle rounded p-1.5"
               style={{ color: "var(--text-muted)" }}
               title="Close"
+              aria-label="Close"
             >
               <X size={13} />
             </button>
@@ -647,6 +668,11 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
         className="flex shrink-0 items-center justify-between border-b px-3 py-2"
         style={{ borderColor: "var(--border-subtle)" }}
       >
+        {embedded ? (
+          <div className="min-w-0 truncate text-xs" style={{ color: "var(--text-muted)" }}>
+            SFTP over this session
+          </div>
+        ) : (
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
             Files
@@ -655,6 +681,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
             SFTP
           </div>
         </div>
+        )}
         <div className="flex items-center gap-0.5">
           <button
             type="button"
@@ -662,6 +689,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
             className="hover-subtle rounded p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Upload file here"
+            aria-label="Upload file here"
           >
             <Upload size={13} />
           </button>
@@ -671,6 +699,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
             className="hover-subtle rounded p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Home"
+            aria-label="Home"
           >
             <Home size={13} />
           </button>
@@ -680,6 +709,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
             className="hover-subtle rounded p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Refresh"
+            aria-label="Refresh"
           >
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
           </button>
@@ -690,19 +720,23 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
               className="hover-subtle rounded p-1.5"
               style={{ color: "var(--text-muted)" }}
               title="cd terminal here"
+              aria-label="cd terminal here"
             >
               <TerminalSquare size={13} />
             </button>
           )}
+          {!embedded && (
           <button
             type="button"
             onClick={onClose}
             className="hover-subtle rounded p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Close"
+            aria-label="Close"
           >
             <X size={13} />
           </button>
+          )}
         </div>
       </div>
 
@@ -717,6 +751,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
           className="hover-subtle rounded p-1 disabled:opacity-30"
           style={{ color: "var(--text-muted)" }}
           title="Up"
+          aria-label="Up"
         >
           <ArrowUp size={13} />
         </button>
@@ -773,6 +808,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
             className="hover-subtle rounded p-0.5"
             style={{ color: "var(--text-muted)" }}
             title="Clear filter"
+            aria-label="Clear filter"
           >
             <X size={12} />
           </button>
@@ -856,6 +892,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
                     className="hover-subtle shrink-0 rounded p-1 opacity-0 group-hover:opacity-100"
                     style={{ color: "var(--text-muted)" }}
                     title="Download"
+                    aria-label="Download"
                   >
                     <Download size={12} />
                   </button>
@@ -866,6 +903,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
                       className="hover-subtle shrink-0 rounded p-1 opacity-0 group-hover:opacity-100"
                       style={{ color: "var(--text-muted)" }}
                       title="Edit remote file"
+                      aria-label="Edit remote file"
                     >
                       <Pencil size={12} />
                     </button>

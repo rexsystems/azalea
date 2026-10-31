@@ -9,9 +9,27 @@ interface ForwardsPopoverProps {
   sessionId: string;
   onClose: () => void;
   onStatus: (message: string) => void;
+  /**
+   * "popover" floats over the terminal (Legacy UI). "panel" fills the
+   * workbench inspector: static, no close button, no outside-click dismiss.
+   */
+  variant?: "popover" | "panel";
 }
 
-function statusLabel(status: PortForwardStatus | undefined): {
+interface StatusTones {
+  ok: string;
+  danger: string;
+}
+
+// Legacy keeps its fixed colors; the panel uses the theme status tokens,
+// which are contrast-checked for text on Ink and Paper.
+const POPOVER_TONES: StatusTones = { ok: "#86efac", danger: "#f87171" };
+const PANEL_TONES: StatusTones = { ok: "var(--ok)", danger: "var(--danger)" };
+
+function statusLabel(
+  status: PortForwardStatus | undefined,
+  tones: StatusTones,
+): {
   text: string;
   color: string;
 } {
@@ -19,13 +37,13 @@ function statusLabel(status: PortForwardStatus | undefined): {
     return { text: "Off", color: "var(--text-muted)" };
   }
   if (status.state === "failed") {
-    return { text: "Failed", color: "#f87171" };
+    return { text: "Failed", color: tones.danger };
   }
   if (status.state === "connected") {
     const n = status.connections;
     return {
       text: n === 1 ? "Connected · 1" : `Connected · ${n}`,
-      color: "#86efac",
+      color: tones.ok,
     };
   }
   return { text: "Listening", color: "var(--accent)" };
@@ -36,7 +54,10 @@ export function ForwardsPopover({
   sessionId,
   onClose,
   onStatus,
+  variant = "popover",
 }: ForwardsPopoverProps) {
+  const panel = variant === "panel";
+  const tones = panel ? PANEL_TONES : POPOVER_TONES;
   const [forwards, setForwards] = useState<PortForward[]>([]);
   const [statuses, setStatuses] = useState<Record<string, PortForwardStatus>>({});
   const [adding, setAdding] = useState(false);
@@ -93,6 +114,7 @@ export function ForwardsPopover({
   }, [sessionId]);
 
   useEffect(() => {
+    if (panel) return;
     const onMouseDown = (e: MouseEvent) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
@@ -102,7 +124,7 @@ export function ForwardsPopover({
     };
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [onClose]);
+  }, [onClose, panel]);
 
   const submit = async () => {
     const lp = parseInt(localPort, 10);
@@ -170,9 +192,33 @@ export function ForwardsPopover({
   return (
     <div
       ref={panelRef}
-      className="absolute right-2 top-1 z-20 flex w-80 flex-col rounded-xl border shadow-xl"
+      className={
+        panel
+          ? "flex min-h-0 flex-1 flex-col"
+          : "absolute right-2 top-1 z-20 flex w-80 flex-col rounded-xl border shadow-xl"
+      }
       style={{ background: "var(--bg-panel)", borderColor: "var(--border-subtle)" }}
     >
+      {panel ? (
+        <div
+          className="flex items-center justify-between gap-2 border-b px-3 py-2"
+          style={{ borderColor: "var(--border-subtle)" }}
+        >
+          <span className="min-w-0 truncate text-xs" style={{ color: "var(--text-muted)" }}>
+            Saved for this host, started per session
+          </span>
+          <button
+            type="button"
+            onClick={() => setAdding((v) => !v)}
+            aria-expanded={adding}
+            className="hover-subtle inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium"
+            style={{ color: "var(--text)", borderColor: "var(--border)", background: "var(--bg-card)" }}
+          >
+            <Plus size={13} />
+            New forward
+          </button>
+        </div>
+      ) : (
       <div
         className="flex items-center justify-between border-b px-3 py-2"
         style={{ borderColor: "var(--border-subtle)" }}
@@ -186,6 +232,7 @@ export function ForwardsPopover({
             className="hover-subtle rounded p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="New forward"
+            aria-label="New forward"
           >
             <Plus size={13} />
           </button>
@@ -194,11 +241,13 @@ export function ForwardsPopover({
             className="hover-subtle rounded p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Close"
+            aria-label="Close port forwarding"
           >
             <X size={13} />
           </button>
         </div>
       </div>
+      )}
 
       {adding && (
         <div className="flex flex-col gap-1.5 border-b px-3 py-2" style={{ borderColor: "var(--border-subtle)" }}>
@@ -206,6 +255,7 @@ export function ForwardsPopover({
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Label (optional)"
+            aria-label="Forward label"
             className="rounded-md border px-2 py-1 text-xs outline-none"
             style={inputStyle}
           />
@@ -214,6 +264,7 @@ export function ForwardsPopover({
               value={localPort}
               onChange={(e) => setLocalPort(e.target.value.replace(/\D/g, ""))}
               placeholder="Local port"
+              aria-label="Local port"
               className="w-20 rounded-md border px-2 py-1 text-xs outline-none"
               style={inputStyle}
             />
@@ -222,6 +273,7 @@ export function ForwardsPopover({
               value={remoteHost}
               onChange={(e) => setRemoteHost(e.target.value)}
               placeholder="Remote host"
+              aria-label="Remote host"
               className="min-w-0 flex-1 rounded-md border px-2 py-1 text-xs outline-none"
               style={inputStyle}
             />
@@ -229,6 +281,7 @@ export function ForwardsPopover({
               value={remotePort}
               onChange={(e) => setRemotePort(e.target.value.replace(/\D/g, ""))}
               placeholder="Port"
+              aria-label="Remote port"
               className="w-16 rounded-md border px-2 py-1 text-xs outline-none"
               style={inputStyle}
             />
@@ -243,10 +296,12 @@ export function ForwardsPopover({
         </div>
       )}
 
-      <div className="max-h-64 overflow-y-auto p-1.5">
+      <div className={panel ? "min-h-0 flex-1 overflow-y-auto p-1.5" : "max-h-64 overflow-y-auto p-1.5"}>
         {forwards.length === 0 && !adding && (
           <div className="px-2 py-2 text-xs" style={{ color: "var(--text-muted)" }}>
-            No forwards for this host. Use + to add one.
+            {panel
+              ? "No saved forwards for this host. Choose New forward to map a local port to a port reachable from the server."
+              : "No forwards for this host. Use + to add one."}
           </div>
         )}
         {forwards.map((forward) => {
@@ -254,7 +309,7 @@ export function ForwardsPopover({
           const running =
             status?.state === "listening" || status?.state === "connected";
           const failed = status?.state === "failed";
-          const badge = statusLabel(status);
+          const badge = statusLabel(status, tones);
           const toggleOn = running || (failed && Boolean(status?.error && busyId === forward.id));
 
           return (
@@ -271,9 +326,14 @@ export function ForwardsPopover({
                     ? "var(--accent)"
                     : failed
                       ? "rgba(248,113,113,0.45)"
-                      : "var(--border-subtle)",
+                      : panel
+                        ? "var(--line-input)"
+                        : "var(--border-subtle)",
                 }}
                 title={running ? "Stop" : "Start"}
+                role="switch"
+                aria-checked={running}
+                aria-label={`${forward.label}: ${running ? "stop" : "start"} forwarding`}
               >
                 <span
                   className="absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all"
@@ -296,7 +356,7 @@ export function ForwardsPopover({
                   127.0.0.1:{forward.local_port} → {forward.remote_host}:{forward.remote_port}
                 </span>
                 {status?.error && (
-                  <span className="truncate text-[10px]" style={{ color: "#f87171" }} title={status.error}>
+                  <span className="truncate text-[10px]" style={{ color: tones.danger }} title={status.error}>
                     {status.error}
                   </span>
                 )}
@@ -306,9 +366,10 @@ export function ForwardsPopover({
                   void api.stopForward(sessionId, forward.id).catch(() => undefined);
                   void api.deletePortForward(forward.id).then(refresh);
                 }}
-                className="shrink-0 rounded p-1 opacity-0 group-hover:opacity-100"
-                style={{ color: "#f87171" }}
+                className="shrink-0 rounded p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                style={{ color: tones.danger }}
                 title="Delete"
+                aria-label={`Delete forward ${forward.label}`}
               >
                 <Trash2 size={12} />
               </button>
