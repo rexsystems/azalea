@@ -7,11 +7,17 @@ import { getStoredTheme, type ThemeId } from "./theme";
  */
 export type UiMode = "new" | "legacy" | "minimal";
 
-/** Color scheme for the new and minimal interfaces. */
-export type UiThemeId = "ink" | "paper" | "system";
+/**
+ * Color scheme for the new and minimal interfaces. "system" follows the OS
+ * between Ink and Paper.
+ */
+export type UiThemeId = "ink" | "paper" | "noir" | "contrast" | "system";
 
-/** Theme actually written to `data-theme` when a non-legacy mode is active. */
-export type ResolvedUiTheme = "ink" | "paper";
+/**
+ * Theme actually written to `data-theme` when a non-legacy mode is active.
+ * Legacy owns "noir", so the new black themes get their own ids.
+ */
+export type ResolvedUiTheme = "ink" | "paper" | "ink-noir" | "ink-contrast";
 
 export const UI_MODE_KEY = "azalea-ui-mode";
 export const UI_THEME_KEY = "azalea-ui-theme";
@@ -36,10 +42,13 @@ export const uiModes: { id: UiMode; label: string; description: string }[] = [
   },
 ];
 
-export const uiThemes: { id: UiThemeId; label: string; description: string; preview: [string, string] }[] = [
-  { id: "ink", label: "Ink", description: "Dark", preview: ["#0F0F12", "#A898FF"] },
-  { id: "paper", label: "Paper", description: "Light", preview: ["#FAFAF8", "#372882"] },
-  { id: "system", label: "Match system", description: "Follows the OS setting", preview: ["#0F0F12", "#FAFAF8"] },
+export type FixedUiThemeId = Exclude<UiThemeId, "system">;
+
+export const uiThemes: { id: FixedUiThemeId; label: string; description: string }[] = [
+  { id: "ink", label: "Ink", description: "Default dark" },
+  { id: "paper", label: "Paper", description: "Light, for daylight" },
+  { id: "noir", label: "Noir", description: "True black for OLED" },
+  { id: "contrast", label: "High contrast", description: "Thick borders, 7:1 text" },
 ];
 
 const LIGHT_LEGACY_THEMES: ReadonlySet<ThemeId> = new Set(["white", "snow", "pearl"]);
@@ -49,7 +58,13 @@ export function isUiMode(value: unknown): value is UiMode {
 }
 
 export function isUiTheme(value: unknown): value is UiThemeId {
-  return value === "ink" || value === "paper" || value === "system";
+  return (
+    value === "ink" ||
+    value === "paper" ||
+    value === "noir" ||
+    value === "contrast" ||
+    value === "system"
+  );
 }
 
 export function parseUiMode(raw: string | null): UiMode {
@@ -65,9 +80,17 @@ export function parseUiTheme(raw: string | null, legacyTheme: ThemeId): UiThemeI
   return LIGHT_LEGACY_THEMES.has(legacyTheme) ? "paper" : "ink";
 }
 
-export function resolveUiTheme(id: UiThemeId, prefersDark: boolean): ResolvedUiTheme {
+/** The fixed theme a choice shows right now ("system" picks Ink or Paper). */
+export function effectiveUiTheme(id: UiThemeId, prefersDark: boolean): FixedUiThemeId {
   if (id === "system") return prefersDark ? "ink" : "paper";
   return id;
+}
+
+export function resolveUiTheme(id: UiThemeId, prefersDark: boolean): ResolvedUiTheme {
+  const theme = effectiveUiTheme(id, prefersDark);
+  if (theme === "noir") return "ink-noir";
+  if (theme === "contrast") return "ink-contrast";
+  return theme;
 }
 
 export function documentTheme(

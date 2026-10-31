@@ -25,6 +25,15 @@ import { Inspector, PanelLoading, type InspectorView } from "./components/workbe
 import { SessionFooter } from "./components/workbench/SessionFooter";
 import { SidebarHosts, SidebarSessions } from "./components/workbench/WorkbenchSidebar";
 import { WorkbenchTabs, type WorkbenchTool } from "./components/workbench/WorkbenchTabs";
+import { WorkbenchEmpty } from "./components/workbench/WorkbenchEmpty";
+import {
+  WbBatch,
+  WbChat,
+  WbFolder,
+  WbForward,
+  WbSplit,
+} from "./components/workbench/wbIcons";
+import { TERMINAL_CWD_EVENT, type TerminalCwdDetail } from "./lib/sessionInfo";
 import * as api from "./lib/api";
 import type { HostFormValues } from "./lib/utils";
 import { looksLikeUnreachableError, parseQuickConnect, wolBroadcastForHost } from "./lib/utils";
@@ -181,12 +190,14 @@ function App() {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
   const workspaceOpening = useRef(false);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const workspaceAccountRef = useRef<string | null>(null);
   const workspaces = workspaceState.accountId === activeAccount?.id ? workspaceState.items : [];
   useEffect(() => {
     const accountId = activeAccount?.id ?? null;
     workspaceAccountRef.current = accountId;
     setWorkspaceError(null);
+    setActiveWorkspaceId(null);
     try {
       setWorkspaceState({ accountId, items: accountId ? parseWorkspaces(localStorage.getItem(workspaceStorageKey(accountId))) : [] });
     } catch {
@@ -488,8 +499,9 @@ function App() {
     Record<string, { cols: number; rows: number }>
   >({});
 
+  // The terminal resizes its backend itself; this only records the grid size
+  // for the status line.
   const handleTerminalResize = useCallback((sessionId: string, cols: number, rows: number) => {
-    void api.resizeTerminal(sessionId, cols, rows);
     setTerminalSizes((prev) => {
       const current = prev[sessionId];
       if (current && current.cols === cols && current.rows === rows) return prev;
@@ -1681,6 +1693,23 @@ function App() {
 
       if (commandPaletteOpen) return;
 
+      if (mod && !e.shiftKey && e.key === ",") {
+        e.preventDefault();
+        handleNavigate("settings");
+        return;
+      }
+
+      // Workbench tool shortcuts. Ctrl+Shift keeps them clear of shell
+      // bindings such as Ctrl+F (forward char) and Ctrl+A (line start).
+      if (workbench && viewingTerminal && activeTabId && e.ctrlKey && e.shiftKey && !e.altKey) {
+        const tool = workbenchTools.find((t) => t.shortcut === `Ctrl Shift ${key.toUpperCase()}`);
+        if (tool) {
+          e.preventDefault();
+          tool.onClick();
+          return;
+        }
+      }
+
       if (e.ctrlKey && key === "tab") {
         const cycle = tabs.filter((t) => !t.poppedOut);
         if (cycle.length === 0) return;
@@ -1740,7 +1769,11 @@ function App() {
       message: "Saves tab order and split views locally. Opening it adds new sessions alongside existing tabs.",
       placeholder: "Workspace name",
       confirmLabel: "Save workspace",
-      onConfirm: (name) => persistWorkspaces([...workspaces, { ...snapshot, id: crypto.randomUUID(), name }]),
+      onConfirm: (name) => {
+        const id = crypto.randomUUID();
+        persistWorkspaces([...workspaces, { ...snapshot, id, name }]);
+        setActiveWorkspaceId(id);
+      },
     });
   };
 
@@ -1781,6 +1814,7 @@ function App() {
       setActiveTabId(ids[workspace.activeTab] ?? null);
       setViewingTerminal(true);
       setStatusMessage(`Opened workspace: ${workspace.name}`);
+      setActiveWorkspaceId(workspace.id);
     } catch (error) {
       setWorkspaceError(`Could not open workspace: ${String(error)}`);
     } finally {
@@ -2228,6 +2262,17 @@ function App() {
   // UI keep the original layout.
   const workbench = !isMobile && uiMode !== "legacy";
   const activeIsLocal = activeTab ? api.isLocalSession(activeTab.id) : false;
+
+  // Working directory per session, as reported by the shell.
+  const [terminalCwds, setTerminalCwds] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const onCwd = (e: Event) => {
+      const { sessionId, cwd } = (e as CustomEvent<TerminalCwdDetail>).detail;
+      setTerminalCwds((prev) => (prev[sessionId] === cwd ? prev : { ...prev, [sessionId]: cwd }));
+    };
+    window.addEventListener(TERMINAL_CWD_EVENT, onCwd);
+    return () => window.removeEventListener(TERMINAL_CWD_EVENT, onCwd);
+  }, []);
   const inspectorViews: InspectorView[] =
     viewingTerminal && activeTab
       ? [
@@ -2344,6 +2389,17 @@ function App() {
   const renderNavPage = () => {
     switch (navPage) {
       case "home":
+        if (workbench && !isMobile && !hostsLoading && hosts.length === 0) {
+          return (
+            <WorkbenchEmpty
+              onImportSsh={handleOpenImportFromSsh}
+              onAddHost={() => openAddDrawer()}
+              onOpenLocalTerminal={() => void openLocalTerminal()}
+              onRestoreBackup={handleImportBackup}
+              backupBusy={backupBusy}
+            />
+          );
+        }
         return (
           <HomePage
             hosts={hosts}
@@ -2479,6 +2535,7 @@ function App() {
         key={sessionId}
         sessionId={sessionId}
         embedded={embedded}
+        terminalCwd={terminalCwds[sessionId]}
         onClose={() => setFilesPanelSessionId(null)}
         onCdTerminal={(path) =>
           sendCommandToTerminal(
@@ -2527,21 +2584,23 @@ function App() {
     splitWithId: tab.splitWithId,
   }));
 
-  const workbenchTools: WorkbenchTool[] = [
-    {
-      id: "local",
-      icon: SquareTerminal,
-      label: "Local terminal",
-      onClick: () => void openLocalTerminal(),
-    },
-    ...(viewingTerminal && activeTab
+  const activeHost = activeTab ? hosts.find((h) => h.id === activeTab.hostId) : undefined;
+  const batchTargets = (): Host[] => {
+    if (!activeHost) return hosts;
+    if (!activeHost.group_id) return [activeHost];
+    return hosts.filter((h) => h.group_id === activeHost.group_id);
+  };
+
+  const workbenchTools: WorkbenchTool[] =
+    viewingTerminal && activeTab
       ? [
           ...(!activeIsLocal
             ? [
                 {
                   id: "files",
-                  icon: FolderTree,
+                  icon: WbFolder,
                   label: "Files",
+                  shortcut: "Ctrl Shift F",
                   pressed: inspectorView === "files",
                   onClick: () => toggleInspectorView("files"),
                 },
@@ -2551,8 +2610,9 @@ function App() {
             ? [
                 {
                   id: "assistant",
-                  icon: Message,
+                  icon: WbChat,
                   label: "Assistant",
+                  shortcut: "Ctrl Shift A",
                   pressed: inspectorView === "assistant",
                   onClick: () => toggleInspectorView("assistant"),
                 },
@@ -2562,66 +2622,83 @@ function App() {
             ? [
                 {
                   id: "forwards",
-                  icon: ArrowLeftRight,
+                  icon: WbForward,
                   label: "Forwards",
+                  shortcut: "Ctrl Shift P",
                   pressed: inspectorView === "forwards",
                   detail: activeForwardCount > 0 ? `${activeForwardCount} running` : undefined,
-                  badge: activeForwardCount,
                   onClick: () => toggleInspectorView("forwards"),
                 },
               ]
             : []),
-          {
-            id: "snippets",
-            icon: FileCode,
-            label: "Snippets",
-            expanded: snippetsOpen,
-            popoverTrigger: true,
-            onClick: () => setSnippetsOpen((v) => !v),
-          },
+          ...(hosts.length > 0
+            ? [
+                {
+                  id: "batch",
+                  icon: WbBatch,
+                  label: "Batch",
+                  shortcut: "Ctrl Shift B",
+                  separatorBefore: true,
+                  onClick: () => setBatchHosts(batchTargets()),
+                },
+              ]
+            : []),
           {
             id: "split",
-            icon: Columns2,
-            label: activeTab.splitWithId ? "Unsplit" : "Split",
+            icon: WbSplit,
+            label: activeTab.splitWithId ? "Close split pane" : "Split pane",
+            iconOnly: true,
             pressed: Boolean(activeTab.splitWithId),
             onClick: () => splitActiveTab(),
           },
-          {
-            id: "popout",
-            icon: ExternalLink,
-            label: "Pop out",
-            onClick: () => popOutActiveTab(),
-          },
         ]
-      : []),
-  ];
+      : [];
+
+  const sidebarFoot = {
+    activeForwards: activeForwardCount,
+    forwardsOpen: inspectorView === "forwards",
+    snippetsOpen,
+    onForwards: () => {
+      if (viewingTerminal && activeTab && !activeIsLocal) toggleInspectorView("forwards");
+      else setStatusMessage("Open an SSH session to manage its port forwards.");
+    },
+    onSnippets: () => {
+      if (viewingTerminal && activeTab) setSnippetsOpen((v) => !v);
+      else setStatusMessage("Open a session to run a snippet in it.");
+    },
+  };
+
+  const keyLabel = (host: Host | undefined): string | null => {
+    if (!host) return null;
+    if (host.auth_type === "password") return "password";
+    if (host.auth_type === "none") return "no auth";
+    const key = keys.find((k) => k.id === host.key_id);
+    return key ? `${key.key_type.replace(/^ssh-/, "")} · ${key.name}` : "key";
+  };
 
   const renderWorkbenchSidebar = () => (
     <>
       <SidebarSessions
-        sessions={displayTabs.map((tab) => {
-          const raw = tabs.find((t) => t.id === tab.id);
-          return {
-            id: tab.id,
-            title: tab.title,
-            status: tab.status,
-            isLocal: api.isLocalSession(tab.id),
-            osId: raw ? hosts.find((h) => h.id === raw.hostId)?.os_id : null,
-          };
-        })}
+        sessions={displayTabs.map((tab) => ({
+          id: tab.id,
+          title: tab.title,
+          status: tab.status,
+          isLocal: api.isLocalSession(tab.id),
+        }))}
         activeSessionId={viewingTerminal ? activeTabId : null}
         onSelect={handleSelectTab}
         onClose={requestCloseTab}
-        onOpenLocalTerminal={() => void openLocalTerminal()}
       />
       <SidebarHosts
         hosts={hosts}
         groups={groups}
         loading={hostsLoading}
         connectingHostId={connectingHostId}
+        openHostIds={new Set(tabs.filter((t) => t.status !== "disconnected").map((t) => t.hostId))}
         onConnect={(host) => void connectToHost(host)}
         onEdit={(host) => openHostDrawerFromSidebar(host)}
         onAdd={() => openHostDrawerFromSidebar(null)}
+        onManage={() => handleNavigate("hosts")}
       />
     </>
   );
@@ -2635,12 +2712,42 @@ function App() {
             hostname: activeTab.hostname,
             port: activeTab.port,
             status: activeTab.status,
+            auth: activeIsLocal ? null : keyLabel(activeHost),
+            cwd: terminalCwds[activeTab.id] ?? null,
             cols: terminalSizes[activeTab.id]?.cols,
             rows: terminalSizes[activeTab.id]?.rows,
           }
         : null;
-    return <SessionFooter session={session} statusMessage={statusMessage} />;
+    if (!session) return null;
+    return (
+      <SessionFooter
+        session={session}
+        statusMessage={statusMessage === "Ready" ? "" : statusMessage}
+      />
+    );
   };
+
+  const renderInspector = () =>
+    workbench && viewingTerminal && inspectorView && activeTab ? (
+      <Inspector
+        view={inspectorView}
+        onClose={() => showInspectorView(null)}
+        contextLabel={inspectorView === "files" ? `${activeTab.title} · SFTP` : activeTab.title}
+      >
+        {inspectorView === "files" && renderFilesPanel(activeTab.id, true)}
+        {inspectorView === "assistant" && renderAiPanel(activeTab.id, activeTab, true)}
+        {inspectorView === "forwards" && (
+          <ForwardsPopover
+            key={activeTab.id}
+            variant="panel"
+            hostId={activeTab.hostId}
+            sessionId={activeTab.id}
+            onClose={() => setForwardsOpen(false)}
+            onStatus={setStatusMessage}
+          />
+        )}
+      </Inspector>
+    ) : null;
 
   const renderMain = () => (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -2830,29 +2937,6 @@ function App() {
             aiPanelSessionId === activeTab.id &&
             renderAiPanel(aiPanelSessionId, activeTab, false)}
 
-          {workbench && inspectorView && activeTab && (
-            <Inspector
-              view={inspectorView}
-              views={inspectorViews}
-              onViewChange={showInspectorView}
-              onClose={() => showInspectorView(null)}
-              contextLabel={activeTab.title}
-              forwardCount={activeForwardCount}
-            >
-              {inspectorView === "files" && renderFilesPanel(activeTab.id, true)}
-              {inspectorView === "assistant" && renderAiPanel(activeTab.id, activeTab, true)}
-              {inspectorView === "forwards" && (
-                <ForwardsPopover
-                  key={activeTab.id}
-                  variant="panel"
-                  hostId={activeTab.hostId}
-                  sessionId={activeTab.id}
-                  onClose={() => setForwardsOpen(false)}
-                  onStatus={setStatusMessage}
-                />
-              )}
-            </Inspector>
-          )}
         </div>
       )}
 
@@ -2917,7 +3001,7 @@ function App() {
         onPasswordLogin={handlePasswordLogin}
         statusMessage={isMobile ? undefined : statusMessage}
         syncStatus={syncStatus}
-        showTabs={hasTabs && (viewingTerminal || !isMobile)}
+        showTabs={hasTabs && (viewingTerminal || (!isMobile && !workbench))}
         isMobile={isMobile}
         immersive={isMobile && viewingTerminal}
         uiMode={uiMode}
@@ -2925,6 +3009,19 @@ function App() {
         onOpenPalette={() => setCommandPaletteOpen(true)}
         sidebarContent={workbench ? renderWorkbenchSidebar() : undefined}
         footer={workbench ? renderWorkbenchFooter() : undefined}
+        inspector={workbench ? renderInspector() : undefined}
+        sidebarFoot={sidebarFoot}
+        workspaces={{
+          items: workspaces,
+          activeId: activeWorkspaceId,
+          canSave:
+            Boolean(activeAccount) &&
+            workspaceState.accountId === activeAccount?.id &&
+            tabs.some((tab) => !tab.poppedOut),
+          onOpen: (workspace) => void openWorkspace(workspace),
+          onSave: saveWorkspace,
+          onManage: () => handleNavigate("home"),
+        }}
         tabBar={
           workbench ? (
             <WorkbenchTabs
@@ -2932,6 +3029,7 @@ function App() {
               activeTabId={viewingTerminal ? activeTabId : null}
               onSelectTab={handleSelectTab}
               onCloseTab={requestCloseTab}
+              onNewTab={() => void openLocalTerminal()}
               tools={workbenchTools}
             />
           ) : (

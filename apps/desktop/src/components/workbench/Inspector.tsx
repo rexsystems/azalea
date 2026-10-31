@@ -1,22 +1,36 @@
 import {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
-  useId,
   useRef,
   useState,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { ArrowLeftRight, FolderTree, Message, X, type AppIcon } from "../icons";
+import { createPortal } from "react-dom";
+import { WbClose, WbServer } from "./wbIcons";
 
 export type InspectorView = "files" | "assistant" | "forwards";
 
-const VIEW_META: Record<InspectorView, { label: string; icon: AppIcon }> = {
-  files: { label: "Files", icon: FolderTree },
-  assistant: { label: "Assistant", icon: Message },
-  forwards: { label: "Forwards", icon: ArrowLeftRight },
+const VIEW_TITLE: Record<InspectorView, string> = {
+  files: "Files",
+  assistant: "Assistant",
+  forwards: "Port forwards",
 };
+
+const ActionsSlotContext = createContext<HTMLElement | null>(null);
+
+/**
+ * Header buttons that belong to the panel's content (upload, refresh, model
+ * picker). Rendered into the inspector header so the panel needs no second
+ * toolbar of its own.
+ */
+export function InspectorActions({ children }: { children: ReactNode }) {
+  const slot = useContext(ActionsSlotContext);
+  return slot ? createPortal(children, slot) : null;
+}
 
 const WIDTH_KEY = "azalea-inspector-width";
 const DEFAULT_WIDTH = 440;
@@ -50,14 +64,9 @@ function storeWidth(value: number) {
 
 interface InspectorProps {
   view: InspectorView;
-  /** Views offered for the active session, in display order. */
-  views: InspectorView[];
-  onViewChange: (view: InspectorView) => void;
   onClose: () => void;
   /** Session the panel is acting on, shown so the target is never ambiguous. */
   contextLabel: string;
-  /** Running forwards for the session, shown on the Forwards tab. */
-  forwardCount?: number;
   children: ReactNode;
 }
 
@@ -65,15 +74,7 @@ interface InspectorProps {
  * One right-hand panel for Files, Assistant and Forwards. It owns width,
  * resizing and closing so the embedded panels only render content.
  */
-export function Inspector({
-  view,
-  views,
-  onViewChange,
-  onClose,
-  contextLabel,
-  forwardCount = 0,
-  children,
-}: InspectorProps) {
+export function Inspector({ view, onClose, contextLabel, children }: InspectorProps) {
   const [width, setWidth] = useState(readStoredWidth);
   const [resizing, setResizing] = useState(false);
   const widthRef = useRef(width);
@@ -81,10 +82,7 @@ export function Inspector({
     widthRef.current = width;
   }, [width]);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
-  const tabRefs = useRef(new Map<InspectorView, HTMLButtonElement>());
-  const idBase = useId();
-  const panelId = `${idBase}-panel`;
-  const tabId = (v: InspectorView) => `${idBase}-tab-${v}`;
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     const onResize = () => setWidth((w) => clampWidth(w));
@@ -130,21 +128,8 @@ export function Inspector({
     e.preventDefault();
   };
 
-  const onTabKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
-    const index = views.indexOf(view);
-    let next: InspectorView | undefined;
-    if (e.key === "ArrowRight") next = views[(index + 1) % views.length];
-    else if (e.key === "ArrowLeft") next = views[(index - 1 + views.length) % views.length];
-    else if (e.key === "Home") next = views[0];
-    else if (e.key === "End") next = views[views.length - 1];
-    if (!next) return;
-    e.preventDefault();
-    onViewChange(next);
-    tabRefs.current.get(next)?.focus();
-  };
-
   return (
-    <aside className="wb-inspector" style={{ width }} aria-label="Session panel">
+    <aside className="wb-insp" style={{ width }} aria-label={VIEW_TITLE[view]}>
       <div
         role="separator"
         aria-orientation="vertical"
@@ -153,7 +138,7 @@ export function Inspector({
         aria-valuemax={maxWidth()}
         aria-valuenow={width}
         tabIndex={0}
-        className="wb-inspector-grip"
+        className="wb-grip"
         data-resizing={resizing ? "true" : undefined}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -162,61 +147,26 @@ export function Inspector({
         onKeyDown={onGripKeyDown}
       />
 
-      <div className="wb-inspector-head">
-        <div role="tablist" aria-label="Session panel views" className="wb-inspector-tabs">
-          {views.map((v) => {
-            const meta = VIEW_META[v];
-            const Icon = meta.icon;
-            const selected = v === view;
-            return (
-              <button
-                key={v}
-                ref={(node) => {
-                  if (node) tabRefs.current.set(v, node);
-                  else tabRefs.current.delete(v);
-                }}
-                id={tabId(v)}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                aria-controls={panelId}
-                tabIndex={selected ? 0 : -1}
-                className="wb-inspector-tab"
-                onClick={() => onViewChange(v)}
-                onKeyDown={onTabKeyDown}
-              >
-                <Icon size={13} />
-                {meta.label}
-                {v === "forwards" && forwardCount > 0 && (
-                  <span className="wb-tool-badge" aria-label={`${forwardCount} running`}>
-                    {forwardCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <span className="wb-inspector-context" title={contextLabel}>
-          {contextLabel}
+      <div className="wb-insp-h">
+        <h2>{VIEW_TITLE[view]}</h2>
+        <span className="wb-insp-ctx" title={contextLabel}>
+          <WbServer />
+          <span>{contextLabel}</span>
         </span>
+        <span className="wb-insp-actions" ref={setSlot} />
         <button
           type="button"
-          className="wb-icon-btn"
+          className="wb-ib"
           onClick={onClose}
-          aria-label="Close session panel"
+          aria-label={`Close ${VIEW_TITLE[view].toLowerCase()} panel`}
           title="Close panel"
         >
-          <X size={13} />
+          <WbClose />
         </button>
       </div>
 
-      <div
-        id={panelId}
-        role="tabpanel"
-        aria-labelledby={tabId(view)}
-        className="wb-inspector-body"
-      >
-        {children}
+      <div className="wb-insp-body">
+        <ActionsSlotContext.Provider value={slot}>{children}</ActionsSlotContext.Provider>
       </div>
     </aside>
   );

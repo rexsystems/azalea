@@ -1,23 +1,23 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import type { Host, HostGroup } from "@azalea/shared";
-import {
-  Home,
-  KeyRound,
-  Pencil,
-  Plus,
-  Server,
-  Settings,
-  SidebarLeft,
-  SquareTerminal,
-  X,
-  type AppIcon,
-} from "../icons";
 import { HostOsIcon } from "../HostOsIcon";
 import type { NavPage } from "../AppShell";
 import { useHideHostAddresses } from "../../hooks/useHideHostAddresses";
 import { formatHostEndpoint } from "../../lib/utils";
-import { formatSince } from "../../lib/relativeTime";
+import { describeSince, formatSince } from "../../lib/relativeTime";
 import { sessionStatusInfo, type SessionStatus } from "./sessionStatus";
+import {
+  WbChevronDown,
+  WbChevronRight,
+  WbClose,
+  WbForward,
+  WbGear,
+  WbKey,
+  WbPlus,
+  WbSnippet,
+  WbTerminal,
+  type WbIcon,
+} from "./wbIcons";
 
 const SidebarCollapsedContext = createContext(false);
 
@@ -26,82 +26,99 @@ export function useSidebarCollapsed(): boolean {
   return useContext(SidebarCollapsedContext);
 }
 
-const NAV: { id: NavPage; label: string; icon: AppIcon }[] = [
-  { id: "home", label: "Home", icon: Home },
-  { id: "hosts", label: "Hosts", icon: Server },
-  { id: "keys", label: "Keychain", icon: KeyRound },
-  { id: "settings", label: "Settings", icon: Settings },
-];
+export interface SidebarFootActions {
+  activeForwards: number;
+  forwardsOpen: boolean;
+  snippetsOpen: boolean;
+  onForwards: () => void;
+  onSnippets: () => void;
+}
 
 interface WorkbenchSidebarProps {
   collapsed: boolean;
-  onToggleCollapsed: () => void;
   /** Highlighted page, or null while a terminal is in front. */
   activePage: NavPage | null;
   onNavigate: (page: NavPage) => void;
+  foot: SidebarFootActions;
   accountSlot: ReactNode;
-  version: string;
   children?: ReactNode;
+}
+
+interface FootRow {
+  id: string;
+  label: string;
+  icon: WbIcon;
+  current: boolean;
+  meta?: ReactNode;
+  onClick: () => void;
 }
 
 export function WorkbenchSidebar({
   collapsed,
-  onToggleCollapsed,
   activePage,
   onNavigate,
+  foot,
   accountSlot,
-  version,
   children,
 }: WorkbenchSidebarProps) {
+  const rows: FootRow[] = [
+    {
+      id: "keys",
+      label: "Keychain",
+      icon: WbKey,
+      current: activePage === "keys",
+      onClick: () => onNavigate("keys"),
+    },
+    {
+      id: "forwards",
+      label: "Port forwards",
+      icon: WbForward,
+      current: foot.forwardsOpen,
+      meta: foot.activeForwards > 0 ? <span className="wb-mono">{foot.activeForwards} active</span> : null,
+      onClick: foot.onForwards,
+    },
+    {
+      id: "snippets",
+      label: "Snippets",
+      icon: WbSnippet,
+      current: foot.snippetsOpen,
+      onClick: foot.onSnippets,
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      icon: WbGear,
+      current: activePage === "settings",
+      meta: <kbd className="wb-kbd">Ctrl ,</kbd>,
+      onClick: () => onNavigate("settings"),
+    },
+  ];
+
   return (
     <SidebarCollapsedContext.Provider value={collapsed}>
-      <nav
-        className="wb-sidebar"
-        data-collapsed={collapsed ? "true" : "false"}
-        aria-label="Workspace"
-      >
-        <div className="wb-sidebar-head">
-          <button
-            type="button"
-            className="wb-icon-btn"
-            onClick={onToggleCollapsed}
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            <SidebarLeft size={14} />
-          </button>
-        </div>
-
-        <ul className="wb-nav" role="list">
-          {NAV.map(({ id, label, icon: Icon }) => {
-            const current = activePage === id;
-            return (
+      <nav className="wb-side" data-collapsed={collapsed ? "true" : "false"} aria-label="Workspace">
+        <div className="wb-side-scroll">{children}</div>
+        <div className="wb-side-foot">
+          <ul role="list" className="wb-list">
+            {rows.map(({ id, label, icon: Icon, current, meta, onClick }) => (
               <li key={id}>
                 <button
                   type="button"
-                  className="wb-row wb-nav-item"
-                  aria-current={current ? "page" : undefined}
+                  className="wb-row"
+                  aria-current={current ? (id === "keys" || id === "settings" ? "page" : "true") : undefined}
                   aria-label={collapsed ? label : undefined}
                   title={collapsed ? label : undefined}
-                  onClick={() => onNavigate(id)}
+                  onClick={onClick}
                 >
-                  <Icon size={14} />
+                  <Icon />
                   <span className="wb-row-label">{label}</span>
+                  {meta && <span className="wb-meta">{meta}</span>}
                 </button>
               </li>
-            );
-          })}
-        </ul>
-
-        <div className="wb-sidebar-scroll">{children}</div>
-
-        {!collapsed && (
-          <div className="wb-sidebar-foot">
-            {accountSlot}
-            <div className="wb-version">Azalea {version}</div>
-          </div>
-        )}
+            ))}
+          </ul>
+          {!collapsed && <div className="wb-acct-wrap">{accountSlot}</div>}
+        </div>
       </nav>
     </SidebarCollapsedContext.Provider>
   );
@@ -111,7 +128,6 @@ export interface SidebarSession {
   id: string;
   title: string;
   status: SessionStatus;
-  osId: string | null | undefined;
   isLocal: boolean;
 }
 
@@ -120,7 +136,6 @@ interface SidebarSessionsProps {
   activeSessionId: string | null;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
-  onOpenLocalTerminal: () => void;
 }
 
 export function SidebarSessions({
@@ -128,36 +143,20 @@ export function SidebarSessions({
   activeSessionId,
   onSelect,
   onClose,
-  onOpenLocalTerminal,
 }: SidebarSessionsProps) {
   const collapsed = useSidebarCollapsed();
 
   return (
     <section className="wb-section" aria-labelledby="wb-sessions-heading">
-      <div className="wb-section-head">
-        <h2 id="wb-sessions-heading" className="wb-section-title">
-          Sessions
-          {sessions.length > 0 && <span className="wb-count">{sessions.length}</span>}
-        </h2>
-        {!collapsed && (
-          <button
-            type="button"
-            className="wb-icon-btn"
-            onClick={onOpenLocalTerminal}
-            aria-label="New local terminal"
-            title="New local terminal"
-          >
-            <Plus size={13} />
-          </button>
+      <div className="wb-sec">
+        <h2 id="wb-sessions-heading">Sessions</h2>
+        {sessions.length > 0 && !collapsed && (
+          <span className="wb-sec-note">{sessions.length} open</span>
         )}
       </div>
 
       {sessions.length === 0 ? (
-        !collapsed && (
-          <p className="wb-empty">
-            No open sessions. Connect to a host below or start a local terminal.
-          </p>
-        )
+        !collapsed && <p className="wb-row wb-row-note">No open sessions</p>
       ) : (
         <ul role="list" className="wb-list">
           {sessions.map((session) => {
@@ -173,22 +172,11 @@ export function SidebarSessions({
                   title={collapsed ? `${session.title} (${status.label})` : undefined}
                   onClick={() => onSelect(session.id)}
                 >
-                  <span className="wb-row-icon">
-                    {session.isLocal ? (
-                      <span className="wb-local-icon" aria-hidden>
-                        <SquareTerminal size={12} />
-                      </span>
-                    ) : (
-                      <HostOsIcon
-                        osId={session.osId}
-                        seed={session.id}
-                        size={18}
-                        rounded={4}
-                        padding={2}
-                      />
-                    )}
-                    <span className={`wb-dot wb-dot-${status.tone}`} aria-hidden />
-                  </span>
+                  {session.isLocal ? (
+                    <WbTerminal />
+                  ) : (
+                    <span className={`wb-dot ${status.tone}`} aria-hidden />
+                  )}
                   <span className="wb-row-label">{session.title}</span>
                 </button>
                 {!collapsed && (
@@ -199,7 +187,7 @@ export function SidebarSessions({
                     aria-label={`Close ${session.title}`}
                     title="Close session"
                   >
-                    <X size={12} />
+                    <WbClose />
                   </button>
                 )}
               </li>
@@ -211,14 +199,28 @@ export function SidebarSessions({
   );
 }
 
+const COLLAPSED_GROUPS_KEY = "azalea-collapsed-host-groups";
+
+function readCollapsedGroups(): Set<string> {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(COLLAPSED_GROUPS_KEY) ?? "[]");
+    return new Set(Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
 interface SidebarHostsProps {
   hosts: Host[];
   groups: HostGroup[];
   loading: boolean;
   connectingHostId: string | null;
+  /** Hosts with an open session; their rows skip the "last connected" hint. */
+  openHostIds: ReadonlySet<string>;
   onConnect: (host: Host) => void;
   onEdit: (host: Host) => void;
   onAdd: () => void;
+  onManage: () => void;
 }
 
 export function SidebarHosts({
@@ -226,119 +228,147 @@ export function SidebarHosts({
   groups,
   loading,
   connectingHostId,
+  openHostIds,
   onConnect,
   onEdit,
   onAdd,
+  onManage,
 }: SidebarHostsProps) {
   const collapsed = useSidebarCollapsed();
   const hideAddress = useHideHostAddresses();
+  const [closedGroups, setClosedGroups] = useState(readCollapsedGroups);
+
+  const toggleGroup = useCallback((id: string) => {
+    setClosedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...next]));
+      } catch {
+        // Collapsing still works for this window when storage is unavailable.
+      }
+      return next;
+    });
+  }, []);
 
   const sections = useMemo(() => {
-    const byName = (a: Host, b: Host) => a.name.localeCompare(b.name);
     const result: { id: string; name: string; hosts: Host[] }[] = groups
       .map((group) => ({
         id: group.id,
         name: group.name,
-        hosts: hosts.filter((host) => host.group_id === group.id).sort(byName),
+        hosts: hosts.filter((host) => host.group_id === group.id),
       }))
       .filter((section) => section.hosts.length > 0);
     const known = new Set(groups.map((group) => group.id));
-    const ungrouped = hosts
-      .filter((host) => !host.group_id || !known.has(host.group_id))
-      .sort(byName);
+    const ungrouped = hosts.filter((host) => !host.group_id || !known.has(host.group_id));
     if (ungrouped.length > 0) {
       result.push({ id: "ungrouped", name: "Ungrouped", hosts: ungrouped });
     }
     return result;
   }, [hosts, groups]);
 
-  // The rail has no room for a host tree; sessions and nav stay reachable.
+  // The rail has no room for a host tree; sessions and the foot stay reachable.
   if (collapsed) return null;
 
   return (
-    <section className="wb-section" aria-labelledby="wb-hosts-heading">
-      <div className="wb-section-head">
-        <h2 id="wb-hosts-heading" className="wb-section-title">
-          Hosts
-          {hosts.length > 0 && <span className="wb-count">{hosts.length}</span>}
+    <section className="wb-section wb-section-hosts" aria-labelledby="wb-hosts-heading">
+      <div className="wb-sec">
+        <h2 id="wb-hosts-heading">
+          <button
+            type="button"
+            className="wb-sec-link"
+            onClick={onManage}
+            title="Manage hosts and groups"
+          >
+            Hosts
+          </button>
         </h2>
-        <button
-          type="button"
-          className="wb-icon-btn"
-          onClick={onAdd}
-          aria-label="Add host"
-          title="Add host"
-        >
-          <Plus size={13} />
+        <button type="button" onClick={onAdd} aria-label="Add host" title="Add host">
+          <WbPlus />
         </button>
       </div>
 
       {loading && hosts.length === 0 ? (
-        <p className="wb-empty" role="status">
+        <p className="wb-row wb-row-note" role="status">
           Loading hosts…
         </p>
       ) : hosts.length === 0 ? (
-        <div className="wb-empty">
-          <p>No hosts saved yet. Add one with its address and login to connect over SSH.</p>
-          <button type="button" className="wb-link-btn" onClick={onAdd}>
-            Add a host
-          </button>
-        </div>
+        <p className="wb-side-empty">
+          No hosts yet. Add one, or import the entries from your SSH config.
+        </p>
       ) : (
-        sections.map((section) => (
-          <div key={section.id} className="wb-group" role="group" aria-label={section.name}>
-            <div className="wb-group-title" aria-hidden>
-              {section.name}
+        sections.map((section) => {
+          const open = !closedGroups.has(section.id);
+          const listId = `wb-group-${section.id}`;
+          return (
+            <div key={section.id} className="wb-group">
+              <button
+                type="button"
+                className="wb-grp"
+                aria-expanded={open}
+                aria-controls={listId}
+                onClick={() => toggleGroup(section.id)}
+              >
+                {open ? <WbChevronDown /> : <WbChevronRight />}
+                <span className="wb-row-label">{section.name}</span>
+                <span className="wb-grp-n" aria-label={`${section.hosts.length} hosts`}>
+                  {section.hosts.length}
+                </span>
+              </button>
+              {open && (
+                <ul role="list" className="wb-list" id={listId}>
+                  {section.hosts.map((host) => {
+                    const connecting = connectingHostId === host.id;
+                    const isOpen = openHostIds.has(host.id);
+                    const since = host.last_connected_at
+                      ? formatSince(host.last_connected_at)
+                      : "never";
+                    const endpoint = formatHostEndpoint(host.username, host.hostname, hideAddress);
+                    return (
+                      <li key={host.id} className="wb-list-item">
+                        <button
+                          type="button"
+                          className="wb-row wb-row-host"
+                          disabled={connecting}
+                          aria-busy={connecting || undefined}
+                          aria-label={`Connect to ${host.name}, ${endpoint}. ${describeSince(
+                            host.last_connected_at,
+                          )}`}
+                          title={endpoint}
+                          onClick={() => onConnect(host)}
+                        >
+                          <HostOsIcon
+                            osId={host.os_id}
+                            seed={host.id || host.name}
+                            size={16}
+                            rounded={4}
+                            padding={2}
+                          />
+                          <span className="wb-row-label">{host.name}</span>
+                          {connecting ? (
+                            <span className="wb-meta">Connecting…</span>
+                          ) : (
+                            !isOpen && since && <span className="wb-meta">{since}</span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="wb-row-action"
+                          onClick={() => onEdit(host)}
+                          aria-label={`Edit ${host.name}`}
+                          title="Edit host"
+                        >
+                          <WbGear />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
-            <ul role="list" className="wb-list">
-              {section.hosts.map((host) => {
-                const connecting = connectingHostId === host.id;
-                const since = formatSince(host.last_connected_at);
-                const endpoint = formatHostEndpoint(host.username, host.hostname, hideAddress);
-                return (
-                  <li key={host.id} className="wb-list-item">
-                    <button
-                      type="button"
-                      className="wb-row wb-row-host"
-                      disabled={connecting}
-                      aria-busy={connecting || undefined}
-                      aria-label={`Connect to ${host.name}, ${endpoint}${
-                        since ? `, last connected ${since}` : ""
-                      }`}
-                      onClick={() => onConnect(host)}
-                    >
-                      <span className="wb-row-icon">
-                        <HostOsIcon
-                          osId={host.os_id}
-                          seed={host.id || host.name}
-                          size={18}
-                          rounded={4}
-                          padding={2}
-                        />
-                      </span>
-                      <span className="wb-row-text">
-                        <span className="wb-row-label">{host.name}</span>
-                        <span className="wb-row-meta">
-                          {connecting ? "Connecting…" : endpoint}
-                        </span>
-                      </span>
-                      {since && !connecting && <span className="wb-row-aside">{since}</span>}
-                    </button>
-                    <button
-                      type="button"
-                      className="wb-row-action"
-                      onClick={() => onEdit(host)}
-                      aria-label={`Edit ${host.name}`}
-                      title="Edit host"
-                    >
-                      <Pencil size={12} />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))
+          );
+        })
       )}
     </section>
   );

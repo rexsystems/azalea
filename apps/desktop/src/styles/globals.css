@@ -291,7 +291,7 @@
  * ── Ink and Paper: the New and Minimal interfaces ──
  * Two neutral ramps and one violet accent. Every text pair meets WCAG AA on
  * the surfaces it sits on (checked: muted on panel is 5.4:1 in Ink and
- * 5.2:1 in Paper; input borders are 3:1 or more for non-text contrast).
+ * 4.9:1 in Paper; input borders are 3:1 or more for non-text contrast).
  * The legacy variable names are mapped so existing pages follow without
  * per-page edits; --ok, --warn and --line-input are new.
  */
@@ -332,17 +332,69 @@
   --line-input: #8e8e99;
   --text: #17171c;
   --text-secondary: #4e4e58;
-  --text-muted: #63636e;
+  --text-muted: #686873;
   --accent: #372882;
   --accent-hover: #47379c;
   --accent-muted: rgba(55, 40, 130, 0.09);
   --accent-fg: #ffffff;
   --danger: #c0392b;
-  --ok: #13774a;
+  --ok: #17804f;
   --warn: #946200;
   --nav-active: rgba(55, 40, 130, 0.09);
   --terminal-bg: #ffffff;
   --shadow: 0 12px 32px rgba(23, 23, 28, 0.12), 0 0 0 1px rgba(23, 23, 28, 0.06);
+}
+
+/* Noir: true black for OLED panels, with a white accent. */
+[data-theme="ink-noir"] {
+  color-scheme: dark;
+  --bg-base: #000000;
+  --bg-panel: #0a0a0a;
+  --bg-card: #141414;
+  --bg-card-hover: #1c1c1c;
+  --bg-input: #000000;
+  --border: #262626;
+  --border-subtle: #1f1f1f;
+  --line-input: #6e6e6e;
+  --text: #ffffff;
+  --text-secondary: #b4b4b4;
+  --text-muted: #949494;
+  --accent: #ffffff;
+  --accent-hover: #e6e6e6;
+  --accent-muted: rgba(255, 255, 255, 0.12);
+  --accent-fg: #000000;
+  --danger: #ff8a80;
+  --ok: #5ad19a;
+  --warn: #f0c060;
+  --nav-active: rgba(255, 255, 255, 0.12);
+  --terminal-bg: #000000;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* High contrast: white borders and 7:1 text on black. */
+[data-theme="ink-contrast"] {
+  color-scheme: dark;
+  --bg-base: #000000;
+  --bg-panel: #000000;
+  --bg-card: #0d0d0d;
+  --bg-card-hover: #1f1f1f;
+  --bg-input: #000000;
+  --border: #ffffff;
+  --border-subtle: #ffffff;
+  --line-input: #ffffff;
+  --text: #ffffff;
+  --text-secondary: #e6e6e6;
+  --text-muted: #d0d0d0;
+  --accent: #ffd84d;
+  --accent-hover: #ffe380;
+  --accent-muted: rgba(255, 216, 77, 0.2);
+  --accent-fg: #000000;
+  --danger: #ff9e94;
+  --ok: #6ee7a8;
+  --warn: #ffd84d;
+  --nav-active: rgba(255, 216, 77, 0.2);
+  --terminal-bg: #000000;
+  --shadow: 0 0 0 1px #ffffff;
 }
 
 * {

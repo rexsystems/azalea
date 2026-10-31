@@ -1,5 +1,5 @@
-import { SquareTerminal, X, type AppIcon } from "../icons";
 import { sessionStatusInfo, type SessionStatus } from "./sessionStatus";
+import { WbClose, WbPlus, WbTerminal, type WbIcon } from "./wbIcons";
 
 export interface WorkbenchTab {
   id: string;
@@ -11,17 +11,21 @@ export interface WorkbenchTab {
 
 export interface WorkbenchTool {
   id: string;
-  icon: AppIcon;
+  icon: WbIcon;
   label: string;
   onClick: () => void;
+  /** Keyboard shortcut shown in the tooltip, such as "Ctrl Shift F". */
+  shortcut?: string;
+  /** Draw only the icon; the label stays as the accessible name. */
+  iconOnly?: boolean;
+  /** Draw a divider before this tool. */
+  separatorBefore?: boolean;
   /** Toggle tools report their state with aria-pressed. */
   pressed?: boolean;
   /** Popover tools report their state with aria-expanded instead. */
   expanded?: boolean;
   /** Extra text for screen readers and the tooltip, such as an active count. */
   detail?: string;
-  /** Small count shown next to the label. */
-  badge?: number;
   /** Clicks on this tool must not dismiss the popover it controls. */
   popoverTrigger?: boolean;
 }
@@ -31,19 +35,26 @@ interface WorkbenchTabsProps {
   activeTabId: string | null;
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
+  onNewTab: () => void;
   tools: WorkbenchTool[];
 }
 
+function toolTitle(tool: WorkbenchTool): string {
+  const base = tool.detail ? `${tool.label}, ${tool.detail}` : tool.label;
+  return tool.shortcut ? `${base} (${tool.shortcut})` : base;
+}
+
 /**
- * Session tabs plus a labeled terminal toolbar. Labels collapse to icons when
- * the strip gets narrow (container query in workbench.css) and are always
- * icon-only in Minimal UI; the accessible name stays the same either way.
+ * Session tabs plus the terminal toolbar. With the inspector open the labels
+ * of inactive tools collapse to icons (workbench.css); the accessible name
+ * stays the same either way.
  */
 export function WorkbenchTabs({
   tabs,
   activeTabId,
   onSelectTab,
   onCloseTab,
+  onNewTab,
   tools,
 }: WorkbenchTabsProps) {
   const active = tabs.find((t) => t.id === activeTabId) ?? null;
@@ -60,8 +71,9 @@ export function WorkbenchTabs({
             <div
               key={tab.id}
               className="wb-tab"
-              data-current={current ? "true" : undefined}
+              data-on={current ? "true" : undefined}
               data-split={inSplit ? "true" : undefined}
+              data-local={tab.isLocal ? "true" : undefined}
             >
               <button
                 type="button"
@@ -71,52 +83,64 @@ export function WorkbenchTabs({
                 onClick={() => onSelectTab(tab.id)}
               >
                 {tab.isLocal ? (
-                  <SquareTerminal size={12} />
+                  <WbTerminal />
                 ) : (
-                  <span className={`wb-dot wb-dot-${status.tone}`} aria-hidden />
+                  <span className={`wb-dot ${status.tone}`} aria-hidden />
                 )}
                 <span className="wb-tab-title">{tab.title}</span>
               </button>
               <button
                 type="button"
-                className="wb-tab-close"
+                className="wb-tab-x"
                 onClick={() => onCloseTab(tab.id)}
                 aria-label={`Close ${tab.title}`}
                 title="Close session"
               >
-                <X size={12} />
+                <WbClose />
               </button>
             </div>
           );
         })}
+        <button
+          type="button"
+          className="wb-tab-new"
+          onClick={onNewTab}
+          aria-label="New local terminal"
+          title="New local terminal"
+        >
+          <WbPlus />
+        </button>
       </nav>
 
       {tools.length > 0 && (
         <div className="wb-tools" role="toolbar" aria-label="Terminal tools">
           {tools.map((tool) => {
             const Icon = tool.icon;
+            const on = Boolean(tool.pressed || tool.expanded);
             return (
-              <button
-                key={tool.id}
-                type="button"
-                className="wb-tool"
-                onClick={tool.onClick}
-                aria-pressed={tool.pressed}
-                aria-expanded={tool.expanded}
-                aria-label={tool.detail ? `${tool.label}, ${tool.detail}` : tool.label}
-                title={tool.detail ? `${tool.label} (${tool.detail})` : tool.label}
-                {...(tool.popoverTrigger ? { "data-azalea-popover-trigger": "" } : {})}
-              >
-                <Icon size={13} />
-                <span className="wb-tool-label" aria-hidden>
-                  {tool.label}
-                </span>
-                {tool.badge != null && tool.badge > 0 && (
-                  <span className="wb-tool-badge" aria-hidden>
-                    {tool.badge}
-                  </span>
-                )}
-              </button>
+              <span key={tool.id} className="wb-tool-slot">
+                {tool.separatorBefore && <span className="wb-sep" aria-hidden />}
+                <button
+                  type="button"
+                  className="wb-tool"
+                  data-on={on ? "true" : undefined}
+                  data-icon-only={tool.iconOnly ? "true" : undefined}
+                  onClick={tool.onClick}
+                  aria-pressed={tool.pressed}
+                  aria-expanded={tool.expanded}
+                  aria-label={tool.detail ? `${tool.label}, ${tool.detail}` : tool.label}
+                  aria-keyshortcuts={tool.shortcut?.replace(/ /g, "+").replace("Ctrl", "Control")}
+                  title={toolTitle(tool)}
+                  {...(tool.popoverTrigger ? { "data-azalea-popover-trigger": "" } : {})}
+                >
+                  <Icon />
+                  {!tool.iconOnly && (
+                    <span className="wb-tool-label" aria-hidden>
+                      {tool.label}
+                    </span>
+                  )}
+                </button>
+              </span>
             );
           })}
         </div>

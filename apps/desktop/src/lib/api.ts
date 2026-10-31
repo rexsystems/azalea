@@ -506,11 +506,37 @@ export function syncPreview(settings: unknown): Promise<SyncPreview> {
   return invoke("sync_preview", { settings });
 }
 
-export function syncNow(
+const LAST_SYNC_KEY = "azalea-last-sync-at";
+/** Window event fired after a sync round trip completes. */
+export const LAST_SYNC_EVENT = "azalea-last-sync";
+
+/** When this device last finished a sync with the cloud, in ms since the epoch. */
+export function lastSyncAt(): number | null {
+  try {
+    const value = Number(localStorage.getItem(LAST_SYNC_KEY));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function syncNow(
   settings: unknown,
   resolution?: "keep_local" | "keep_cloud",
 ): Promise<SyncOutcome> {
-  return invoke("sync_now", { settings, resolution: resolution ?? null });
+  const outcome = await invoke<SyncOutcome>("sync_now", {
+    settings,
+    resolution: resolution ?? null,
+  });
+  if (outcome.status === "in_sync" || outcome.status === "pushed" || outcome.status === "pulled") {
+    try {
+      localStorage.setItem(LAST_SYNC_KEY, String(Date.now()));
+    } catch {
+      // The title bar falls back to "Sync on" without a timestamp.
+    }
+    window.dispatchEvent(new Event(LAST_SYNC_EVENT));
+  }
+  return outcome;
 }
 
 export type AccountKind =

@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Home, KeyRound, Server, Settings, type AppIcon } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { TitleBar } from "./TitleBar";
 import { Logo } from "./Logo";
 import { AccountSwitcher } from "./AccountSwitcher";
-import { WorkbenchTitleBar } from "./workbench/WorkbenchTitleBar";
-import { WorkbenchSidebar } from "./workbench/WorkbenchSidebar";
+import { WorkbenchTitleBar, type TitleBarWorkspaces } from "./workbench/WorkbenchTitleBar";
+import { WorkbenchSidebar, type SidebarFootActions } from "./workbench/WorkbenchSidebar";
 import type { UiMode } from "../lib/appearance";
 
 const SIDEBAR_COLLAPSED_KEY = "azalea-sidebar-collapsed";
@@ -73,7 +73,30 @@ interface AppShellProps {
   onOpenPalette?: () => void;
   /** Workbench only: a terminal is in front, so no nav page is current. */
   viewingTerminal?: boolean;
+  /** Workbench only: saved workspaces for the title bar switcher. */
+  workspaces?: TitleBarWorkspaces;
+  /** Workbench only: forwards and snippets entries in the sidebar foot. */
+  sidebarFoot?: SidebarFootActions;
+  /** Workbench only: right-hand panel, laid out as its own column. */
+  inspector?: ReactNode;
 }
+
+const NO_WORKSPACES: TitleBarWorkspaces = {
+  items: [],
+  activeId: null,
+  canSave: false,
+  onOpen: () => undefined,
+  onSave: () => undefined,
+  onManage: () => undefined,
+};
+
+const NO_FOOT: SidebarFootActions = {
+  activeForwards: 0,
+  forwardsOpen: false,
+  snippetsOpen: false,
+  onForwards: () => undefined,
+  onSnippets: () => undefined,
+};
 
 const primaryNav: { id: NavPage; label: string; icon: AppIcon }[] = [
   { id: "home", label: "Home", icon: Home },
@@ -165,6 +188,9 @@ export function AppShell({
   footer,
   onOpenPalette,
   viewingTerminal = false,
+  workspaces = NO_WORKSPACES,
+  sidebarFoot = NO_FOOT,
+  inspector,
 }: AppShellProps) {
   const [appVersion, setAppVersion] = useState("…");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
@@ -202,8 +228,43 @@ export function AppShell({
       onSignIn={onSignInForSync}
       onPasswordLogin={onPasswordLogin}
       compact={isMobile}
+      variant={!isMobile && uiMode !== "legacy" ? "workbench" : "default"}
     />
   );
+  const workbench = !isMobile && uiMode !== "legacy";
+  const autoRail = uiMode === "minimal" && viewingTerminal;
+  const collapsed = autoRail ? !terminalPeek : sidebarCollapsed;
+  const toggleCollapsed = () => {
+    if (autoRail) {
+      setTerminalPeek((peek) => !peek);
+      return;
+    }
+    const next = !collapsed;
+    setSidebarCollapsed(next);
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+    } catch {
+      // Not persisting the rail state is harmless.
+    }
+  };
+  const toggleRef = useRef(toggleCollapsed);
+  toggleRef.current = toggleCollapsed;
+
+  // Ctrl+B folds the workbench sidebar to a rail and back.
+  useEffect(() => {
+    if (!workbench) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b") {
+        const target = e.target as HTMLElement | null;
+        // Ctrl+B is "back one character" in the shell; leave it to the terminal.
+        if (target?.closest(".xterm")) return;
+        e.preventDefault();
+        toggleRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [workbench]);
 
   if (isMobile) {
     return (
@@ -271,48 +332,44 @@ export function AppShell({
     );
   }
 
-  if (uiMode !== "legacy") {
-    // Minimal keeps the terminal as wide as possible: the sidebar folds to a
-    // rail while a session is in front, without changing the saved choice.
-    const autoRail = uiMode === "minimal" && viewingTerminal;
-    const collapsed = autoRail ? !terminalPeek : sidebarCollapsed;
-    const toggleCollapsed = () => {
-      if (autoRail) {
-        setTerminalPeek((peek) => !peek);
-        return;
-      }
-      const next = !collapsed;
-      setSidebarCollapsed(next);
-      try {
-        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
-      } catch {
-        // Not persisting the rail state is harmless.
-      }
-    };
-
+  if (workbench) {
     return (
-      <div className="app-shell-root wb-shell flex h-full select-none flex-col overflow-hidden">
-        <WorkbenchTitleBar onOpenPalette={() => onOpenPalette?.()} />
-        <div className="flex min-h-0 flex-1">
+      <div className="app-shell-root wb-app select-none">
+        <WorkbenchTitleBar
+          onOpenPalette={() => onOpenPalette?.()}
+          onHome={() => onNavigate("home")}
+          workspaces={workspaces}
+          syncStatus={syncStatus}
+        />
+        <div className="wb-body" data-inspector={inspector ? "true" : undefined}>
           <WorkbenchSidebar
             collapsed={collapsed}
-            onToggleCollapsed={toggleCollapsed}
             activePage={viewingTerminal ? null : activePage}
             onNavigate={onNavigate}
+            foot={sidebarFoot}
             accountSlot={switcher}
-            version={appVersion === "-" ? "" : `v${appVersion}`}
           >
             {sidebarContent}
           </WorkbenchSidebar>
 
-          <main className="wb-main" aria-label="Work area">
+          <main
+            className="wb-main"
+            data-terminal={viewingTerminal ? "true" : undefined}
+            aria-label="Work area"
+          >
             {showTabs && tabBar}
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+            <div className="wb-work">
+              {children}
               {sidePanel}
             </div>
             {footer}
+            {!viewingTerminal && statusMessage && statusMessage !== "Ready" && (
+              <p className="wb-toast" role="status" aria-live="polite">
+                {statusMessage}
+              </p>
+            )}
           </main>
+          {inspector}
         </div>
       </div>
     );

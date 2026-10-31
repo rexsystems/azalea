@@ -9,6 +9,8 @@ import { createPortal } from "react-dom";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import * as api from "../lib/api";
 import { isPersonalCloudKind } from "../lib/api";
+import { initials } from "../lib/sessionInfo";
+import { WbChevronDown } from "./workbench/wbIcons";
 import { maskEmail } from "../lib/utils";
 import {
   AlertTriangle,
@@ -60,6 +62,8 @@ interface AccountSwitcherProps {
   onSignIn?: () => void;
   onPasswordLogin?: (email: string, password: string) => void | Promise<void>;
   compact?: boolean;
+  /** "workbench" draws the New UI sidebar block: initials, name, storage line. */
+  variant?: "default" | "workbench";
 }
 
 type AddStep =
@@ -70,6 +74,13 @@ function kindIcon(kind: AccountKind): ReactNode {
   const provider = providerFromKind(kind);
   if (provider) return <ProviderIcon provider={provider} size={14} />;
   return <SquareTerminal size={14} />;
+}
+
+/** Where the vault lives, in the workbench sidebar's words. */
+function storageLabel(kind: AccountKind): string {
+  if (kind === "selfhost") return "Self-hosted · encrypted";
+  if (isPersonalCloudKind(kind)) return "Personal cloud · encrypted";
+  return "This device only";
 }
 
 function kindLabel(kind: AccountKind): string {
@@ -103,6 +114,7 @@ export function AccountSwitcher({
   onSignIn,
   onPasswordLogin,
   compact = false,
+  variant = "default",
 }: AccountSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<AddStep>("menu");
@@ -341,7 +353,33 @@ export function AccountSwitcher({
     </span>
   ) : null;
 
-  const trigger = compact ? (
+  const trigger = variant === "workbench" ? (
+    <button
+      ref={triggerRef}
+      type="button"
+      onClick={() => {
+        if (open) close();
+        else {
+          setOpen(true);
+          setStep("menu");
+        }
+      }}
+      className="wb-acct"
+      aria-label={`Account: ${active?.label ?? "Local"}. Switch account`}
+      aria-expanded={open}
+    >
+      <span className="wb-av" aria-hidden>
+        {initials(active?.label || displayEmail || "Local")}
+      </span>
+      <span className="wb-acct-text">
+        <span className="wb-acct-name">{active?.label ?? "Local"}</span>
+        <span className="wb-acct-sub" data-warn={needsAuth ? "true" : undefined}>
+          {needsAuth ? subtitle : active ? storageLabel(active.kind) : "This device only"}
+        </span>
+      </span>
+      <WbChevronDown className="wb-acct-chev" />
+    </button>
+  ) : compact ? (
     <button
       ref={triggerRef}
       type="button"

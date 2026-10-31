@@ -1,13 +1,13 @@
 /*
- * New and Minimal interface rules. Everything here is scoped to
- * html[data-ui="new"] or html[data-ui="minimal"], so Legacy UI renders
- * exactly as before. Rules are unlayered on purpose: Tailwind v4 utilities
- * live in @layer, so these win without !important.
+ * New and Minimal interface rules. Global tweaks are scoped to
+ * html[data-ui="new"] or html[data-ui="minimal"]; the wb-* classes only
+ * render in those interfaces, so Legacy renders exactly as before. Rules are
+ * unlayered on purpose: Tailwind v4 utilities live in @layer, so these win
+ * without !important. Sizes follow the approved mockups (tokens.css) in px.
  */
 
-/* Type scale. Legacy uses an 18px root; the new interfaces use 16px (13px
-   body via text-xs/text-sm) and Minimal 15px, which densifies every
-   rem-based page without per-page edits. */
+/* Type scale. Legacy uses an 18px root; the new interfaces use 16px and
+   Minimal 15px, which densifies every rem-based page without per-page edits. */
 html[data-ui="new"] {
   font-size: 16px;
 }
@@ -39,7 +39,9 @@ html:is([data-ui="new"], [data-ui="minimal"]) :is(input, select, textarea):focus
 
 /* Form fields need a 3:1 boundary against their surface (WCAG 1.4.11). */
 html:is([data-ui="new"], [data-ui="minimal"])
-  :is(input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea):not(.xterm-helper-textarea) {
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea):not(
+    .xterm-helper-textarea
+  ) {
   border-color: var(--line-input);
 }
 
@@ -53,478 +55,40 @@ html:is([data-ui="new"], [data-ui="minimal"])
   }
 }
 
-/* ── Settings: grouped vertical navigation ── */
-.settings-layout {
-  display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-
-.settings-nav {
-  position: sticky;
-  top: 0;
-}
-
-.settings-nav-group + .settings-nav-group {
-  margin-top: 16px;
-}
-
-.settings-nav-heading {
-  padding: 0 10px 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.settings-nav-item {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: var(--wb-row, 30px);
-  padding: 0 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  text-align: left;
-  position: relative;
-}
-
-.settings-nav-item:hover {
-  background: var(--bg-card-hover);
-  color: var(--text);
-}
-
-.settings-nav-item[aria-selected="true"] {
-  background: var(--accent-muted);
-  color: var(--text);
-}
-
-.settings-nav-item[aria-selected="true"]::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 7px;
-  bottom: 7px;
-  width: 2px;
-  border-radius: 2px;
-  background: var(--accent);
-}
-
 html:is([data-ui="new"], [data-ui="minimal"]) .settings-shell {
   padding: 24px 28px 40px;
 }
 
-@media (max-width: 760px) {
-  .settings-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .settings-nav {
-    position: static;
-  }
-}
-
-/* ── Workbench shell (New and Minimal) ──
-   The wb-* classes only render in the new interfaces, so they need no
-   data-ui scoping. Minimal overrides the size tokens further down. */
-.wb-shell {
-  --wb-titlebar: 40px;
-  --wb-sidebar: 264px;
-  --wb-rail: 52px;
-  --wb-row: 30px;
-  --wb-tabs: 38px;
-  --wb-footer: 28px;
-  --wb-gap: 8px;
-  background: var(--bg-base);
-  color: var(--text);
-}
-
-.wb-titlebar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 520px) minmax(0, 1fr);
-  align-items: center;
-  height: var(--wb-titlebar);
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-panel);
-}
-
-.wb-titlebar-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-left: 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.wb-titlebar-center {
-  display: flex;
-  justify-content: center;
-  padding: 0 12px;
-}
-
-.wb-palette-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 28px;
-  padding: 0 6px 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-input);
-  color: var(--text-muted);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.wb-palette-trigger:hover {
-  border-color: var(--line-input);
-  color: var(--text-secondary);
-}
-
-.wb-palette-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.wb-kbd {
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-panel);
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: 12px;
-}
-
-.wb-window-controls {
-  display: flex;
-  justify-content: flex-end;
-  height: 100%;
-}
-
-.wb-main {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  flex-direction: column;
-  background: var(--bg-base);
-}
-
-/* Sidebar */
-.wb-sidebar {
-  display: flex;
-  flex-direction: column;
-  width: var(--wb-sidebar);
-  flex-shrink: 0;
-  min-height: 0;
-  border-right: 1px solid var(--border-subtle);
-  background: var(--bg-panel);
-}
-
-.wb-sidebar[data-collapsed="true"] {
-  width: var(--wb-rail);
-}
-
-.wb-sidebar-head {
-  display: flex;
-  justify-content: flex-end;
-  padding: 6px 8px 2px;
-}
-
-.wb-sidebar[data-collapsed="true"] .wb-sidebar-head {
-  justify-content: center;
-}
-
-.wb-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  margin: 0;
-  padding: 0 8px 8px;
-  list-style: none;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.wb-sidebar-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 4px 8px 12px;
-}
-
-.wb-sidebar-foot {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.wb-version {
-  padding: 0 6px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.wb-section + .wb-section {
-  margin-top: 12px;
-}
-
-.wb-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 28px;
-  padding: 0 2px 0 8px;
-}
-
-.wb-section-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text-secondary);
-}
-
-.wb-count {
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: var(--bg-card);
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 18px;
-  text-align: center;
-}
-
-.wb-group {
-  margin-top: 6px;
-}
-
-.wb-group-title {
-  padding: 4px 8px 2px;
-  font-size: 12px;
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.wb-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.wb-list-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.wb-empty {
-  margin: 0;
-  padding: 6px 8px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-muted);
-}
-
-.wb-link-btn {
-  display: inline-block;
-  margin-top: 6px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.wb-link-btn:hover {
-  text-decoration: underline;
-}
-
-/* Rows: nav items, sessions and hosts share one shape. */
-.wb-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  min-height: var(--wb-row);
-  padding: 3px 8px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.wb-row:hover {
-  background: var(--bg-card-hover);
-  color: var(--text);
-}
-
-.wb-row:is([aria-current="page"], [aria-current="true"]) {
-  background: var(--nav-active);
-  color: var(--text);
-  font-weight: 600;
-}
-
-.wb-list-item .wb-row {
-  padding-right: 30px;
-}
-
-.wb-row-icon {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-}
-
-.wb-row-icon > .wb-dot {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  box-shadow: 0 0 0 2px var(--bg-panel);
-}
-
-.wb-local-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-}
-
-.wb-row-text {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  line-height: 1.25;
-}
-
-.wb-row-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.wb-row-text .wb-row-label {
+/* ── Shared primitives ── */
+.wb-i {
   flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.wb-row-meta {
-  overflow: hidden;
+.wb-mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-feature-settings: normal;
+}
+
+.wb-muted {
   color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 400;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.wb-row-aside {
-  flex-shrink: 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 400;
+.wb-accent {
+  color: var(--accent);
 }
 
-/* Row actions appear on hover or keyboard focus, never only on hover. */
-.wb-row-action {
-  position: absolute;
-  right: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-muted);
-  opacity: 0;
-  cursor: pointer;
+.wb-r {
+  text-align: right;
 }
 
-.wb-list-item:hover .wb-row-action,
-.wb-list-item:focus-within .wb-row-action {
-  opacity: 1;
-}
-
-.wb-list-item:hover .wb-row-host .wb-row-aside,
-.wb-list-item:focus-within .wb-row-host .wb-row-aside {
-  visibility: hidden;
-}
-
-.wb-row-action:hover {
-  background: var(--bg-card);
-  color: var(--text);
-}
-
-.wb-icon-btn {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.wb-icon-btn:hover {
-  background: var(--bg-card-hover);
-  color: var(--text);
-}
-
-/* Rail: icons only, labels stay in the accessible name. */
-.wb-sidebar[data-collapsed="true"] :is(.wb-nav, .wb-sidebar-scroll) {
-  padding-left: 6px;
-  padding-right: 6px;
-}
-
-.wb-sidebar[data-collapsed="true"] .wb-row {
-  justify-content: center;
-  padding: 3px 0;
-}
-
-.wb-sidebar[data-collapsed="true"] :is(.wb-row-label, .wb-row-action, .wb-section-head, .wb-empty) {
+.wb-visually-hidden,
+.wb-switch > input,
+.wb-check > input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -533,42 +97,858 @@ html:is([data-ui="new"], [data-ui="minimal"]) .settings-shell {
   white-space: nowrap;
 }
 
-/* Status dots */
+.wb-h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.wb-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.wb-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.wb-link:hover {
+  text-decoration: underline;
+}
+
+.wb-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.wb-kbd {
+  padding: 0 5px;
+  border: 1px solid var(--border-subtle);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
 .wb-dot {
   display: inline-block;
-  flex-shrink: 0;
+  flex: none;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--text-muted);
-}
-
-.wb-dot-ok {
   background: var(--ok);
 }
 
-.wb-dot-warn {
+.wb-dot.off {
+  border: 1.5px solid var(--text-muted);
+  background: transparent;
+}
+
+.wb-dot.warn {
   background: var(--warn);
 }
 
-.wb-dot-danger {
+.wb-dot.danger {
   background: var(--danger);
 }
 
-/* Tab strip with labeled tools */
+.wb-ib {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.wb-ib:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.wb-ib:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.wb-ib[data-busy="true"] .wb-i {
+  animation: wb-spin 0.9s linear infinite;
+}
+
+@keyframes wb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.wb-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wb-btn:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+
+.wb-btn[data-variant="pri"] {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.wb-btn[data-variant="pri"]:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+
+.wb-btn[data-variant="ghost"] {
+  border-color: transparent;
+  background: none;
+  color: var(--text-secondary);
+}
+
+.wb-btn[data-variant="ghost"]:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.wb-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.wb-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+button.wb-chip {
+  cursor: pointer;
+}
+
+button.wb-chip:hover {
+  color: var(--text);
+}
+
+.wb-chip[aria-pressed="false"] {
+  border-style: dashed;
+  background: none;
+  color: var(--text-muted);
+}
+
+.wb-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line-input);
+  border-radius: 6px;
+  background: var(--bg-base);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+}
+
+.wb-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.wb-input > input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.wb-input > input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.wb-input > input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.wb-input-clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.wb-input-clear:hover {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.wb-input-clear .wb-i {
+  width: 14px;
+  height: 14px;
+}
+
+.wb-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 60;
+  display: grid;
+  min-width: 260px;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-card);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.wb-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wb-menu-item:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+
+.wb-menu-item:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.wb-menu-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-menu-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.wb-menu-check {
+  color: var(--accent);
+}
+
+.wb-menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border-subtle);
+}
+
+.wb-menu-note {
+  max-width: 280px;
+  margin: 0;
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── App frame: 40px title bar over sidebar, work area and inspector ── */
+.wb-app {
+  display: grid;
+  grid-template-rows: 40px minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-base);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  font-feature-settings: "cv11", "ss01", "tnum";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Zero specificity, so any component class can still set its own type. */
+:where(.wb-app) button {
+  font: inherit;
+}
+
+.wb-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding-left: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-base);
+}
+
+.wb-brand {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wb-logo {
+  display: block;
+  flex: none;
+  color: #372882;
+}
+
+/* The logo is drawn for light surfaces; lift it on dark themes as the
+   mockups do. */
+html:not([data-theme="paper"], [data-theme="white"], [data-theme="snow"], [data-theme="pearl"])
+  .wb-logo {
+  filter: brightness(2.6) saturate(0.9);
+}
+
+.wb-ws-wrap {
+  position: relative;
+  flex: none;
+}
+
+.wb-ws {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.wb-ws:hover,
+.wb-ws[aria-expanded="true"] {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.wb-cmdk {
+  display: flex;
+  flex: 0 1 460px;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+  height: 28px;
+  margin: 0 auto;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wb-cmdk:hover {
+  border-color: var(--line-input);
+}
+
+.wb-cmdk > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-cmdk > .wb-kbd {
+  margin-left: auto;
+}
+
+.wb-sync {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.wb-winbtns {
+  display: flex;
+  flex: none;
+  align-self: stretch;
+}
+
+.wb-winbtns > button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.wb-winbtns > button:hover {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.wb-winbtns > .wb-winbtn-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.wb-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.wb-body[data-inspector="true"] {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+/* ── Sidebar ── */
+.wb-side {
+  display: flex;
+  flex-direction: column;
+  width: 264px;
+  min-height: 0;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+}
+
+.wb-side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 10px 8px;
+  scrollbar-width: thin;
+}
+
+.wb-side-foot {
+  padding: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.wb-section + .wb-section {
+  margin-top: 8px;
+}
+
+.wb-sec {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.wb-sec > h2 {
+  margin: 0;
+  font: inherit;
+}
+
+.wb-sec > button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.wb-sec > button:hover {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.wb-sec-note {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.wb-sec-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.wb-sec-link:hover {
+  color: var(--text);
+}
+
+.wb-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wb-list-item {
+  position: relative;
+}
+
+/* One row shape for sessions, hosts, the sidebar foot and settings nav. */
+.wb-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wb-row:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+
+.wb-row:is([aria-current="page"], [aria-current="true"]) {
+  background: var(--accent-muted);
+}
+
+.wb-row:is([aria-current="page"], [aria-current="true"])::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: -8px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.wb-row:disabled {
+  cursor: progress;
+}
+
+.wb-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-meta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+p.wb-row-note,
+.wb-row-note {
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: default;
+}
+
+.wb-row-note:hover {
+  background: none;
+}
+
+/* Row actions appear on hover or keyboard focus and take the meta's place. */
+.wb-row-action {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+}
+
+.wb-list-item:is(:hover, :focus-within) .wb-row-action {
+  opacity: 1;
+}
+
+.wb-list-item:is(:hover, :focus-within) .wb-row .wb-meta {
+  visibility: hidden;
+}
+
+.wb-row-action:hover {
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+.wb-row-action .wb-i {
+  width: 14px;
+  height: 14px;
+}
+
+.wb-group + .wb-group {
+  margin-top: 4px;
+}
+
+.wb-grp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wb-grp:hover {
+  background: var(--bg-card-hover);
+}
+
+.wb-grp-n {
+  margin-left: auto;
+  color: var(--text-muted);
+}
+
+.wb-side-empty {
+  margin: 2px 8px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wb-acct-wrap {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.wb-acct {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wb-acct:hover {
+  background: var(--bg-card-hover);
+}
+
+.wb-av {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-card);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.wb-acct-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.wb-acct-name {
+  font-weight: 500;
+}
+
+.wb-acct-sub {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-acct-sub[data-warn="true"] {
+  color: var(--warn);
+}
+
+.wb-acct-chev {
+  margin-left: auto;
+  color: var(--text-muted);
+}
+
+/* Rail: icons only, labels stay in the accessible name. */
+.wb-side[data-collapsed="true"] {
+  width: 52px;
+}
+
+.wb-side[data-collapsed="true"] .wb-row {
+  justify-content: center;
+  padding: 0;
+}
+
+.wb-side[data-collapsed="true"] :is(.wb-row-label, .wb-meta, .wb-sec) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ── Work area ── */
+.wb-main {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-base);
+}
+
+.wb-main[data-terminal="true"] {
+  background: var(--terminal-bg);
+}
+
+/* Always the stretchy row, even when there are no tabs above it. */
+.wb-work {
+  position: relative;
+  display: flex;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.wb-toast {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  max-width: 420px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Terminal text keeps 14px / 18px from the pane edges. FitAddon subtracts
+   the .xterm padding, so the grid still fills the space exactly. */
+html:is([data-ui="new"], [data-ui="minimal"]) .terminal-host > .xterm {
+  padding: 14px 0 0 18px;
+}
+
+/* ── Tabs and tools ── */
 .wb-tabs {
   container-type: inline-size;
   display: flex;
   align-items: stretch;
-  height: var(--wb-tabs);
-  flex-shrink: 0;
+  height: 38px;
+  min-width: 0;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-panel);
+  background: var(--bg-base);
 }
 
 .wb-tab-list {
   display: flex;
-  flex: 1;
+  align-items: stretch;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -577,99 +957,123 @@ html:is([data-ui="new"], [data-ui="minimal"]) .settings-shell {
 .wb-tab {
   position: relative;
   display: flex;
+  flex: none;
   align-items: center;
-  max-width: 220px;
-  flex-shrink: 0;
+  min-width: 150px;
+  padding-right: 10px;
   border-right: 1px solid var(--border-subtle);
   color: var(--text-secondary);
 }
 
-.wb-tab:hover {
+.wb-tab[data-local="true"] {
+  min-width: 120px;
+}
+
+.wb-tab:hover:not([data-on]) {
   background: var(--bg-card-hover);
 }
 
-.wb-tab[data-current="true"] {
-  background: var(--bg-base);
+.wb-tab[data-on="true"] {
+  background: var(--terminal-bg);
   color: var(--text);
 }
 
-.wb-tab[data-current="true"]::after {
+.wb-tab:is([data-on="true"], [data-split="true"])::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
   top: 0;
-  height: 2px;
-  background: var(--accent);
-}
-
-.wb-tab[data-split="true"]:not([data-current="true"])::after {
-  content: "";
-  position: absolute;
-  left: 0;
   right: 0;
-  top: 0;
+  left: 0;
   height: 2px;
   background: var(--line-input);
 }
 
+.wb-tab[data-on="true"]::after {
+  background: var(--accent);
+}
+
 .wb-tab-main {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 8px;
   min-width: 0;
   height: 100%;
-  padding: 0 4px 0 12px;
+  padding: 0 0 0 12px;
   border: 0;
-  background: transparent;
+  background: none;
   color: inherit;
-  font-size: 13px;
+  text-align: left;
   cursor: pointer;
 }
 
 .wb-tab-title {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.wb-tab-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  margin-right: 6px;
+.wb-tab-x {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 8px;
+  padding: 0;
   border: 0;
-  border-radius: 4px;
-  background: transparent;
+  border-radius: 5px;
+  background: none;
   color: var(--text-muted);
   cursor: pointer;
 }
 
-.wb-tab-close:hover {
-  background: var(--bg-card);
+.wb-tab-x:hover {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.wb-tab-new {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.wb-tab-new:hover {
+  background: var(--bg-card-hover);
   color: var(--text);
 }
 
 .wb-tools {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 2px;
-  padding: 0 6px;
-  border-left: 1px solid var(--border-subtle);
+  margin-left: auto;
+  padding: 0 8px;
+}
+
+.wb-tool-slot {
+  display: flex;
+  align-items: center;
 }
 
 .wb-tool {
-  position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
   height: 28px;
-  padding: 0 8px;
+  padding: 0 9px;
   border: 0;
   border-radius: 6px;
-  background: transparent;
+  background: none;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
@@ -682,221 +1086,1304 @@ html:is([data-ui="new"], [data-ui="minimal"]) .settings-shell {
   color: var(--text);
 }
 
-.wb-tool:is([aria-pressed="true"], [aria-expanded="true"]) {
+.wb-tool[data-on="true"] {
   background: var(--accent-muted);
+  color: var(--text);
+}
+
+.wb-tool[data-on="true"] .wb-i {
   color: var(--accent);
 }
 
-.wb-tool-badge {
-  min-width: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--accent-fg);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-  text-align: center;
+.wb-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border-subtle);
 }
 
-/* Labels fold to icons once the strip runs out of room. */
-@container (max-width: 820px) {
+/* With the inspector open, tabs share the room and inactive tools fold to
+   icons; their names stay in aria-label. */
+.wb-body[data-inspector="true"] .wb-tab {
+  flex: 0 1 150px;
+  min-width: 0;
+}
+
+.wb-body[data-inspector="true"] .wb-tool:not([data-on]) .wb-tool-label {
+  display: none;
+}
+
+@container (max-width: 760px) {
   .wb-tool-label {
     display: none;
   }
-
-  .wb-tool {
-    padding: 0 6px;
-  }
 }
 
-/* Inspector: one right-hand panel for Files, Assistant and Forwards. */
-.wb-inspector {
-  position: relative;
+/* ── Status line ── */
+.wb-foot {
   display: flex;
-  flex-shrink: 0;
+  align-items: center;
+  gap: 14px;
+  height: 28px;
+  min-width: 0;
+  padding: 0 14px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-base);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.wb-foot-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wb-foot-r {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.wb-foot-msg {
+  min-width: 0;
+  max-width: 360px;
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+}
+
+.wb-foot-msg:empty {
+  display: none;
+}
+
+/* ── Inspector: one right-hand panel for Files, Assistant and Forwards ── */
+.wb-insp {
+  position: relative;
+  display: grid;
+  grid-template-rows: 44px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  flex-direction: column;
   border-left: 1px solid var(--border-subtle);
   background: var(--bg-panel);
 }
 
-.wb-inspector-grip {
+.wb-grip {
   position: absolute;
-  left: -3px;
   top: 0;
   bottom: 0;
+  left: -4px;
   z-index: 5;
-  width: 6px;
+  display: grid;
+  place-items: center;
+  width: 8px;
   cursor: col-resize;
+  touch-action: none;
 }
 
-.wb-inspector-grip:hover,
-.wb-inspector-grip:focus-visible,
-.wb-inspector-grip[data-resizing="true"] {
-  background: var(--accent-muted);
-  box-shadow: inset 2px 0 0 var(--accent);
+.wb-grip::before {
+  content: "";
+  width: 3px;
+  height: 28px;
+  border-radius: 2px;
+  background: var(--line-input);
+  opacity: 0.7;
 }
 
-.wb-inspector-head {
+.wb-grip:is(:hover, :focus-visible, [data-resizing="true"])::before {
+  background: var(--accent);
+  opacity: 1;
+}
+
+.wb-grip:focus-visible {
+  outline: none;
+}
+
+.wb-insp-h {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: var(--wb-tabs);
-  flex-shrink: 0;
-  padding: 0 6px 0 8px;
+  min-width: 0;
+  padding: 0 10px 0 14px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.wb-inspector-tabs {
-  display: flex;
-  gap: 2px;
-}
-
-.wb-inspector-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.wb-inspector-tab:hover {
-  background: var(--bg-card-hover);
-  color: var(--text);
-}
-
-.wb-inspector-tab[aria-selected="true"] {
-  background: var(--bg-card);
-  color: var(--text);
+.wb-insp-h > h2 {
+  flex: none;
+  margin: 0;
+  font-size: 13px;
   font-weight: 600;
 }
 
-.wb-inspector-context {
-  flex: 1;
+.wb-insp-ctx {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  overflow: hidden;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 12px;
-  text-align: right;
+}
+
+.wb-insp-ctx > span {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.wb-inspector-body {
+.wb-insp-actions {
   display: flex;
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.wb-insp-body {
+  display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
 
-/* Give terminal text room from the panel edges. FitAddon subtracts the
-   .xterm padding, so the grid still fills the space exactly. */
-html:is([data-ui="new"], [data-ui="minimal"]) .terminal-host > .xterm {
-  padding: 8px 0 0 12px;
-}
-
-html[data-ui="minimal"] .terminal-host > .xterm {
-  padding: 4px 0 0 8px;
-}
-
-/* Status line */
-.wb-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  height: var(--wb-footer);
-  flex-shrink: 0;
-  padding: 0 12px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-panel);
+.wb-empty {
+  margin: 0;
+  padding: 16px 14px;
   color: var(--text-muted);
   font-size: 12px;
 }
 
-.wb-footer-session {
+/* ── Files (SFTP) ── */
+.wb-files {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.wb-crumbs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.wb-crumb-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.wb-crumb {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.wb-crumb > button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.wb-crumb > button:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.wb-crumb > button[aria-current="location"] {
+  color: var(--text);
+}
+
+.wb-path-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line-input);
+  border-radius: 5px;
+  background: var(--bg-base);
+  color: var(--text);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.wb-switch {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wb-switch-track {
+  position: relative;
+  display: inline-block;
+  width: 28px;
+  height: 16px;
+  border-radius: 9px;
+  background: var(--line-input);
+  transition: background-color 120ms ease;
+}
+
+.wb-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--bg-base);
+  transition: transform 120ms ease;
+}
+
+.wb-switch > input:checked + .wb-switch-track {
+  background: var(--accent);
+}
+
+.wb-switch > input:checked + .wb-switch-track::after {
+  background: var(--accent-fg);
+  transform: translateX(12px);
+}
+
+.wb-switch > input:focus-visible + .wb-switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.wb-files-filter {
+  flex: none;
+  padding: 0 14px 8px;
+}
+
+.wb-files-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.wb-ftable {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12.5px;
+}
+
+.wb-ftable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 14px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.wb-ftable td {
+  height: 32px;
+  padding: 0 14px;
+  border-top: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.wb-ftable :is(th, td).wb-r {
+  text-align: right;
+}
+
+/* Right-aligned headers sit flush with the column edge. */
+.wb-ftable th.wb-r {
+  padding: 6px 0;
+}
+
+/* Fixed widths keep the columns steady as the listing changes; the name
+   column takes the rest and truncates. */
+.wb-ftable .wb-fcol-size {
+  width: 85px;
+}
+
+.wb-ftable .wb-fcol-modified {
+  width: 79px;
+}
+
+/* The last column keeps the panel's inset on its header too. */
+.wb-ftable th.wb-fcol-modified {
+  padding-right: 14px;
+}
+
+.wb-ftable td:first-child {
+  overflow: hidden;
+}
+
+.wb-ftable tbody tr {
+  cursor: default;
+}
+
+.wb-ftable tbody tr:hover td {
+  background: var(--bg-card-hover);
+}
+
+.wb-ftable tbody tr[data-selected="true"] td {
+  background: var(--accent-muted);
+}
+
+.wb-ftable tbody tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.wb-fname {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  white-space: nowrap;
+  color: var(--text-secondary);
 }
 
-.wb-footer-strong {
+.wb-fname[data-dir="true"] {
+  color: var(--accent);
+}
+
+.wb-fname > span {
+  min-width: 0;
   overflow: hidden;
-  color: var(--text-secondary);
-  font-weight: 500;
+  color: var(--text);
   text-overflow: ellipsis;
 }
 
-.wb-footer-meta {
-  font-variant-numeric: tabular-nums;
+.wb-files-note {
+  margin: 0;
+  padding: 10px 14px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
-.wb-footer-message {
+.wb-files-note[data-tone="danger"] {
+  color: var(--danger);
+}
+
+.wb-files-status {
+  flex: none;
+  margin: 0;
+  padding: 8px 14px;
+  overflow: hidden;
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-transfers {
+  display: grid;
+  flex: none;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.wb-transfers-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.wb-transfers .wb-files-note {
+  padding: 0;
+}
+
+.wb-transfer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wb-transfer-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.wb-transfer-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.wb-transfer-line > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.wb-transfer-line > span + span {
+  flex: none;
+}
+
+.wb-progress {
+  position: relative;
+  height: 4px;
+  margin-top: 5px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--bg-card);
+}
+
+.wb-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 200ms linear;
+}
+
+.wb-progress[data-indeterminate="true"] > span {
+  width: 30%;
+  animation: wb-indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes wb-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-progress[data-indeterminate="true"] > span {
+    width: 100%;
+    opacity: 0.5;
+    animation: none;
+  }
+}
+
+/* ── Assistant ── */
+.wb-ai {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.wb-ai-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.wb-ai-model {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wb-ai-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  width: 300px;
+  max-height: min(460px, 70vh);
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.wb-ai-subhead {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+}
+
+.wb-ai-thread {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 16px 12px;
+  user-select: text;
+}
+
+.wb-ai-empty {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.wb-ai-empty-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wb-ai-user {
+  align-self: flex-end;
+  max-width: 86%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px 10px 3px 10px;
+  background: var(--bg-card);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.wb-ai-reply {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  line-height: 1.55;
+}
+
+.wb-ai-obs {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.wb-ai-obs > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.wb-ai-obs > summary::-webkit-details-marker {
+  display: none;
+}
+
+.wb-ai-obs[open] > .wb-md {
+  max-height: 260px;
+  margin-top: 8px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--terminal-bg);
+  font-size: 12px;
+}
+
+.wb-md {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.wb-md :is(p, ul, ol, h1, h2, h3, h4, blockquote) {
+  margin: 0;
+}
+
+.wb-md :is(ul, ol) {
+  display: grid;
+  gap: 4px;
+  padding-left: 20px;
+}
+
+.wb-md ul {
+  list-style: disc;
+}
+
+.wb-md ol {
+  list-style: decimal;
+}
+
+.wb-md :is(h1, h2, h3, h4) {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wb-md h1 {
+  font-size: 15px;
+}
+
+.wb-md a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.wb-md blockquote {
+  padding-left: 10px;
+  border-left: 2px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.wb-code {
+  font-size: 12px;
+}
+
+.wb-cmd {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--terminal-bg);
+}
+
+.wb-cmd-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.wb-cmd-risk {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wb-cmd-risk[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.wb-cmd-risk[data-tone="warn"] {
+  color: var(--warn);
+}
+
+.wb-cmd-code {
+  margin: 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.wb-cmd-code code {
+  font: inherit;
+}
+
+.wb-cmd-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 10px;
+  line-height: 1.45;
+}
+
+.wb-cmd-note {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.wb-ai-composer {
+  display: grid;
+  flex: none;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.wb-ai-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wb-ai-box {
+  padding: 10px 10px 8px;
+  border: 1px solid var(--line-input);
+  border-radius: 8px;
+  background: var(--bg-base);
+}
+
+.wb-ai-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+html:is([data-ui="new"], [data-ui="minimal"]) .wb-ai-input {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  max-height: 160px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+  resize: none;
+  outline: none;
+}
+
+.wb-ai-input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.wb-ai-box-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wb-ai-box-foot > span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── First-run page ── */
+.wb-empty-page {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+  background: var(--bg-base);
+}
+
+.wb-empty-col {
+  display: grid;
+  gap: 22px;
+  width: 560px;
+  max-width: 100%;
+}
+
+.wb-empty-col .wb-h1 {
+  margin-top: 18px;
+}
+
+.wb-empty-lead {
+  max-width: 480px;
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.wb-start {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wb-start-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-panel);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wb-start-card:hover {
+  border-color: var(--line-input);
+}
+
+.wb-start-card[data-primary="true"] {
+  border-color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.wb-start-icon {
+  color: var(--text-secondary);
+}
+
+.wb-start-card[data-primary="true"] .wb-start-icon {
+  color: var(--accent);
+}
+
+.wb-start-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.wb-start-title {
+  display: block;
+  font-weight: 600;
+}
+
+/* Keeps the 13 px body row height, so both lines of a card are the same height. */
+.wb-start-hint {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: calc(13px * 1.45);
+}
+
+.wb-empty-foot {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ── Settings ── */
+.wb-settings {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: 0;
+  background: var(--bg-base);
+}
+
+.wb-settings-nav {
+  display: grid;
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 10px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.wb-settings-nav :is([role="tablist"], [role="presentation"]) {
+  display: grid;
+  gap: 1px;
+}
+
+.wb-settings-nav .wb-sec[data-first="true"] {
+  padding-top: 2px;
+}
+
+.wb-settings-search {
+  margin: 0 0 12px;
+}
+
+.wb-settings-body {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.wb-settings-content {
+  display: grid;
+  align-content: start;
+  gap: 26px;
+  max-width: 980px;
+  padding: 28px 40px;
+}
+
+.wb-set-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.wb-set-lead {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+}
+
+.wb-set-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.wb-set-tight {
+  align-content: start;
+  gap: 10px;
+}
+
+.wb-set-title {
+  font-weight: 600;
+}
+
+.wb-set-note {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.wb-set-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.wb-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1180px) {
+  .wb-theme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wb-set-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.wb-theme-card {
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.wb-theme-card:hover {
+  border-color: var(--line-input);
+}
+
+.wb-theme-card[aria-checked="true"] {
+  border: 2px solid var(--accent);
+}
+
+.wb-tc-preview {
+  display: grid;
+  grid-template-columns: 34% 1fr;
+  height: 96px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.wb-tc-side {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 10px 8px;
+  border-right: 1px solid;
+}
+
+.wb-tc-main {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 10px;
+}
+
+.wb-tc-bar {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+}
+
+.wb-tc-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  font-weight: 600;
+}
+
+.wb-tc-check {
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.wb-tc-desc {
+  display: block;
+  padding: 0 12px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.wb-check {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.wb-check-box {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--line-input);
+  border-radius: 4px;
+  color: transparent;
+}
+
+.wb-check-box .wb-i {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.4;
+}
+
+.wb-check > input:checked + .wb-check-box {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.wb-check > input:focus-visible + .wb-check-box {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.wb-pal-box {
+  display: grid;
+  padding: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-panel);
+}
+
+.wb-row.wb-pal-row {
+  height: 38px;
+}
+
+.wb-swatch {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 44px;
+  height: 22px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+}
+
+.wb-swatch > span {
+  width: 4px;
+  height: 12px;
+  border-radius: 1px;
+}
+
+.wb-term-preview {
+  margin: 0;
+  padding: 12px 14px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  line-height: 1.55;
+  white-space: pre;
+}
+
+.wb-set-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wb-set-pair .wb-label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.wb-input.wb-select {
+  width: 100%;
+  padding-right: 32px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238c8c99' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.wb-input.wb-select option {
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.wb-stepper {
+  color: var(--text);
+}
+
+/* The glyphs sit at the field's inset; the hit area spills into the padding. */
+.wb-stepper > button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: 0 -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.wb-stepper > button:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+}
+
+.wb-stepper > button:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.wb-stepper > output {
+  margin: 0 auto;
+}
+
 /* ── Minimal: same structure, tighter rhythm, icon-only tools ── */
-html[data-ui="minimal"] .wb-shell {
-  --wb-titlebar: 32px;
-  --wb-sidebar: 232px;
-  --wb-rail: 44px;
-  --wb-row: 24px;
-  --wb-tabs: 30px;
-  --wb-footer: 24px;
+html[data-ui="minimal"] .wb-app {
+  grid-template-rows: 32px minmax(0, 1fr);
+  font-size: 12.5px;
 }
 
-html[data-ui="minimal"] .wb-titlebar-brand {
-  font-size: 12px;
+html[data-ui="minimal"] .wb-title {
+  gap: 10px;
+  padding-left: 10px;
 }
 
-html[data-ui="minimal"] .wb-palette-trigger {
+html[data-ui="minimal"] .wb-brand {
+  font-size: 12.5px;
+}
+
+html[data-ui="minimal"] .wb-cmdk {
+  flex-basis: 400px;
   height: 24px;
-  font-size: 12px;
+  border-radius: 6px;
+}
+
+html[data-ui="minimal"] .wb-sync {
+  display: none;
+}
+
+html[data-ui="minimal"] .wb-winbtns > button {
+  width: 40px;
+}
+
+html[data-ui="minimal"] .wb-side {
+  width: 232px;
+}
+
+html[data-ui="minimal"] .wb-side[data-collapsed="true"] {
+  width: 44px;
+}
+
+html[data-ui="minimal"] .wb-side-scroll {
+  padding: 6px 8px;
+}
+
+html[data-ui="minimal"] .wb-sec {
+  padding: 8px 8px 4px;
 }
 
 html[data-ui="minimal"] .wb-row {
-  padding-top: 1px;
-  padding-bottom: 1px;
-  font-size: 12px;
+  gap: 8px;
+  height: 26px;
+  font-size: 12.5px;
 }
 
-html[data-ui="minimal"] .wb-row-meta {
+html[data-ui="minimal"] .wb-row:is([aria-current="page"], [aria-current="true"])::before {
+  top: 6px;
+  bottom: 6px;
+}
+
+html[data-ui="minimal"] .wb-row-action {
+  top: 1px;
+}
+
+html[data-ui="minimal"] .wb-grp {
+  height: 24px;
+}
+
+html[data-ui="minimal"] .wb-acct-sub {
   display: none;
+}
+
+html[data-ui="minimal"] .wb-tabs {
+  height: 32px;
+}
+
+html[data-ui="minimal"] .wb-tab {
+  min-width: 120px;
 }
 
 html[data-ui="minimal"] .wb-tab-main {
   padding-left: 10px;
-  font-size: 12px;
-}
-
-html[data-ui="minimal"] :is(.wb-tool, .wb-inspector-tab) {
-  height: 24px;
 }
 
 html[data-ui="minimal"] .wb-tool {
-  padding: 0 5px;
+  height: 26px;
+  padding: 0 7px;
 }
 
 html[data-ui="minimal"] .wb-tool-label {
   display: none;
 }
 
-html[data-ui="minimal"] .wb-icon-btn {
-  width: 24px;
+html[data-ui="minimal"] .wb-foot {
   height: 24px;
+}
+
+html[data-ui="minimal"] .wb-insp {
+  grid-template-rows: 36px minmax(0, 1fr);
+}
+
+html[data-ui="minimal"] :is(.wb-ib, .wb-btn) {
+  height: 26px;
+}
+
+html[data-ui="minimal"] .wb-ib {
+  width: 26px;
+}
+
+html[data-ui="minimal"] .wb-ftable td {
+  height: 28px;
+}
+
+html[data-ui="minimal"] .terminal-host > .xterm {
+  padding: 10px 0 0 14px;
+}
+
+html[data-ui="minimal"] .wb-settings-content {
+  gap: 20px;
+  padding: 20px 28px;
+}
+
+html[data-ui="minimal"] .wb-tc-preview {
+  height: 80px;
 }
