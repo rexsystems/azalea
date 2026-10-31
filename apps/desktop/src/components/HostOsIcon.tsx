@@ -5,6 +5,11 @@ interface HostOsIconProps {
   seed: string;
   size?: number;
   rounded?: number;
+  /**
+   * Inner padding around the logo. Defaults to a size-based value with a 6px
+   * floor, which suits tiles; dense lists pass a smaller value.
+   */
+  padding?: number;
 }
 
 const iconModules = import.meta.glob("../assets/os-icons/*.svg", {
@@ -128,7 +133,7 @@ function resolveIcon(osId: string): { key: string; src: string } | null {
 }
 
 function UnknownHostIcon({ size, rounded }: { size: number; rounded: number }) {
-  const iconSize = Math.max(22, Math.round(size * 0.52));
+  const iconSize = size >= 40 ? Math.max(22, Math.round(size * 0.52)) : Math.round(size * 0.62);
   return (
     <div
       className="flex shrink-0 items-center justify-center"
@@ -161,7 +166,13 @@ export function hostConnectAccent(osId: string | null | undefined, _seed: string
   return "var(--text-muted)";
 }
 
-export function HostOsIcon({ osId, seed: _seed, size = 48, rounded = 10 }: HostOsIconProps) {
+export function HostOsIcon({
+  osId,
+  seed: _seed,
+  size = 48,
+  rounded = 10,
+  padding,
+}: HostOsIconProps) {
   void _seed;
   const raw = (osId || "").toLowerCase();
   if (!raw) {
@@ -173,7 +184,7 @@ export function HostOsIcon({ osId, seed: _seed, size = 48, rounded = 10 }: HostO
     return <UnknownHostIcon size={size} rounded={rounded} />;
   }
 
-  const pad = Math.max(6, Math.round(size * 0.16));
+  const pad = padding ?? Math.max(6, Math.round(size * 0.16));
   const bg = OS_BG[resolved.key] ?? "#1a1a1e";
 
   return (

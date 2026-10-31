@@ -3,7 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, WindowClose } from "./icons";
 import { Logo } from "./Logo";
 
-function MaximizeIcon({ size = 12 }: { size?: number }) {
+export function MaximizeIcon({ size = 12 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" fill="none" aria-hidden>
       <rect
@@ -19,7 +19,7 @@ function MaximizeIcon({ size = 12 }: { size?: number }) {
   );
 }
 
-function RestoreIcon({ size = 12 }: { size?: number }) {
+export function RestoreIcon({ size = 12 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" fill="none" aria-hidden>
       <rect
