@@ -46,13 +46,16 @@ export function getStoredTheme(): ThemeId {
   return "noir";
 }
 
-export function setStoredTheme(id: ThemeId) {
-  localStorage.setItem(STORAGE_KEY, id);
-  document.documentElement.dataset.theme = id;
+export function isThemeId(value: unknown): value is ThemeId {
+  return typeof value === "string" && themes.some((t) => t.id === value);
 }
 
-export function applyTheme(id: ThemeId) {
-  document.documentElement.dataset.theme = id;
+/**
+ * Stores the legacy-interface theme. `applyAppearance()` decides whether it
+ * is the one shown, because the new interfaces use Ink or Paper instead.
+ */
+export function setStoredTheme(id: ThemeId) {
+  localStorage.setItem(STORAGE_KEY, id);
 }
 
 export const hostIconColors = [

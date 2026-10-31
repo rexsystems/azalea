@@ -1,0 +1,127 @@
+/*
+ * New and Minimal interface rules. Everything here is scoped to
+ * html[data-ui="new"] or html[data-ui="minimal"], so Legacy UI renders
+ * exactly as before. Rules are unlayered on purpose: Tailwind v4 utilities
+ * live in @layer, so these win without !important.
+ */
+
+/* Type scale. Legacy uses an 18px root; the new interfaces use 16px (13px
+   body via text-xs/text-sm) and Minimal 15px, which densifies every
+   rem-based page without per-page edits. */
+html[data-ui="new"] {
+  font-size: 16px;
+}
+
+html[data-ui="minimal"] {
+  font-size: 15px;
+}
+
+/* Phones keep the larger touch-friendly scale; only colors change there. */
+html[data-mobile="true"]:is([data-ui="new"], [data-ui="minimal"]) {
+  font-size: 18px;
+}
+
+/* 10px and 11px labels are below the readable floor; lift them to 12px. */
+html:is([data-ui="new"], [data-ui="minimal"]) :is(.text-\[10px\], .text-\[11px\]) {
+  font-size: 12px;
+}
+
+/* One visible focus ring for keyboard users. The xterm helper textarea is
+   excluded: the terminal shows its own cursor. */
+html:is([data-ui="new"], [data-ui="minimal"]) :focus-visible:not(.xterm-helper-textarea) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+html:is([data-ui="new"], [data-ui="minimal"]) :is(input, select, textarea):focus-visible {
+  outline-offset: 0;
+}
+
+/* Form fields need a 3:1 boundary against their surface (WCAG 1.4.11). */
+html:is([data-ui="new"], [data-ui="minimal"])
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea):not(.xterm-helper-textarea) {
+  border-color: var(--line-input);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:is([data-ui="new"], [data-ui="minimal"]) *,
+  html:is([data-ui="new"], [data-ui="minimal"]) *::before,
+  html:is([data-ui="new"], [data-ui="minimal"]) *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Settings: grouped vertical navigation ── */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.settings-nav {
+  position: sticky;
+  top: 0;
+}
+
+.settings-nav-group + .settings-nav-group {
+  margin-top: 16px;
+}
+
+.settings-nav-heading {
+  padding: 0 10px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: var(--wb-row, 30px);
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: left;
+  position: relative;
+}
+
+.settings-nav-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.settings-nav-item[aria-selected="true"] {
+  background: var(--accent-muted);
+  color: var(--text);
+}
+
+.settings-nav-item[aria-selected="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+html:is([data-ui="new"], [data-ui="minimal"]) .settings-shell {
+  padding: 24px 28px 40px;
+}
+
+@media (max-width: 760px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-nav {
+    position: static;
+  }
+}

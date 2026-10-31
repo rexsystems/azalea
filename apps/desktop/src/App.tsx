@@ -73,8 +73,9 @@ import {
   collectAppSettings,
   exportBackupToFile,
   importBackupFromFile,
-  type AppSettingsExport,
 } from "./lib/backup";
+import { isUiMode, isUiTheme } from "./lib/appearance";
+import { isThemeId } from "./lib/theme";
 import { setStoredCustomCss } from "./lib/customCss";
 import { checkForUpdateSilent } from "./lib/updater";
 import { getStoredAutoSync, setStoredAutoSync } from "./lib/settings";
@@ -150,7 +151,7 @@ function App() {
     moveHostToGroup,
     refresh: refreshGroups,
   } = useGroups();
-  const { theme, changeTheme } = useTheme();
+  const { theme, changeTheme, uiMode, changeUiMode, uiTheme, changeUiTheme } = useTheme();
   const { connectScreen, changeConnectScreen } = useConnectScreen();
   const { status: syncStatus, setStatus: setSyncStatus, refresh: refreshSyncStatus } =
     useSyncStatus();
@@ -1914,8 +1915,14 @@ function App() {
 
   const applyImportedSettings = (settings?: Record<string, unknown>) => {
     if (!settings) return;
-    if (typeof settings.theme === "string") {
-      changeTheme(settings.theme as AppSettingsExport["theme"]);
+    if (isThemeId(settings.theme)) {
+      changeTheme(settings.theme);
+    }
+    if (isUiMode(settings.uiMode)) {
+      changeUiMode(settings.uiMode);
+    }
+    if (isUiTheme(settings.uiTheme)) {
+      changeUiTheme(settings.uiTheme);
     }
     if (settings.connectScreen === "fancy" || settings.connectScreen === "instant") {
       changeConnectScreen(settings.connectScreen);
@@ -2360,6 +2367,10 @@ function App() {
         <SettingsPage
           theme={theme}
           onThemeChange={changeTheme}
+          uiMode={uiMode}
+          onUiModeChange={changeUiMode}
+          uiTheme={uiTheme}
+          onUiThemeChange={changeUiTheme}
           connectScreen={connectScreen}
           onConnectScreenChange={changeConnectScreen}
           terminalSettings={terminalSettings}

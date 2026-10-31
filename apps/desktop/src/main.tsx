@@ -7,11 +7,12 @@ import { IconPackProvider } from "./components/IconPackProvider";
 import { applyIconPack, getStoredIconPack } from "./lib/iconPack";
 import { installCrashReporting } from "./lib/telemetry";
 import { applyCustomCss } from "./lib/customCss";
-import { applyTheme, getStoredTheme } from "./lib/theme";
+import { applyAppearance, watchAppearance } from "./lib/appearance";
 import "./styles/globals.css";
+import "./styles/workbench.css";
 
-const initialTheme = getStoredTheme();
-applyTheme(initialTheme);
+applyAppearance();
+watchAppearance();
 applyCustomCss();
 applyIconPack(getStoredIconPack());
 installCrashReporting();

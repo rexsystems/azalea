@@ -13,13 +13,28 @@ import type { CustomCssSettings } from "./customCss";
 import { getStoredCustomCss, setStoredCustomCss } from "./customCss";
 import { applyAiSettings, collectAiSettings, type AiSettingsExport } from "./ai";
 import type { ThemeId } from "./theme";
-import { getStoredTheme, setStoredTheme } from "./theme";
+import { getStoredTheme, isThemeId, setStoredTheme } from "./theme";
+import {
+  getStoredUiMode,
+  getStoredUiTheme,
+  isUiMode,
+  isUiTheme,
+  notifyAppearanceChanged,
+  UI_MODE_KEY,
+  UI_THEME_KEY,
+  type UiMode,
+  type UiThemeId,
+} from "./appearance";
 import type { IconPackId } from "./iconPack";
 import { getStoredIconPack, setStoredIconPack } from "./iconPack";
 import * as api from "./api";
 
 export interface AppSettingsExport {
   theme: ThemeId;
+  /** Interface layout. Missing in backups made before the redesign. */
+  uiMode?: UiMode;
+  /** Ink, Paper or system for the new interfaces. */
+  uiTheme?: UiThemeId;
   iconPack?: IconPackId;
   connectScreen: ConnectScreenMode;
   terminalSettings: TerminalSettings;
@@ -32,6 +47,8 @@ export interface AppSettingsExport {
 export function collectAppSettings(): AppSettingsExport {
   return {
     theme: getStoredTheme(),
+    uiMode: getStoredUiMode(),
+    uiTheme: getStoredUiTheme(),
     iconPack: getStoredIconPack(),
     connectScreen: getStoredConnectScreen(),
     terminalSettings: getStoredTerminalSettings(),
@@ -42,7 +59,9 @@ export function collectAppSettings(): AppSettingsExport {
 }
 
 export function applyAppSettings(settings: Partial<AppSettingsExport>) {
-  if (settings.theme) setStoredTheme(settings.theme);
+  if (isThemeId(settings.theme)) setStoredTheme(settings.theme);
+  if (isUiMode(settings.uiMode)) localStorage.setItem(UI_MODE_KEY, settings.uiMode);
+  if (isUiTheme(settings.uiTheme)) localStorage.setItem(UI_THEME_KEY, settings.uiTheme);
   if (settings.iconPack) setStoredIconPack(settings.iconPack);
   if (settings.connectScreen) setStoredConnectScreen(settings.connectScreen);
   if (settings.terminalSettings) setStoredTerminalSettings(settings.terminalSettings);
@@ -56,6 +75,7 @@ export function applyAppSettings(settings: Partial<AppSettingsExport>) {
   if (settings.ai && typeof settings.ai === "object") {
     applyAiSettings(settings.ai);
   }
+  notifyAppearanceChanged();
 }
 
 export function exportBackup(settings: AppSettingsExport): Promise<string> {

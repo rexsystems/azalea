@@ -287,6 +287,64 @@
   --shadow: 0 1px 2px rgba(42, 31, 24, 0.06);
 }
 
+/*
+ * ── Ink and Paper: the New and Minimal interfaces ──
+ * Two neutral ramps and one violet accent. Every text pair meets WCAG AA on
+ * the surfaces it sits on (checked: muted on panel is 5.4:1 in Ink and
+ * 5.2:1 in Paper; input borders are 3:1 or more for non-text contrast).
+ * The legacy variable names are mapped so existing pages follow without
+ * per-page edits; --ok, --warn and --line-input are new.
+ */
+[data-theme="ink"] {
+  color-scheme: dark;
+  --bg-base: #0f0f12;
+  --bg-panel: #16161b;
+  --bg-card: #1e1e24;
+  --bg-card-hover: #24242b;
+  --bg-input: #0f0f12;
+  --border: #2c2c34;
+  --border-subtle: #26262d;
+  --line-input: #6a6a76;
+  --text: #ececf1;
+  --text-secondary: #a9a9b5;
+  --text-muted: #8c8c99;
+  --accent: #a898ff;
+  --accent-hover: #bcb0ff;
+  --accent-muted: rgba(168, 152, 255, 0.14);
+  --accent-fg: #0f0f12;
+  --danger: #f07a7a;
+  --ok: #4cc38a;
+  --warn: #e5b454;
+  --nav-active: rgba(168, 152, 255, 0.14);
+  --terminal-bg: #0b0b0e;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="paper"] {
+  color-scheme: light;
+  --bg-base: #fafaf8;
+  --bg-panel: #f1f1ed;
+  --bg-card: #ffffff;
+  --bg-card-hover: #e8e8e3;
+  --bg-input: #ffffff;
+  --border: #d6d6cf;
+  --border-subtle: #e0e0da;
+  --line-input: #8e8e99;
+  --text: #17171c;
+  --text-secondary: #4e4e58;
+  --text-muted: #63636e;
+  --accent: #372882;
+  --accent-hover: #47379c;
+  --accent-muted: rgba(55, 40, 130, 0.09);
+  --accent-fg: #ffffff;
+  --danger: #c0392b;
+  --ok: #13774a;
+  --warn: #946200;
+  --nav-active: rgba(55, 40, 130, 0.09);
+  --terminal-bg: #ffffff;
+  --shadow: 0 12px 32px rgba(23, 23, 28, 0.12), 0 0 0 1px rgba(23, 23, 28, 0.06);
+}
+
 * {
   box-sizing: border-box;
 }

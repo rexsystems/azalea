@@ -4,6 +4,7 @@ import { Download } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ThemeId } from "../lib/theme";
 import { themes } from "../lib/theme";
+import { uiModes, uiThemes, type UiMode, type UiThemeId } from "../lib/appearance";
 import { iconPacks, type IconPackId } from "../lib/iconPack";
 import { useIconPack } from "./IconPackProvider";
 import { hugeiconsPack } from "./icons/hugeiconsPack";
@@ -57,6 +58,10 @@ type SettingsTab =
 interface SettingsPageProps {
   theme: ThemeId;
   onThemeChange: (id: ThemeId) => void;
+  uiMode: UiMode;
+  onUiModeChange: (mode: UiMode) => void;
+  uiTheme: UiThemeId;
+  onUiThemeChange: (id: UiThemeId) => void;
   connectScreen: ConnectScreenMode;
   onConnectScreenChange: (mode: ConnectScreenMode) => void;
   terminalSettings: TerminalSettings;
@@ -93,6 +98,44 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "privacy", label: "Privacy" },
   { id: "about", label: "About" },
 ];
+
+/** Vertical navigation groups used by the New and Minimal interfaces. */
+const TAB_GROUPS: { label: string; ids: SettingsTab[] }[] = [
+  { label: "General", ids: ["appearance", "connect", "terminal"] },
+  { label: "Assistant", ids: ["ai", "voice"] },
+  { label: "Data", ids: ["account", "import", "backup"] },
+  { label: "Other", ids: ["privacy", "about"] },
+];
+
+/** Small schematic of each interface so the choice is visible, not only named. */
+function InterfacePreview({ mode }: { mode: UiMode }) {
+  const sidebar = mode === "minimal" ? 6 : mode === "legacy" ? 22 : 26;
+  const bar = mode === "minimal" ? 5 : 8;
+  return (
+    <svg viewBox="0 0 120 64" className="h-16 w-full" aria-hidden="true">
+      <rect width="120" height="64" rx="4" fill="var(--bg-base)" />
+      <rect width="120" height={bar} fill="var(--bg-panel)" />
+      <rect y={bar} width={sidebar} height={64 - bar} fill="var(--bg-panel)" />
+      {mode !== "minimal" &&
+        [0, 1, 2, 3].map((i) => (
+          <rect
+            key={i}
+            x="4"
+            y={bar + 5 + i * 7}
+            width={sidebar - 8}
+            height="3"
+            rx="1.5"
+            fill="var(--text-muted)"
+            opacity={i === 0 ? 0.9 : 0.45}
+          />
+        ))}
+      <rect x={sidebar} y={bar} width={120 - sidebar} height={mode === "minimal" ? 5 : 7} fill="var(--bg-card)" />
+      <rect x={sidebar + 6} y={bar + 14} width="44" height="3" rx="1.5" fill="var(--accent)" />
+      <rect x={sidebar + 6} y={bar + 21} width="60" height="3" rx="1.5" fill="var(--text-muted)" opacity="0.5" />
+      <rect x={sidebar + 6} y={bar + 28} width="34" height="3" rx="1.5" fill="var(--text-muted)" opacity="0.5" />
+    </svg>
+  );
+}
 
 function PanelHeader({
   title,
@@ -162,6 +205,10 @@ function SettingRow({
 export function SettingsPage({
   theme,
   onThemeChange,
+  uiMode,
+  onUiModeChange,
+  uiTheme,
+  onUiThemeChange,
   connectScreen,
   onConnectScreenChange,
   terminalSettings,
@@ -306,35 +353,66 @@ export function SettingsPage({
           </p>
         </div>
 
-        <div
-          className="settings-tabs mb-5 flex gap-1 overflow-x-auto pb-1"
-          role="tablist"
-          aria-label="Settings sections"
-        >
-          {visibleTabs.map((item) => {
-            const active = tab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => selectTab(item.id)}
-                className="transition-ui shrink-0 rounded-lg px-3 py-2 text-sm font-medium"
-                style={{
-                  background: active ? "var(--bg-panel)" : "transparent",
-                  color: active ? "var(--text)" : "var(--text-muted)",
-                  border: active
-                    ? "1px solid var(--border-subtle)"
-                    : "1px solid transparent",
-                }}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-
+        {uiMode === "legacy" && (
+          <div
+            className="settings-tabs mb-5 flex gap-1 overflow-x-auto pb-1"
+            role="tablist"
+            aria-label="Settings sections"
+          >
+            {visibleTabs.map((item) => {
+              const active = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => selectTab(item.id)}
+                  className="transition-ui shrink-0 rounded-lg px-3 py-2 text-sm font-medium"
+                  style={{
+                    background: active ? "var(--bg-panel)" : "transparent",
+                    color: active ? "var(--text)" : "var(--text-muted)",
+                    border: active
+                      ? "1px solid var(--border-subtle)"
+                      : "1px solid transparent",
+                  }}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className={uiMode === "legacy" ? undefined : "settings-layout"}>
+        {uiMode !== "legacy" && (
+          <nav aria-label="Settings sections" className="settings-nav">
+            <div role="tablist" aria-orientation="vertical" aria-label="Settings sections">
+              {TAB_GROUPS.map((group) => {
+                const items = visibleTabs.filter((item) => group.ids.includes(item.id));
+                if (items.length === 0) return null;
+                return (
+                  <div key={group.label} className="settings-nav-group">
+                    <div className="settings-nav-heading" aria-hidden="true">
+                      {group.label}
+                    </div>
+                    {items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab === item.id}
+                        onClick={() => selectTab(item.id)}
+                        className="settings-nav-item"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </nav>
+        )}
         <div
           className="rounded-2xl border"
           style={{
@@ -378,8 +456,54 @@ export function SettingsPage({
                   </SettingRow>
                 )}
                 <SettingRow
+                  label="Interface"
+                  description="Layout of the main window. Applies right away; your hosts, sessions and settings stay the same."
+                >
+                  <div
+                    role="radiogroup"
+                    aria-label="Interface"
+                    className="grid gap-3 sm:grid-cols-3"
+                  >
+                    {uiModes.map((m) => {
+                      const selected = uiMode === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => onUiModeChange(m.id)}
+                          className="hover-subtle transition-ui overflow-hidden rounded-xl border text-left"
+                          style={{
+                            background: selected ? "var(--accent-muted)" : "var(--bg-card)",
+                            borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
+                          }}
+                        >
+                          <div className="p-2 pb-0">
+                            <InterfacePreview mode={m.id} />
+                          </div>
+                          <div className="px-3 py-2.5">
+                            <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                              {m.label}
+                              {m.id === "new" && (
+                                <span className="ml-1.5 text-xs font-normal" style={{ color: "var(--text-muted)" }}>
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                              {m.description}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </SettingRow>
+                {uiMode === "legacy" ? (
+                <SettingRow
                   label="Theme"
-                  description="Color scheme for the whole UI."
+                  description="Color scheme for the Legacy UI."
                 >
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                     {themes.map((t) => {
@@ -441,6 +565,49 @@ export function SettingsPage({
                     })}
                   </div>
                 </SettingRow>
+                ) : (
+                  <SettingRow
+                    label="Theme"
+                    description="Ink is dark, Paper is light. Legacy UI keeps its own theme."
+                  >
+                    <div role="radiogroup" aria-label="Theme" className="grid gap-3 sm:grid-cols-3">
+                      {uiThemes.map((t) => {
+                        const selected = uiTheme === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            onClick={() => onUiThemeChange(t.id)}
+                            className="hover-subtle transition-ui flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left"
+                            style={{
+                              background: selected ? "var(--accent-muted)" : "var(--bg-card)",
+                              borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
+                            }}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="h-8 w-8 shrink-0 rounded-md border"
+                              style={{
+                                borderColor: "var(--border)",
+                                background: `linear-gradient(135deg, ${t.preview[0]} 0 50%, ${t.preview[1]} 50% 100%)`,
+                              }}
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium" style={{ color: "var(--text)" }}>
+                                {t.label}
+                              </span>
+                              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>
+                                {t.description}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </SettingRow>
+                )}
 
                 <SettingRow
                   label="Icons"
@@ -854,6 +1021,7 @@ export function SettingsPage({
               </>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>
