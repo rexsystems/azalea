@@ -335,6 +335,59 @@ function terminalBgColor(): string {
 
 function xtermPalette() {
   const theme = document.documentElement.dataset.theme ?? "noir";
+  if (theme === "ink") {
+    return {
+      background: terminalBgColor(),
+      foreground: "#ececf1",
+      cursor: "#a898ff",
+      cursorAccent: "#0b0b0e",
+      selectionBackground: "#a898ff40",
+      black: "#1e1e24",
+      red: "#f28b82",
+      green: "#7fd19b",
+      yellow: "#e5c07b",
+      blue: "#8ab4ff",
+      magenta: "#c9b8ff",
+      cyan: "#7dd3d8",
+      white: "#d4d4dc",
+      brightBlack: "#8c8c99",
+      brightRed: "#f7aaa3",
+      brightGreen: "#a3e2b8",
+      brightYellow: "#f0d49c",
+      brightBlue: "#adcbff",
+      brightMagenta: "#ddd2ff",
+      brightCyan: "#a5e3e6",
+      brightWhite: "#ffffff",
+    };
+  }
+
+  // Light terminal: every ANSI color is dark enough for 4.5:1 on white.
+  if (theme === "paper") {
+    return {
+      background: terminalBgColor(),
+      foreground: "#17171c",
+      cursor: "#372882",
+      cursorAccent: "#ffffff",
+      selectionBackground: "#37288233",
+      black: "#17171c",
+      red: "#b42d20",
+      green: "#13774a",
+      yellow: "#855800",
+      blue: "#2b54c4",
+      magenta: "#7a3db8",
+      cyan: "#0f6e75",
+      white: "#4e4e58",
+      brightBlack: "#63636e",
+      brightRed: "#a3281c",
+      brightGreen: "#0f6a41",
+      brightYellow: "#764e00",
+      brightBlue: "#2448ad",
+      brightMagenta: "#6a33a3",
+      brightCyan: "#0b5f65",
+      brightWhite: "#17171c",
+    };
+  }
+
   if (theme === "noir") {
     return {
       background: terminalBgColor(),
@@ -837,6 +890,16 @@ export const TerminalView = memo(function TerminalView({
     if (!term) return;
     term.options.rightClickSelectsWord = !settings.rightClickToPaste;
   }, [settings.rightClickToPaste]);
+
+  // Follow theme and interface switches live instead of only at mount.
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const term = termRef.current;
+      if (term) term.options.theme = xtermPalette();
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
 
   // When select-to-copy is turned on, copy any existing selection immediately.
   useEffect(() => {
