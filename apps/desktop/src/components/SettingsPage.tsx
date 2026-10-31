@@ -1,10 +1,26 @@
 import type { ReactNode } from "react";
-import { startTransition, useEffect, useRef, useState } from "react";
+import { createContext, startTransition, useContext, useEffect, useRef, useState } from "react";
 import { Download } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ThemeId } from "../lib/theme";
 import { themes } from "../lib/theme";
-import { uiModes, uiThemes, type UiMode, type UiThemeId } from "../lib/appearance";
+import { uiModes, type UiMode, type UiThemeId } from "../lib/appearance";
+import { WorkbenchAppearance } from "./workbench/WorkbenchAppearance";
+import {
+  WbBatch,
+  WbChat,
+  WbCloud,
+  WbDownload,
+  WbImport,
+  WbInfo,
+  WbPalette,
+  WbSearch,
+  WbServer,
+  WbShield,
+  WbTerminal,
+  WbWave,
+  type WbIcon,
+} from "./workbench/wbIcons";
 import { iconPacks, type IconPackId } from "../lib/iconPack";
 import { useIconPack } from "./IconPackProvider";
 import { hugeiconsPack } from "./icons/hugeiconsPack";
@@ -49,6 +65,7 @@ type SettingsTab =
   | "terminal"
   | "ai"
   | "voice"
+  | "batch"
   | "account"
   | "import"
   | "backup"
@@ -99,13 +116,107 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "about", label: "About" },
 ];
 
-/** Vertical navigation groups used by the New and Minimal interfaces. */
-const TAB_GROUPS: { label: string; ids: SettingsTab[] }[] = [
-  { label: "General", ids: ["appearance", "connect", "terminal"] },
-  { label: "Assistant", ids: ["ai", "voice"] },
-  { label: "Data", ids: ["account", "import", "backup"] },
-  { label: "Other", ids: ["privacy", "about"] },
+interface WorkbenchTab {
+  id: SettingsTab;
+  label: string;
+  icon: WbIcon;
+  /** Extra words the settings search matches. */
+  keywords: string;
+}
+
+/** Vertical navigation of the New and Minimal interfaces, in display order. */
+const WORKBENCH_GROUPS: { label: string; tabs: WorkbenchTab[] }[] = [
+  {
+    label: "General",
+    tabs: [
+      {
+        id: "appearance",
+        label: "Appearance",
+        icon: WbPalette,
+        keywords: "theme dark light colors palette font size interface minimal icons css tray",
+      },
+      {
+        id: "terminal",
+        label: "Terminal",
+        icon: WbTerminal,
+        keywords: "clipboard copy paste select right-click font size",
+      },
+      {
+        id: "connect",
+        label: "Connections",
+        icon: WbServer,
+        keywords: "connect screen session open animation ssh",
+      },
+    ],
+  },
+  {
+    label: "Assistant",
+    tabs: [
+      {
+        id: "ai",
+        label: "Models and keys",
+        icon: WbChat,
+        keywords: "ai api key provider openai anthropic model assistant agent",
+      },
+      {
+        id: "voice",
+        label: "Voice",
+        icon: WbWave,
+        keywords: "speech dictation whisper microphone spoken",
+      },
+      {
+        id: "batch",
+        label: "Batch commands",
+        icon: WbBatch,
+        keywords: "multiple hosts run parallel timeout",
+      },
+    ],
+  },
+  {
+    label: "Data",
+    tabs: [
+      {
+        id: "account",
+        label: "Account and sync",
+        icon: WbCloud,
+        keywords: "sync vault passphrase cloud drive dropbox onedrive self-host sign in",
+      },
+      {
+        id: "import",
+        label: "Import",
+        icon: WbImport,
+        keywords: "ssh config keys openssh restore",
+      },
+      {
+        id: "backup",
+        label: "Backup",
+        icon: WbDownload,
+        keywords: "export archive restore",
+      },
+    ],
+  },
+  {
+    label: "Other",
+    tabs: [
+      {
+        id: "privacy",
+        label: "Privacy",
+        icon: WbShield,
+        keywords: "telemetry diagnostics crash reports hide addresses",
+      },
+      { id: "about", label: "About Azalea", icon: WbInfo, keywords: "version updates build" },
+    ],
+  },
 ];
+
+function matchesSearch(tab: WorkbenchTab, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return `${tab.label} ${tab.keywords}`.toLowerCase().includes(q);
+}
+
+/** True in the New and Minimal interfaces, where panel headers become page headings. */
+const WorkbenchLayout = createContext(false);
 
 /** Small schematic of each interface so the choice is visible, not only named. */
 function InterfacePreview({ mode }: { mode: UiMode }) {
@@ -146,6 +257,18 @@ function PanelHeader({
   description: string;
   action?: ReactNode;
 }) {
+  const workbench = useContext(WorkbenchLayout);
+  if (workbench) {
+    return (
+      <div className="wb-set-head">
+        <div className="min-w-0">
+          <h1 className="wb-h1">{title}</h1>
+          <p className="wb-set-lead">{description}</p>
+        </div>
+        {action}
+      </div>
+    );
+  }
   return (
     <div
       className="mb-6 flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-start sm:justify-between"
@@ -234,6 +357,7 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const { iconPack, changeIconPack } = useIconPack();
   const [tab, setTab] = useState<SettingsTab>("appearance");
+  const [settingsQuery, setSettingsQuery] = useState("");
   const [importVisited, setImportVisited] = useState(false);
   const [accountVisited, setAccountVisited] = useState(false);
   const [aiVisited, setAiVisited] = useState(false);
@@ -329,6 +453,662 @@ export function SettingsPage({
     (item) => !(item.id === "voice" && isMobileRuntime()),
   );
 
+  const workbench = uiMode !== "legacy";
+
+  const sections = (
+    <>
+      {tab === "appearance" && (
+        <>
+          <PanelHeader
+            title="Appearance"
+            description={
+              workbench
+                ? "App theme and terminal colors are set separately. Changes apply right away."
+                : "Theme, icons, desktop, and optional custom CSS."
+            }
+          />
+          {workbench && (
+            <WorkbenchAppearance
+              uiTheme={uiTheme}
+              onUiThemeChange={onUiThemeChange}
+              terminalSettings={terminalSettings}
+              onTerminalSettingsChange={onTerminalSettingsChange}
+            />
+          )}
+          {!isMobileRuntime() && desktopPrefs && (
+            <SettingRow
+              label="Desktop"
+              description="What happens when you close the main window."
+            >
+              <div className="space-y-2">
+                <SettingToggle
+                  label="Close to system tray"
+                  description="Hide Azalea in the tray instead of quitting. Open it again from the tray icon, or Quit Azalea there."
+                  checked={desktopPrefs.preferences.closeToTray}
+                  onChange={(closeToTray) => {
+                    void setDesktopPrefs({ closeToTray })
+                      .then(setDesktopPrefsState)
+                      .catch(() => undefined);
+                  }}
+                />
+                {!desktopPrefs.trayAvailable && (
+                  <p
+                    className="text-xs"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    The system tray is unavailable in this desktop
+                    session. Closing the window will quit Azalea.
+                  </p>
+                )}
+              </div>
+            </SettingRow>
+          )}
+          <SettingRow
+            label="Interface"
+            description="Layout of the main window. Applies right away; your hosts, sessions and settings stay the same."
+          >
+            <div
+              role="radiogroup"
+              aria-label="Interface"
+              className="grid gap-3 sm:grid-cols-3"
+            >
+              {uiModes.map((m) => {
+                const selected = uiMode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => onUiModeChange(m.id)}
+                    className="hover-subtle transition-ui overflow-hidden rounded-xl border text-left"
+                    style={{
+                      background: selected ? "var(--accent-muted)" : "var(--bg-card)",
+                      borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
+                    }}
+                  >
+                    <div className="p-2 pb-0">
+                      <InterfacePreview mode={m.id} />
+                    </div>
+                    <div className="px-3 py-2.5">
+                      <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                        {m.label}
+                        {m.id === "new" && (
+                          <span className="ml-1.5 text-xs font-normal" style={{ color: "var(--text-muted)" }}>
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                        {m.description}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </SettingRow>
+          {!workbench && (
+          <SettingRow
+            label="Theme"
+            description="Color scheme for the Legacy UI."
+          >
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+              {themes.map((t) => {
+                const selected = theme === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onThemeChange(t.id)}
+                    className="hover-subtle transition-ui overflow-hidden rounded-2xl border text-left"
+                    style={{
+                      background: selected
+                        ? "var(--accent-muted)"
+                        : "var(--bg-card)",
+                      borderColor: selected
+                        ? "var(--accent)"
+                        : "var(--border-subtle)",
+                    }}
+                  >
+                    <div
+                      className="relative h-16 w-full sm:h-[4.25rem]"
+                      style={{
+                        background: `linear-gradient(145deg, ${t.preview} 0%, color-mix(in srgb, ${t.preview} 55%, #000) 100%)`,
+                      }}
+                    >
+                      {t.experimental && (
+                        <span
+                          className="absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
+                          style={{
+                            background:
+                              "color-mix(in srgb, var(--bg-base) 75%, transparent)",
+                            color: "var(--text)",
+                          }}
+                        >
+                          Experimental
+                        </span>
+                      )}
+                      {selected && (
+                        <span
+                          className="absolute right-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
+                          style={{
+                            background:
+                              "color-mix(in srgb, var(--bg-base) 75%, transparent)",
+                            color: "var(--text)",
+                          }}
+                        >
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className="px-3 py-2.5 text-sm font-medium"
+                      style={{ color: "var(--text)" }}
+                    >
+                      {t.name}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </SettingRow>
+          )}
+
+          <SettingRow
+            label="Icons"
+            description="Hugeicons by default. Pixel Icons is experimental."
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              {iconPacks.map((pack) => {
+                const selected = iconPack === pack.id;
+                const Preview =
+                  pack.id === "pixelart" ? pixelartPack : hugeiconsPack;
+                return (
+                  <button
+                    key={pack.id}
+                    type="button"
+                    onClick={() => changeIconPack(pack.id as IconPackId)}
+                    className="hover-subtle transition-ui rounded-xl border px-3.5 py-3.5 text-left"
+                    style={{
+                      background: selected
+                        ? "var(--accent-muted)"
+                        : "var(--bg-card)",
+                      borderColor: selected
+                        ? "var(--accent)"
+                        : "var(--border-subtle)",
+                    }}
+                  >
+                    <div
+                      className="mb-2.5 flex items-center gap-2.5"
+                      style={{ color: "var(--text)" }}
+                    >
+                      <Preview.Home size={18} />
+                      <Preview.Server size={18} />
+                      <Preview.KeyRound size={18} />
+                      <Preview.Settings size={18} />
+                    </div>
+                    <div
+                      className="text-sm font-medium"
+                      style={{ color: "var(--text)" }}
+                    >
+                      {pack.name}
+                    </div>
+                    <div
+                      className="mt-1 text-xs"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {pack.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </SettingRow>
+
+          <SettingRow
+            label="Custom CSS"
+            description="Extra CSS on the active theme. You can override variables such as --bg-base and --accent."
+          >
+            <div className="grid gap-3">
+              <SettingToggle
+                label="Enable custom CSS"
+                description="Applies the CSS below. Edit, then Apply CSS to save."
+                checked={customCssEnabled}
+                onChange={(checked) => {
+                  setCustomCssEnabled(checked);
+                  setCustomCssEnabledFlag(checked);
+                  setCustomCssSaved(false);
+                }}
+              />
+              <textarea
+                value={customCssDraft}
+                onChange={(e) => {
+                  setCustomCssDraft(e.target.value);
+                  setCustomCssSaved(false);
+                }}
+                spellCheck={false}
+                placeholder={CUSTOM_CSS_PLACEHOLDER}
+                rows={12}
+                className="select-text w-full resize-y rounded-xl border px-3.5 py-3 font-mono text-xs leading-relaxed outline-none"
+                style={{
+                  background: "var(--bg-input)",
+                  borderColor: "var(--border-subtle)",
+                  color: "var(--text)",
+                  minHeight: "12rem",
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setStoredCustomCss({
+                      enabled: customCssEnabled,
+                      css: customCssDraft,
+                    });
+                    setCustomCssSaved(true);
+                  }}
+                >
+                  Apply CSS
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    clearCustomCss();
+                    setCustomCssDraft("");
+                    setCustomCssEnabled(false);
+                    setCustomCssSaved(false);
+                  }}
+                >
+                  Clear
+                </Button>
+                {customCssSaved ? (
+                  <span
+                    className="text-xs"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    Applied
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </SettingRow>
+        </>
+      )}
+
+      {tab === "connect" && (
+        <>
+          <PanelHeader
+            title="Connect experience"
+            description="What you see while an SSH session starts."
+          />
+          <SettingRow
+            label="Session open"
+            description="Animated connect screen, or go straight to the terminal."
+          >
+            <div className="grid gap-3">
+              {connectScreenOptions.map((opt) => {
+                const selected = connectScreen === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => onConnectScreenChange(opt.id)}
+                    className="hover-subtle transition-ui rounded-xl border px-3.5 py-3.5 text-left"
+                    style={{
+                      background: selected
+                        ? "var(--accent-muted)"
+                        : "var(--bg-card)",
+                      borderColor: selected
+                        ? "var(--accent)"
+                        : "var(--border-subtle)",
+                    }}
+                  >
+                    <div
+                      className="text-sm font-medium"
+                      style={{ color: "var(--text)" }}
+                    >
+                      {opt.label}
+                    </div>
+                    <div
+                      className="mt-1.5 text-xs leading-relaxed"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      {opt.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </SettingRow>
+        </>
+      )}
+
+      {tab === "terminal" && (
+        <>
+          <PanelHeader
+            title="Terminal"
+            description="Clipboard, font size, and batch command limits."
+          />
+          <SettingRow label="Clipboard">
+            <div className="space-y-2">
+              <SettingToggle
+                label="Select to copy"
+                description="Copies selected text to the clipboard."
+                checked={terminalSettings.selectToCopy}
+                onChange={(v) =>
+                  onTerminalSettingsChange({ selectToCopy: v })
+                }
+              />
+              <SettingToggle
+                label="Right-click to paste"
+                description="Pastes from the clipboard on right-click."
+                checked={terminalSettings.rightClickToPaste}
+                onChange={(v) =>
+                  onTerminalSettingsChange({ rightClickToPaste: v })
+                }
+              />
+            </div>
+          </SettingRow>
+          <SettingRow
+            label="Font size"
+            description="Terminal text size in pixels."
+          >
+            <Slider
+              min={12}
+              max={26}
+              step={1}
+              value={terminalSettings.fontSize}
+              formatValue={(v) => `${v}px`}
+              onChange={(fontSize) =>
+                onTerminalSettingsChange({
+                  fontSize: clampFontSize(fontSize),
+                })
+              }
+            />
+          </SettingRow>
+          {!workbench && (
+            <SettingRow
+              label="Batch commands"
+              description="Defaults for commands sent to multiple hosts."
+            >
+              <BatchSettingsSection />
+            </SettingRow>
+          )}
+        </>
+      )}
+
+      {tab === "batch" && (
+        <>
+          <PanelHeader
+            title="Batch commands"
+            description="Defaults for commands sent to multiple hosts."
+          />
+          <BatchSettingsSection />
+        </>
+      )}
+
+      {(tab === "account" || accountVisited) && (
+        <div
+          className={tab === "account" ? undefined : "hidden"}
+          aria-hidden={tab !== "account"}
+        >
+          <PanelHeader
+            title="Account"
+            description={
+              accountKind === "offline"
+                ? "Local profile. Hosts and keys stay on this device."
+                : accountKind === "selfhost"
+                  ? "Your instance, vault status, and master passphrase."
+                  : accountKind === "gdrive" ||
+                      accountKind === "onedrive" ||
+                      accountKind === "dropbox"
+                    ? "Personal cloud vault. Master passphrase stays on this device."
+                    : "Sign-in and encrypted vault sync."
+            }
+          />
+          <SyncSection
+            embedded
+            status={syncStatus}
+            onStatusChange={onSyncStatusChange}
+            getSettings={syncGetSettings}
+            onVaultApplied={onSyncVaultApplied}
+            onDataRefresh={onSyncDataRefresh}
+            accountKind={accountKind}
+            account={activeAccount}
+          />
+        </div>
+      )}
+
+      {(tab === "import" || importVisited) && (
+        <div
+          className={tab === "import" ? undefined : "hidden"}
+          aria-hidden={tab !== "import"}
+        >
+          <PanelHeader
+            title="Import"
+            description="Import from ~/.ssh, or restore an Azalea backup or config file."
+          />
+          <ImportSection
+            busy={backupBusy}
+            onImportBackup={onImportBackup}
+            onImportBackupReplace={onImportBackupReplace}
+            onDataChanged={onImportDataRefresh ?? (async () => undefined)}
+          />
+        </div>
+      )}
+
+      {tab === "backup" && (
+        <>
+          <PanelHeader
+            title="Backup & restore"
+            description="Exports hosts, keys, passwords, groups, and settings as an unencrypted archive. Store it somewhere safe."
+          />
+          <SettingRow label="Local backup">
+            <div className="space-y-2">
+              <Button
+                className="w-full"
+                disabled={backupBusy}
+                onClick={onExportBackup}
+              >
+                <Download size={16} />
+                Export Azalea backup
+              </Button>
+              <p
+                className="text-xs"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Import a backup or OpenSSH files from the Import tab.
+              </p>
+            </div>
+          </SettingRow>
+        </>
+      )}
+
+      {(tab === "ai" || aiVisited) && (
+        <div
+          className={tab === "ai" ? undefined : "hidden"}
+          aria-hidden={tab !== "ai"}
+        >
+          <PanelHeader
+            title="AI"
+            description="Your API keys, your provider. Off by default."
+          />
+          <SettingRow
+            label="Terminal AI"
+            description="Ask and Agent in the active terminal session."
+          >
+            <AiSettingsSection />
+          </SettingRow>
+        </div>
+      )}
+
+      {(tab === "voice" || voiceVisited) && (
+        <div
+          className={tab === "voice" ? undefined : "hidden"}
+          aria-hidden={tab !== "voice"}
+        >
+          <PanelHeader
+            title="Voice assistant"
+            description="Local speech recognition and spoken replies. Off by default."
+          />
+          <SettingRow label="Setup">
+            <VoiceSettingsSection />
+          </SettingRow>
+        </div>
+      )}
+
+      {tab === "privacy" && (
+        <>
+          <PanelHeader
+            title="Privacy"
+            description="Asked once at startup. You can change these anytime."
+          />
+          <SettingRow label="Diagnostics">
+            <div className="space-y-2">
+              <SettingToggle
+                label="Share anonymous usage & crash reports"
+                description="Daily install ping and crash reports. No hostnames, emails, keys, or commands."
+                checked={telemetryOn}
+                onChange={(on) => {
+                  setTelemetryEnabled(on);
+                  setTelemetryOn(on);
+                }}
+              />
+            </div>
+          </SettingRow>
+          <SettingRow label="Hosts">
+            <div className="space-y-2">
+              <SettingToggle
+                label="Hide addresses on host cards"
+                description="Home and Hosts show the username only. Hostname and IP stay in Edit and connect."
+                checked={hideHostAddresses}
+                onChange={(on) => {
+                  setStoredHideHostAddresses(on);
+                  setHideHostAddresses(on);
+                  window.dispatchEvent(
+                    new Event("azalea-hide-host-addresses"),
+                  );
+                }}
+              />
+            </div>
+          </SettingRow>
+        </>
+      )}
+
+      {tab === "about" && (
+        <>
+          <PanelHeader
+            title="About"
+            description="Version and updates."
+          />
+          <SettingRow label="Application">
+            <div
+              className="rounded-xl border px-3.5 py-3"
+              style={{
+                background: "var(--bg-card)",
+                borderColor: "var(--border-subtle)",
+              }}
+            >
+              <div
+                className="text-sm font-medium"
+                style={{ color: "var(--text)" }}
+              >
+                Azalea
+              </div>
+              <div
+                className="mt-1 text-xs tabular-nums"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Version {appVersion}
+                <span style={{ color: "var(--text-muted)" }}> · </span>
+                Build {__AZALEA_BUILD__}
+              </div>
+              <div
+                className="mt-0.5 text-xs"
+                style={{ color: "var(--text-muted)" }}
+              >
+                RexSystems
+              </div>
+            </div>
+          </SettingRow>
+          <SettingRow
+            label="Updates"
+            description="Check for and install the latest desktop release."
+          >
+            <UpdateSection embedded />
+          </SettingRow>
+        </>
+      )}
+    </>
+  );
+
+  if (workbench) {
+    const groups = WORKBENCH_GROUPS.map((group) => ({
+      label: group.label,
+      tabs: group.tabs.filter(
+        (item) =>
+          !(item.id === "voice" && isMobileRuntime()) && matchesSearch(item, settingsQuery),
+      ),
+    })).filter((group) => group.tabs.length > 0);
+    const firstMatch = groups[0]?.tabs[0];
+    return (
+      <WorkbenchLayout.Provider value>
+        <div className="wb-settings">
+          <nav aria-label="Settings sections" className="wb-settings-nav">
+            <label className="wb-input wb-settings-search">
+              <WbSearch />
+              <input
+                type="search"
+                value={settingsQuery}
+                placeholder="Search settings"
+                aria-label="Search settings"
+                onChange={(e) => setSettingsQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && firstMatch) selectTab(firstMatch.id);
+                  if (e.key === "Escape") setSettingsQuery("");
+                }}
+              />
+            </label>
+            <div role="tablist" aria-orientation="vertical" aria-label="Settings sections">
+              {groups.map((group, index) => (
+                <div key={group.label} role="presentation">
+                  <div className="wb-sec" data-first={index === 0 ? "true" : undefined}>
+                    {group.label}
+                  </div>
+                  {group.tabs.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab === item.id}
+                        aria-current={tab === item.id ? "page" : undefined}
+                        onClick={() => selectTab(item.id)}
+                        className="wb-row"
+                      >
+                        <Icon />
+                        <span className="wb-row-label">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+              {groups.length === 0 && <p className="wb-row-note">No settings match.</p>}
+            </div>
+          </nav>
+          <div ref={contentScrollRef} className="wb-settings-body">
+            <div className="wb-settings-content" role="tabpanel">
+              {sections}
+            </div>
+          </div>
+        </div>
+      </WorkbenchLayout.Provider>
+    );
+  }
+
   return (
     <div
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -353,66 +1133,34 @@ export function SettingsPage({
           </p>
         </div>
 
-        {uiMode === "legacy" && (
-          <div
-            className="settings-tabs mb-5 flex gap-1 overflow-x-auto pb-1"
-            role="tablist"
-            aria-label="Settings sections"
-          >
-            {visibleTabs.map((item) => {
-              const active = tab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => selectTab(item.id)}
-                  className="transition-ui shrink-0 rounded-lg px-3 py-2 text-sm font-medium"
-                  style={{
-                    background: active ? "var(--bg-panel)" : "transparent",
-                    color: active ? "var(--text)" : "var(--text-muted)",
-                    border: active
-                      ? "1px solid var(--border-subtle)"
-                      : "1px solid transparent",
-                  }}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <div className={uiMode === "legacy" ? undefined : "settings-layout"}>
-        {uiMode !== "legacy" && (
-          <nav aria-label="Settings sections" className="settings-nav">
-            <div role="tablist" aria-orientation="vertical" aria-label="Settings sections">
-              {TAB_GROUPS.map((group) => {
-                const items = visibleTabs.filter((item) => group.ids.includes(item.id));
-                if (items.length === 0) return null;
-                return (
-                  <div key={group.label} className="settings-nav-group">
-                    <div className="settings-nav-heading" aria-hidden="true">
-                      {group.label}
-                    </div>
-                    {items.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={tab === item.id}
-                        onClick={() => selectTab(item.id)}
-                        className="settings-nav-item"
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          </nav>
-        )}
+        <div
+          className="settings-tabs mb-5 flex gap-1 overflow-x-auto pb-1"
+          role="tablist"
+          aria-label="Settings sections"
+        >
+          {visibleTabs.map((item) => {
+            const active = tab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => selectTab(item.id)}
+                className="transition-ui shrink-0 rounded-lg px-3 py-2 text-sm font-medium"
+                style={{
+                  background: active ? "var(--bg-panel)" : "transparent",
+                  color: active ? "var(--text)" : "var(--text-muted)",
+                  border: active
+                    ? "1px solid var(--border-subtle)"
+                    : "1px solid transparent",
+                }}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
         <div
           className="rounded-2xl border"
           style={{
@@ -420,608 +1168,7 @@ export function SettingsPage({
             background: "var(--bg-panel)",
           }}
         >
-          <div className="p-5 sm:p-6">
-            {tab === "appearance" && (
-              <>
-                <PanelHeader
-                  title="Appearance"
-                  description="Theme, icons, desktop, and optional custom CSS."
-                />
-                {!isMobileRuntime() && desktopPrefs && (
-                  <SettingRow
-                    label="Desktop"
-                    description="What happens when you close the main window."
-                  >
-                    <div className="space-y-2">
-                      <SettingToggle
-                        label="Close to system tray"
-                        description="Hide Azalea in the tray instead of quitting. Open it again from the tray icon, or Quit Azalea there."
-                        checked={desktopPrefs.preferences.closeToTray}
-                        onChange={(closeToTray) => {
-                          void setDesktopPrefs({ closeToTray })
-                            .then(setDesktopPrefsState)
-                            .catch(() => undefined);
-                        }}
-                      />
-                      {!desktopPrefs.trayAvailable && (
-                        <p
-                          className="text-xs"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          The system tray is unavailable in this desktop
-                          session. Closing the window will quit Azalea.
-                        </p>
-                      )}
-                    </div>
-                  </SettingRow>
-                )}
-                <SettingRow
-                  label="Interface"
-                  description="Layout of the main window. Applies right away; your hosts, sessions and settings stay the same."
-                >
-                  <div
-                    role="radiogroup"
-                    aria-label="Interface"
-                    className="grid gap-3 sm:grid-cols-3"
-                  >
-                    {uiModes.map((m) => {
-                      const selected = uiMode === m.id;
-                      return (
-                        <button
-                          key={m.id}
-                          type="button"
-                          role="radio"
-                          aria-checked={selected}
-                          onClick={() => onUiModeChange(m.id)}
-                          className="hover-subtle transition-ui overflow-hidden rounded-xl border text-left"
-                          style={{
-                            background: selected ? "var(--accent-muted)" : "var(--bg-card)",
-                            borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
-                          }}
-                        >
-                          <div className="p-2 pb-0">
-                            <InterfacePreview mode={m.id} />
-                          </div>
-                          <div className="px-3 py-2.5">
-                            <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                              {m.label}
-                              {m.id === "new" && (
-                                <span className="ml-1.5 text-xs font-normal" style={{ color: "var(--text-muted)" }}>
-                                  Default
-                                </span>
-                              )}
-                            </div>
-                            <p className="mt-0.5 text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                              {m.description}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </SettingRow>
-                {uiMode === "legacy" ? (
-                <SettingRow
-                  label="Theme"
-                  description="Color scheme for the Legacy UI."
-                >
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-                    {themes.map((t) => {
-                      const selected = theme === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => onThemeChange(t.id)}
-                          className="hover-subtle transition-ui overflow-hidden rounded-2xl border text-left"
-                          style={{
-                            background: selected
-                              ? "var(--accent-muted)"
-                              : "var(--bg-card)",
-                            borderColor: selected
-                              ? "var(--accent)"
-                              : "var(--border-subtle)",
-                          }}
-                        >
-                          <div
-                            className="relative h-16 w-full sm:h-[4.25rem]"
-                            style={{
-                              background: `linear-gradient(145deg, ${t.preview} 0%, color-mix(in srgb, ${t.preview} 55%, #000) 100%)`,
-                            }}
-                          >
-                            {t.experimental && (
-                              <span
-                                className="absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
-                                style={{
-                                  background:
-                                    "color-mix(in srgb, var(--bg-base) 75%, transparent)",
-                                  color: "var(--text)",
-                                }}
-                              >
-                                Experimental
-                              </span>
-                            )}
-                            {selected && (
-                              <span
-                                className="absolute right-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-medium"
-                                style={{
-                                  background:
-                                    "color-mix(in srgb, var(--bg-base) 75%, transparent)",
-                                  color: "var(--text)",
-                                }}
-                              >
-                                Active
-                              </span>
-                            )}
-                          </div>
-                          <div
-                            className="px-3 py-2.5 text-sm font-medium"
-                            style={{ color: "var(--text)" }}
-                          >
-                            {t.name}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </SettingRow>
-                ) : (
-                  <SettingRow
-                    label="Theme"
-                    description="Ink is dark, Paper is light. Legacy UI keeps its own theme."
-                  >
-                    <div role="radiogroup" aria-label="Theme" className="grid gap-3 sm:grid-cols-3">
-                      {uiThemes.map((t) => {
-                        const selected = uiTheme === t.id;
-                        return (
-                          <button
-                            key={t.id}
-                            type="button"
-                            role="radio"
-                            aria-checked={selected}
-                            onClick={() => onUiThemeChange(t.id)}
-                            className="hover-subtle transition-ui flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left"
-                            style={{
-                              background: selected ? "var(--accent-muted)" : "var(--bg-card)",
-                              borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
-                            }}
-                          >
-                            <span
-                              aria-hidden="true"
-                              className="h-8 w-8 shrink-0 rounded-md border"
-                              style={{
-                                borderColor: "var(--border)",
-                                background: `linear-gradient(135deg, ${t.preview[0]} 0 50%, ${t.preview[1]} 50% 100%)`,
-                              }}
-                            />
-                            <span className="min-w-0">
-                              <span className="block text-sm font-medium" style={{ color: "var(--text)" }}>
-                                {t.label}
-                              </span>
-                              <span className="block text-xs" style={{ color: "var(--text-muted)" }}>
-                                {t.description}
-                              </span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </SettingRow>
-                )}
-
-                <SettingRow
-                  label="Icons"
-                  description="Hugeicons by default. Pixel Icons is experimental."
-                >
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {iconPacks.map((pack) => {
-                      const selected = iconPack === pack.id;
-                      const Preview =
-                        pack.id === "pixelart" ? pixelartPack : hugeiconsPack;
-                      return (
-                        <button
-                          key={pack.id}
-                          type="button"
-                          onClick={() => changeIconPack(pack.id as IconPackId)}
-                          className="hover-subtle transition-ui rounded-xl border px-3.5 py-3.5 text-left"
-                          style={{
-                            background: selected
-                              ? "var(--accent-muted)"
-                              : "var(--bg-card)",
-                            borderColor: selected
-                              ? "var(--accent)"
-                              : "var(--border-subtle)",
-                          }}
-                        >
-                          <div
-                            className="mb-2.5 flex items-center gap-2.5"
-                            style={{ color: "var(--text)" }}
-                          >
-                            <Preview.Home size={18} />
-                            <Preview.Server size={18} />
-                            <Preview.KeyRound size={18} />
-                            <Preview.Settings size={18} />
-                          </div>
-                          <div
-                            className="text-sm font-medium"
-                            style={{ color: "var(--text)" }}
-                          >
-                            {pack.name}
-                          </div>
-                          <div
-                            className="mt-1 text-xs"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {pack.description}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </SettingRow>
-
-                <SettingRow
-                  label="Custom CSS"
-                  description="Extra CSS on the active theme. You can override variables such as --bg-base and --accent."
-                >
-                  <div className="grid gap-3">
-                    <SettingToggle
-                      label="Enable custom CSS"
-                      description="Applies the CSS below. Edit, then Apply CSS to save."
-                      checked={customCssEnabled}
-                      onChange={(checked) => {
-                        setCustomCssEnabled(checked);
-                        setCustomCssEnabledFlag(checked);
-                        setCustomCssSaved(false);
-                      }}
-                    />
-                    <textarea
-                      value={customCssDraft}
-                      onChange={(e) => {
-                        setCustomCssDraft(e.target.value);
-                        setCustomCssSaved(false);
-                      }}
-                      spellCheck={false}
-                      placeholder={CUSTOM_CSS_PLACEHOLDER}
-                      rows={12}
-                      className="select-text w-full resize-y rounded-xl border px-3.5 py-3 font-mono text-xs leading-relaxed outline-none"
-                      style={{
-                        background: "var(--bg-input)",
-                        borderColor: "var(--border-subtle)",
-                        color: "var(--text)",
-                        minHeight: "12rem",
-                      }}
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          setStoredCustomCss({
-                            enabled: customCssEnabled,
-                            css: customCssDraft,
-                          });
-                          setCustomCssSaved(true);
-                        }}
-                      >
-                        Apply CSS
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() => {
-                          clearCustomCss();
-                          setCustomCssDraft("");
-                          setCustomCssEnabled(false);
-                          setCustomCssSaved(false);
-                        }}
-                      >
-                        Clear
-                      </Button>
-                      {customCssSaved ? (
-                        <span
-                          className="text-xs"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          Applied
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </SettingRow>
-              </>
-            )}
-
-            {tab === "connect" && (
-              <>
-                <PanelHeader
-                  title="Connect experience"
-                  description="What you see while an SSH session starts."
-                />
-                <SettingRow
-                  label="Session open"
-                  description="Animated connect screen, or go straight to the terminal."
-                >
-                  <div className="grid gap-3">
-                    {connectScreenOptions.map((opt) => {
-                      const selected = connectScreen === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => onConnectScreenChange(opt.id)}
-                          className="hover-subtle transition-ui rounded-xl border px-3.5 py-3.5 text-left"
-                          style={{
-                            background: selected
-                              ? "var(--accent-muted)"
-                              : "var(--bg-card)",
-                            borderColor: selected
-                              ? "var(--accent)"
-                              : "var(--border-subtle)",
-                          }}
-                        >
-                          <div
-                            className="text-sm font-medium"
-                            style={{ color: "var(--text)" }}
-                          >
-                            {opt.label}
-                          </div>
-                          <div
-                            className="mt-1.5 text-xs leading-relaxed"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {opt.description}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </SettingRow>
-              </>
-            )}
-
-            {tab === "terminal" && (
-              <>
-                <PanelHeader
-                  title="Terminal"
-                  description="Clipboard, font size, and batch command limits."
-                />
-                <SettingRow label="Clipboard">
-                  <div className="space-y-2">
-                    <SettingToggle
-                      label="Select to copy"
-                      description="Copies selected text to the clipboard."
-                      checked={terminalSettings.selectToCopy}
-                      onChange={(v) =>
-                        onTerminalSettingsChange({ selectToCopy: v })
-                      }
-                    />
-                    <SettingToggle
-                      label="Right-click to paste"
-                      description="Pastes from the clipboard on right-click."
-                      checked={terminalSettings.rightClickToPaste}
-                      onChange={(v) =>
-                        onTerminalSettingsChange({ rightClickToPaste: v })
-                      }
-                    />
-                  </div>
-                </SettingRow>
-                <SettingRow
-                  label="Font size"
-                  description="Terminal text size in pixels."
-                >
-                  <Slider
-                    min={12}
-                    max={26}
-                    step={1}
-                    value={terminalSettings.fontSize}
-                    formatValue={(v) => `${v}px`}
-                    onChange={(fontSize) =>
-                      onTerminalSettingsChange({
-                        fontSize: clampFontSize(fontSize),
-                      })
-                    }
-                  />
-                </SettingRow>
-                <SettingRow label="Batch commands" description="Defaults for commands sent to multiple hosts.">
-                  <BatchSettingsSection />
-                </SettingRow>
-              </>
-            )}
-
-            {(tab === "account" || accountVisited) && (
-              <div
-                className={tab === "account" ? undefined : "hidden"}
-                aria-hidden={tab !== "account"}
-              >
-                <PanelHeader
-                  title="Account"
-                  description={
-                    accountKind === "offline"
-                      ? "Local profile. Hosts and keys stay on this device."
-                      : accountKind === "selfhost"
-                        ? "Your instance, vault status, and master passphrase."
-                        : accountKind === "gdrive" ||
-                            accountKind === "onedrive" ||
-                            accountKind === "dropbox"
-                          ? "Personal cloud vault. Master passphrase stays on this device."
-                          : "Sign-in and encrypted vault sync."
-                  }
-                />
-                <SyncSection
-                  embedded
-                  status={syncStatus}
-                  onStatusChange={onSyncStatusChange}
-                  getSettings={syncGetSettings}
-                  onVaultApplied={onSyncVaultApplied}
-                  onDataRefresh={onSyncDataRefresh}
-                  accountKind={accountKind}
-                  account={activeAccount}
-                />
-              </div>
-            )}
-
-            {(tab === "import" || importVisited) && (
-              <div
-                className={tab === "import" ? undefined : "hidden"}
-                aria-hidden={tab !== "import"}
-              >
-                <PanelHeader
-                  title="Import"
-                  description="Import from ~/.ssh, or restore an Azalea backup or config file."
-                />
-                <ImportSection
-                  busy={backupBusy}
-                  onImportBackup={onImportBackup}
-                  onImportBackupReplace={onImportBackupReplace}
-                  onDataChanged={onImportDataRefresh ?? (async () => undefined)}
-                />
-              </div>
-            )}
-
-            {tab === "backup" && (
-              <>
-                <PanelHeader
-                  title="Backup & restore"
-                  description="Exports hosts, keys, passwords, groups, and settings as an unencrypted archive. Store it somewhere safe."
-                />
-                <SettingRow label="Local backup">
-                  <div className="space-y-2">
-                    <Button
-                      className="w-full"
-                      disabled={backupBusy}
-                      onClick={onExportBackup}
-                    >
-                      <Download size={16} />
-                      Export Azalea backup
-                    </Button>
-                    <p
-                      className="text-xs"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Import a backup or OpenSSH files from the Import tab.
-                    </p>
-                  </div>
-                </SettingRow>
-              </>
-            )}
-
-            {(tab === "ai" || aiVisited) && (
-              <div
-                className={tab === "ai" ? undefined : "hidden"}
-                aria-hidden={tab !== "ai"}
-              >
-                <PanelHeader
-                  title="AI"
-                  description="Your API keys, your provider. Off by default."
-                />
-                <SettingRow
-                  label="Terminal AI"
-                  description="Ask and Agent in the active terminal session."
-                >
-                  <AiSettingsSection />
-                </SettingRow>
-              </div>
-            )}
-
-            {(tab === "voice" || voiceVisited) && (
-              <div
-                className={tab === "voice" ? undefined : "hidden"}
-                aria-hidden={tab !== "voice"}
-              >
-                <PanelHeader
-                  title="Voice assistant"
-                  description="Local speech recognition and spoken replies. Off by default."
-                />
-                <SettingRow label="Setup">
-                  <VoiceSettingsSection />
-                </SettingRow>
-              </div>
-            )}
-
-            {tab === "privacy" && (
-              <>
-                <PanelHeader
-                  title="Privacy"
-                  description="Asked once at startup. You can change these anytime."
-                />
-                <SettingRow label="Diagnostics">
-                  <div className="space-y-2">
-                    <SettingToggle
-                      label="Share anonymous usage & crash reports"
-                      description="Daily install ping and crash reports. No hostnames, emails, keys, or commands."
-                      checked={telemetryOn}
-                      onChange={(on) => {
-                        setTelemetryEnabled(on);
-                        setTelemetryOn(on);
-                      }}
-                    />
-                  </div>
-                </SettingRow>
-                <SettingRow label="Hosts">
-                  <div className="space-y-2">
-                    <SettingToggle
-                      label="Hide addresses on host cards"
-                      description="Home and Hosts show the username only. Hostname and IP stay in Edit and connect."
-                      checked={hideHostAddresses}
-                      onChange={(on) => {
-                        setStoredHideHostAddresses(on);
-                        setHideHostAddresses(on);
-                        window.dispatchEvent(
-                          new Event("azalea-hide-host-addresses"),
-                        );
-                      }}
-                    />
-                  </div>
-                </SettingRow>
-              </>
-            )}
-
-            {tab === "about" && (
-              <>
-                <PanelHeader
-                  title="About"
-                  description="Version and updates."
-                />
-                <SettingRow label="Application">
-                  <div
-                    className="rounded-xl border px-3.5 py-3"
-                    style={{
-                      background: "var(--bg-card)",
-                      borderColor: "var(--border-subtle)",
-                    }}
-                  >
-                    <div
-                      className="text-sm font-medium"
-                      style={{ color: "var(--text)" }}
-                    >
-                      Azalea
-                    </div>
-                    <div
-                      className="mt-1 text-xs tabular-nums"
-                      style={{ color: "var(--text-secondary)" }}
-                    >
-                      Version {appVersion}
-                      <span style={{ color: "var(--text-muted)" }}> · </span>
-                      Build {__AZALEA_BUILD__}
-                    </div>
-                    <div
-                      className="mt-0.5 text-xs"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      RexSystems
-                    </div>
-                  </div>
-                </SettingRow>
-                <SettingRow
-                  label="Updates"
-                  description="Check for and install the latest desktop release."
-                >
-                  <UpdateSection embedded />
-                </SettingRow>
-              </>
-            )}
-          </div>
-        </div>
+          <div className="p-5 sm:p-6">{sections}</div>
         </div>
       </div>
     </div>

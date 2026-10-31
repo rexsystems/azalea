@@ -34,6 +34,9 @@ import {
 import { copyText } from "../lib/clipboard";
 import * as api from "../lib/api";
 import { ContextMenu, type ContextMenuSection } from "./ui/ContextMenu";
+import { WorkbenchFiles } from "./workbench/WorkbenchFiles";
+import { formatSize } from "../lib/fileSize";
+import { expandHome } from "../lib/sessionInfo";
 
 interface FileBrowserPanelProps {
   sessionId: string;
@@ -44,6 +47,8 @@ interface FileBrowserPanelProps {
    * resize handle, the title and closing.
    */
   embedded?: boolean;
+  /** Working directory the session's shell last reported, if any. */
+  terminalCwd?: string;
 }
 
 interface UploadState {
@@ -51,12 +56,34 @@ interface UploadState {
   filename: string;
   bytesDone: number;
   bytesTotal: number;
+  startedAt: number;
 }
+
+const FOLLOW_KEY = "azalea.sftp.followTerminal";
+
+function readFollow(): boolean {
+  try {
+    return localStorage.getItem(FOLLOW_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function storeFollow(on: boolean) {
+  try {
+    localStorage.setItem(FOLLOW_KEY, on ? "1" : "0");
+  } catch {
+    // Without storage the toggle still works for this panel.
+  }
+}
+
 
 const WIDTH_KEY = "azalea.sftp.panelWidth";
 const MIN_WIDTH = 260;
 const MAX_WIDTH = 720;
 const DEFAULT_WIDTH = 340;
+/** The New and Minimal inspector is wider so the file table fits. */
+const DEFAULT_WIDTH_EMBEDDED = 440;
 
 const TEXT_EXTS = new Set([
   "txt",
@@ -104,23 +131,16 @@ function clampWidth(width: number): number {
   return Math.max(MIN_WIDTH, Math.min(max, Math.round(width)));
 }
 
-function readStoredWidth(): number {
+function readStoredWidth(fallback: number): number {
   try {
     const raw = localStorage.getItem(WIDTH_KEY);
-    if (!raw) return DEFAULT_WIDTH;
+    if (!raw) return fallback;
     const parsed = Number(raw);
-    if (!Number.isFinite(parsed)) return DEFAULT_WIDTH;
+    if (!Number.isFinite(parsed)) return fallback;
     return clampWidth(parsed);
   } catch {
-    return DEFAULT_WIDTH;
+    return fallback;
   }
-}
-
-function formatSize(size: number): string {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
 function formatMtime(mtime: number | null): string | null {
@@ -178,6 +198,7 @@ export function FileBrowserPanel({
   onClose,
   onCdTerminal,
   embedded = false,
+  terminalCwd,
 }: FileBrowserPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [path, setPath] = useState<string | null>(null);
@@ -191,7 +212,9 @@ export function FileBrowserPanel({
   const [dragOver, setDragOver] = useState(false);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
-  const [width, setWidth] = useState(readStoredWidth);
+  const [width, setWidth] = useState(() =>
+    readStoredWidth(embedded ? DEFAULT_WIDTH_EMBEDDED : DEFAULT_WIDTH),
+  );
   const [resizing, setResizing] = useState(false);
   const [editor, setEditor] = useState<{
     remotePath: string;
@@ -202,6 +225,8 @@ export function FileBrowserPanel({
   } | null>(null);
   const [pathDraft, setPathDraft] = useState("");
   const [pathEditing, setPathEditing] = useState(false);
+  const [follow, setFollow] = useState(readFollow);
+  const [doneCount, setDoneCount] = useState(0);
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -251,6 +276,12 @@ export function FileBrowserPanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!embedded || !follow || !terminalCwd || !homePath) return;
+    const target = expandHome(terminalCwd, homePath);
+    if (target && target !== pathRef.current) void load(target);
+  }, [embedded, follow, terminalCwd, homePath, load]);
 
   useEffect(() => {
     const onResize = () => setWidth((w) => clampWidth(w));
@@ -311,11 +342,12 @@ export function FileBrowserPanel({
           typeof crypto !== "undefined" && "randomUUID" in crypto
             ? crypto.randomUUID()
             : `up-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        setUpload({ id: transferId, filename, bytesDone: 0, bytesTotal: 0 });
+        setUpload({ id: transferId, filename, bytesDone: 0, bytesTotal: 0, startedAt: Date.now() });
         try {
           const remote = current === "/" ? `/${filename}` : `${current}/${filename}`;
           await api.sftpUpload(sessionId, local, remote, transferId);
           ok += 1;
+          setDoneCount((n) => n + 1);
         } catch (err) {
           const message = String(err);
           setUpload(null);
@@ -426,6 +458,7 @@ export function FileBrowserPanel({
     setNotice(null);
     try {
       await api.sftpDownload(sessionId, joinPath(entry.name), target);
+      setDoneCount((n) => n + 1);
       setNotice(`Downloaded ${entry.name}`);
     } catch (err) {
       setNotice(String(err));
@@ -538,8 +571,181 @@ export function FileBrowserPanel({
     return [{ items }];
   };
 
+  const pathInput = (className: string) => (
+    <input
+      value={pathEditing ? pathDraft : (path ?? "...")}
+      onChange={(e) => {
+        setPathEditing(true);
+        setPathDraft(e.target.value);
+      }}
+      onFocus={() => {
+        setPathEditing(true);
+        setPathDraft(path ?? "/");
+      }}
+      onBlur={() => goToPath(pathDraft)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          (e.target as HTMLInputElement).blur();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          setPathDraft(path ?? "/");
+          setPathEditing(false);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      spellCheck={false}
+      className={className}
+      style={
+        embedded
+          ? undefined
+          : {
+              color: "var(--text)",
+              background: "var(--bg-base)",
+              borderColor: "var(--border-subtle)",
+            }
+      }
+      title="Type a path and press Enter"
+      aria-label="Remote path"
+      autoFocus={embedded}
+    />
+  );
+
   const dirCount = filtered.filter((e) => e.is_dir).length;
   const fileCount = filtered.length - dirCount;
+
+  const overlays = (
+    <>
+    {dragOver && (
+      <div
+        className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center border-2 border-dashed"
+        style={{
+          background: "color-mix(in srgb, var(--accent) 12%, transparent)",
+          borderColor: "var(--accent)",
+        }}
+      >
+        <span className="text-sm font-medium" style={{ color: "var(--accent)" }}>
+          Drop to upload
+        </span>
+      </div>
+    )}
+
+    {editor && (
+      <div
+        className="absolute inset-0 z-30 flex flex-col"
+        style={{ background: "var(--bg-panel)" }}
+      >
+        <div
+          className="flex shrink-0 items-center gap-2 border-b px-3 py-2"
+          style={{ borderColor: "var(--border-subtle)" }}
+        >
+          <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: "var(--text)" }}>
+            {editor.name}
+            {editor.dirty ? " *" : ""}
+          </span>
+          <button
+            type="button"
+            onClick={() => void saveEditor()}
+            disabled={!editor.dirty || editor.saving}
+            className="rounded px-2 py-1 text-xs font-medium disabled:opacity-40"
+            style={{ background: "var(--accent)", color: "var(--accent-fg, #fff)" }}
+          >
+            {editor.saving ? "Saving..." : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void (async () => {
+                // Do not use window.confirm: tauri-plugin-dialog overrides it to
+                // invoke plugin:dialog|confirm, which is not registered (only
+                // message/open/save are). Use the package confirm() helper.
+                if (editor.dirty) {
+                  const ok = await confirmDialog("Discard unsaved changes?", {
+                    title: "Unsaved changes",
+                    kind: "warning",
+                    okLabel: "Discard",
+                    cancelLabel: "Keep editing",
+                  });
+                  if (!ok) return;
+                }
+                setEditor(null);
+              })();
+            }}
+            className="hover-subtle rounded p-1.5"
+            style={{ color: "var(--text-muted)" }}
+            title="Close"
+            aria-label="Close"
+          >
+            <X size={13} />
+          </button>
+        </div>
+        <textarea
+          value={editor.contents}
+          onChange={(e) =>
+            setEditor({ ...editor, contents: e.target.value, dirty: true })
+          }
+          spellCheck={false}
+          className="min-h-0 flex-1 resize-none border-0 bg-transparent px-3 py-2 font-mono text-xs outline-none"
+          style={{ color: "var(--text)" }}
+        />
+      </div>
+    )}
+
+    </>
+  );
+
+  const contextMenu = menu && (
+    <ContextMenu
+      x={menu.x}
+      y={menu.y}
+      sections={menuSections(menu.entry)}
+      onClose={() => setMenu(null)}
+    />
+  );
+
+  if (embedded) {
+    return (
+      <WorkbenchFiles
+        panelRef={panelRef}
+        overlays={overlays}
+        contextMenu={contextMenu}
+        path={path}
+        entries={filtered}
+        loading={loading}
+        error={error}
+        filter={filter}
+        onFilterChange={setFilter}
+        selected={selected}
+        onSelect={setSelected}
+        onOpen={openEntry}
+        onContextMenu={(entry, x, y) => {
+          setSelected(entry.name);
+          setMenu({ x, y, entry });
+        }}
+        onNavigate={(target) => void load(target)}
+        onRefresh={() => void load(path ?? undefined)}
+        onUpload={() => void uploadFile()}
+        busy={Boolean(transfer || upload)}
+        pathEditing={pathEditing}
+        onEditPath={() => {
+          setPathDraft(path ?? "/");
+          setPathEditing(true);
+        }}
+        pathInput={pathInput("wb-path-input wb-mono")}
+        follow={follow}
+        onFollowChange={(on) => {
+          setFollow(on);
+          storeFollow(on);
+        }}
+        followAvailable={Boolean(terminalCwd)}
+        upload={upload}
+        onCancelUpload={cancelUpload}
+        transfer={transfer}
+        doneCount={doneCount}
+        notice={notice}
+      />
+    );
+  }
 
   return (
     <div
@@ -589,80 +795,7 @@ export function FileBrowserPanel({
         </div>
       )}
 
-      {dragOver && (
-        <div
-          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center border-2 border-dashed"
-          style={{
-            background: "color-mix(in srgb, var(--accent) 12%, transparent)",
-            borderColor: "var(--accent)",
-          }}
-        >
-          <span className="text-sm font-medium" style={{ color: "var(--accent)" }}>
-            Drop to upload
-          </span>
-        </div>
-      )}
-
-      {editor && (
-        <div
-          className="absolute inset-0 z-30 flex flex-col"
-          style={{ background: "var(--bg-panel)" }}
-        >
-          <div
-            className="flex shrink-0 items-center gap-2 border-b px-3 py-2"
-            style={{ borderColor: "var(--border-subtle)" }}
-          >
-            <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: "var(--text)" }}>
-              {editor.name}
-              {editor.dirty ? " *" : ""}
-            </span>
-            <button
-              type="button"
-              onClick={() => void saveEditor()}
-              disabled={!editor.dirty || editor.saving}
-              className="rounded px-2 py-1 text-xs font-medium disabled:opacity-40"
-              style={{ background: "var(--accent)", color: "var(--accent-fg, #fff)" }}
-            >
-              {editor.saving ? "Saving..." : "Save"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                void (async () => {
-                  // Do not use window.confirm: tauri-plugin-dialog overrides it to
-                  // invoke plugin:dialog|confirm, which is not registered (only
-                  // message/open/save are). Use the package confirm() helper.
-                  if (editor.dirty) {
-                    const ok = await confirmDialog("Discard unsaved changes?", {
-                      title: "Unsaved changes",
-                      kind: "warning",
-                      okLabel: "Discard",
-                      cancelLabel: "Keep editing",
-                    });
-                    if (!ok) return;
-                  }
-                  setEditor(null);
-                })();
-              }}
-              className="hover-subtle rounded p-1.5"
-              style={{ color: "var(--text-muted)" }}
-              title="Close"
-              aria-label="Close"
-            >
-              <X size={13} />
-            </button>
-          </div>
-          <textarea
-            value={editor.contents}
-            onChange={(e) =>
-              setEditor({ ...editor, contents: e.target.value, dirty: true })
-            }
-            spellCheck={false}
-            className="min-h-0 flex-1 resize-none border-0 bg-transparent px-3 py-2 font-mono text-xs outline-none"
-            style={{ color: "var(--text)" }}
-          />
-        </div>
-      )}
+      {overlays}
 
       <div
         className="flex shrink-0 items-center justify-between border-b px-3 py-2"
@@ -755,38 +888,9 @@ export function FileBrowserPanel({
         >
           <ArrowUp size={13} />
         </button>
-        <input
-          value={pathEditing ? pathDraft : (path ?? "...")}
-          onChange={(e) => {
-            setPathEditing(true);
-            setPathDraft(e.target.value);
-          }}
-          onFocus={() => {
-            setPathEditing(true);
-            setPathDraft(path ?? "/");
-          }}
-          onBlur={() => goToPath(pathDraft)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              (e.target as HTMLInputElement).blur();
-            } else if (e.key === "Escape") {
-              e.preventDefault();
-              setPathDraft(path ?? "/");
-              setPathEditing(false);
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          spellCheck={false}
-          className="min-w-0 flex-1 rounded-md border px-2 py-1 font-mono text-[11px] outline-none"
-          style={{
-            color: "var(--text)",
-            background: "var(--bg-base)",
-            borderColor: "var(--border-subtle)",
-          }}
-          title="Type a path and press Enter"
-          aria-label="Remote path"
-        />
+        {pathInput(
+          "min-w-0 flex-1 rounded-md border px-2 py-1 font-mono text-[11px] outline-none",
+        )}
       </div>
 
       <div
@@ -969,14 +1073,7 @@ export function FileBrowserPanel({
         )}
       </div>
 
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          sections={menuSections(menu.entry)}
-          onClose={() => setMenu(null)}
-        />
-      )}
+      {contextMenu}
     </div>
   );
 }
