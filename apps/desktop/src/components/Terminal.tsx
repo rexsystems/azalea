@@ -1030,7 +1030,7 @@ export const TerminalView = memo(function TerminalView({
         )}
         <div
           ref={containerRef}
-          className="flex h-full w-full items-start overflow-hidden"
+          className="terminal-host flex h-full w-full items-start overflow-hidden"
           style={{ background: "var(--terminal-bg)" }}
           onContextMenu={(e) => {
             if (settings.rightClickToPaste) e.preventDefault();

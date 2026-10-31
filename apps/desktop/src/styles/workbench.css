@@ -799,6 +799,16 @@ html:is([data-ui="new"], [data-ui="minimal"]) .settings-shell {
   overflow: hidden;
 }
 
+/* Give terminal text room from the panel edges. FitAddon subtracts the
+   .xterm padding, so the grid still fills the space exactly. */
+html:is([data-ui="new"], [data-ui="minimal"]) .terminal-host > .xterm {
+  padding: 8px 0 0 12px;
+}
+
+html[data-ui="minimal"] .terminal-host > .xterm {
+  padding: 4px 0 0 8px;
+}
+
 /* Status line */
 .wb-footer {
   display: flex;
