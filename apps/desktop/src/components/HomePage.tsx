@@ -1,52 +1,65 @@
-import { useMemo, type ReactNode } from "react";
-import type { Host, SshKey } from "@azalea/shared";
+import { useMemo, useState, type ReactNode } from "react";
+import type { Host } from "@azalea/shared";
 import { useHideHostAddresses } from "../hooks/useHideHostAddresses";
-import { formatHostEndpoint } from "../lib/utils";
+import { formatHostEndpoint, formatRelativeTime } from "../lib/utils";
 import { HostOsIcon } from "./HostOsIcon";
-import { KeyRound, Plus, Server, Settings, SquareTerminal } from "./icons";
+import { Plus, Search, SquareTerminal } from "./icons";
 
 interface HomePageProps {
   hosts: Host[];
-  keys: SshKey[];
   openSessions: number;
   connectingHostId: string | null;
   onConnect: (host: Host) => void;
   onAddServer: () => void;
+  /** Called with the typed text when it matches no saved host. */
+  onQuickConnect: (query: string) => void;
   onOpenLocalTerminal: () => void;
   onOpenHosts: () => void;
-  onOpenKeys: () => void;
-  onOpenSettings: () => void;
   isMobile?: boolean;
   workspacesSection?: ReactNode;
 }
 
+const RECENT_LIMIT = 6;
+
+function matchesQuery(host: Host, q: string): boolean {
+  return (
+    host.name.toLowerCase().includes(q) ||
+    host.hostname.toLowerCase().includes(q) ||
+    host.username.toLowerCase().includes(q)
+  );
+}
+
 export function HomePage({
   hosts,
-  keys,
   openSessions,
   connectingHostId,
   onConnect,
   onAddServer,
+  onQuickConnect,
   onOpenLocalTerminal,
   onOpenHosts,
-  onOpenKeys,
-  onOpenSettings,
   isMobile = false,
   workspacesSection,
 }: HomePageProps) {
   const hideAddress = useHideHostAddresses();
-  const recent = useMemo(
+  const [query, setQuery] = useState("");
+
+  const byRecency = useMemo(
     () =>
-      [...hosts]
-        .sort((a, b) => {
-          const ac = a.last_connected_at ?? 0;
-          const bc = b.last_connected_at ?? 0;
-          if (bc !== ac) return bc - ac;
-          return b.updated_at - a.updated_at;
-        })
-        .slice(0, 6),
+      [...hosts].sort((a, b) => {
+        const ac = a.last_connected_at ?? 0;
+        const bc = b.last_connected_at ?? 0;
+        if (bc !== ac) return bc - ac;
+        return b.updated_at - a.updated_at;
+      }),
     [hosts],
   );
+
+  const trimmed = query.trim().toLowerCase();
+  const searching = trimmed.length > 0;
+  const shown = searching
+    ? byRecency.filter((host) => matchesQuery(host, trimmed))
+    : byRecency.slice(0, RECENT_LIMIT);
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
@@ -56,46 +69,21 @@ export function HomePage({
     return "Good night";
   }, []);
 
-  const stats = [
-    { label: "Hosts", value: hosts.length, onClick: onOpenHosts },
-    { label: "Keys", value: keys.length, onClick: onOpenKeys },
-    { label: "Sessions", value: openSessions, onClick: undefined },
-  ];
+  const submit = () => {
+    if (!searching) return;
+    if (shown.length === 1) {
+      onConnect(shown[0]);
+      return;
+    }
+    if (shown.length === 0) onQuickConnect(query);
+  };
 
-  const actions = [
-    {
-      label: "New host",
-      description: "SSH host, user, and key",
-      icon: Plus,
-      onClick: onAddServer,
-      primary: true,
-    },
-    ...(!isMobile
-      ? [
-          {
-            label: "Local terminal",
-            description: "Shell on this machine",
-            icon: SquareTerminal,
-            onClick: onOpenLocalTerminal,
-            primary: false,
-          },
-        ]
-      : []),
-    {
-      label: "Keychain",
-      description: "SSH keys on this device",
-      icon: KeyRound,
-      onClick: onOpenKeys,
-      primary: false,
-    },
-    {
-      label: "Settings",
-      description: "Theme, sync, and backup",
-      icon: Settings,
-      onClick: onOpenSettings,
-      primary: false,
-    },
-  ];
+  const subtitle =
+    hosts.length === 0
+      ? "Add an SSH host to get started."
+      : openSessions > 0
+        ? `${openSessions} open ${openSessions === 1 ? "session" : "sessions"}`
+        : `${hosts.length} saved ${hosts.length === 1 ? "host" : "hosts"}`;
 
   return (
     <div
@@ -103,181 +91,151 @@ export function HomePage({
       style={{ background: "var(--bg-base)" }}
     >
       <div className="settings-shell flex min-h-0 flex-1 flex-col overflow-y-auto !pb-6">
-        <div className="mb-6 shrink-0">
-          <div className="min-w-0">
-            <h2
-              className="text-2xl font-semibold tracking-tight sm:text-3xl"
-              style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
-            >
-              {greeting}
-            </h2>
-            <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
-              {hosts.length === 0
-                ? "Add an SSH host to connect."
-                : "Recent hosts and shortcuts."}
-            </p>
-          </div>
-        </div>
-
-        <div className="mb-5 grid grid-cols-3 gap-3">
-          {stats.map((stat) => (
-            <button
-              key={stat.label}
-              type="button"
-              disabled={!stat.onClick}
-              onClick={stat.onClick}
-              className="rounded-2xl border px-4 py-3.5 text-left transition-ui disabled:cursor-default"
-              style={{
-                borderColor: "var(--border-subtle)",
-                background: "var(--bg-panel)",
-                color: "var(--text)",
-              }}
-            >
-              <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-                {stat.label}
-              </div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
-                {stat.value}
-              </div>
-            </button>
-          ))}
-        </div>
-
-        <div
-          className="mb-5 rounded-2xl border p-5 sm:p-6"
-          style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
-        >
-          <div className="mb-4">
-            <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>
-              Shortcuts
-            </h3>
-            <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-              Hosts, keys, and settings.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {actions.map(({ label, description, icon: Icon, onClick, primary }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={onClick}
-                className={`home-action flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-ui ${
-                  primary ? "home-action-primary" : "hover-subtle"
-                }`}
-                style={{
-                  borderColor: primary ? "transparent" : "var(--border-subtle)",
-                  color: primary ? "var(--accent-fg, #fff)" : "var(--text)",
-                }}
+        <div className="mx-auto w-full max-w-3xl">
+          <div className="mb-6 flex shrink-0 flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <h2
+                className="text-2xl font-semibold tracking-tight sm:text-3xl"
+                style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
               >
-                <span
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                    primary ? "home-action-primary-icon" : ""
-                  }`}
-                  style={{
-                    background: primary ? undefined : "var(--accent-muted)",
-                    color: primary ? "inherit" : "var(--accent)",
-                  }}
-                >
-                  <Icon size={18} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">{label}</span>
-                  <span
-                    className={`block truncate text-[11px] ${primary ? "home-action-primary-desc" : ""}`}
-                    style={{ color: primary ? undefined : "var(--text-muted)" }}
-                  >
-                    {description}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {workspacesSection}
-
-        <div
-          className="rounded-2xl border p-5 sm:p-6"
-          style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
-        >
-          <div className="mb-4 flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>
-                Recent hosts
-              </h3>
-              <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-                Sorted by last connection.
+                {greeting}
+              </h2>
+              <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
+                {subtitle}
               </p>
             </div>
-            {hosts.length > 0 && (
-              <button
-                type="button"
-                onClick={onOpenHosts}
-                className="shrink-0 text-sm font-medium"
-                style={{ color: "var(--accent)" }}
-              >
-                View all
-              </button>
-            )}
-          </div>
-
-          {recent.length === 0 ? (
-            <div
-              className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-12 text-center"
-              style={{ borderColor: "var(--border-subtle)" }}
-            >
-              <Server size={22} style={{ color: "var(--text-muted)" }} />
-              <p className="mt-3 text-sm font-medium" style={{ color: "var(--text)" }}>
-                No hosts yet
-              </p>
-              <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
-                Use New host above, or open Hosts.
-              </p>
+            <div className="flex shrink-0 gap-2">
+              {!isMobile && (
+                <button
+                  type="button"
+                  onClick={onOpenLocalTerminal}
+                  className="hover-subtle transition-ui inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-medium"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                >
+                  <SquareTerminal size={16} />
+                  Local terminal
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onAddServer}
-                className="mt-4 inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium"
-                style={{ background: "var(--accent)", color: "var(--accent-fg, #fff)" }}
+                className="home-action-primary transition-ui inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium"
               >
-                <Plus size={15} />
+                <Plus size={16} />
                 New host
               </button>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-              {recent.map((host) => {
-                const connecting = connectingHostId === host.id;
-                return (
-                  <button
-                    key={host.id}
-                    type="button"
-                    disabled={connecting}
-                    onClick={() => onConnect(host)}
-                    className="flex min-w-0 items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-ui hover-subtle disabled:opacity-50"
-                    style={{
-                      borderColor: "var(--border-subtle)",
-                      background: "var(--bg-card)",
-                    }}
-                  >
-                    <HostOsIcon osId={host.os_id} seed={host.id || host.name} size={40} rounded={11} />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium" style={{ color: "var(--text)" }}>
-                        {host.name}
-                      </span>
-                      <span className="block truncate text-[11px]" style={{ color: "var(--text-muted)" }}>
-                        {formatHostEndpoint(host.username, host.hostname, hideAddress)}
-                      </span>
-                    </span>
-                    {connecting && (
-                      <span className="text-xs" style={{ color: "var(--accent)" }}>
-                        ...
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+          </div>
+
+          <div className="relative mb-6 shrink-0">
+            <Search
+              size={17}
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2"
+              style={{ color: "var(--text-muted)" }}
+            />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit();
+                if (e.key === "Escape") setQuery("");
+              }}
+              placeholder={isMobile ? "Search hosts…" : "Find a host or type ssh user@hostname…"}
+              aria-label="Find a host or connect to a new one"
+              className="transition-ui w-full rounded-xl border py-3 pl-10 pr-3.5 text-sm outline-none focus:border-[var(--accent)]"
+              style={{
+                background: "var(--bg-input)",
+                borderColor: "var(--border-subtle)",
+                color: "var(--text)",
+              }}
+            />
+          </div>
+
+          {workspacesSection}
+
+          <section aria-label={searching ? "Search results" : "Recent hosts"}>
+            <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
+              <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                {searching ? "Matching hosts" : "Recent"}
+              </h3>
+              {!searching && hosts.length > RECENT_LIMIT && (
+                <button
+                  type="button"
+                  onClick={onOpenHosts}
+                  className="text-sm font-medium"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  All {hosts.length} hosts
+                </button>
+              )}
             </div>
-          )}
+
+            {shown.length === 0 ? (
+              <p
+                className="rounded-xl border border-dashed px-4 py-8 text-center text-sm"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
+              >
+                {searching
+                  ? "No saved host matches. Press Enter to add it as a new host."
+                  : "No hosts yet. Use New host to add your first one."}
+              </p>
+            ) : (
+              <ul
+                className="overflow-hidden rounded-xl border"
+                style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+              >
+                {shown.map((host, index) => {
+                  const connecting = connectingHostId === host.id;
+                  return (
+                    <li
+                      key={host.id}
+                      style={
+                        index > 0 ? { borderTop: "1px solid var(--border-subtle)" } : undefined
+                      }
+                    >
+                      <button
+                        type="button"
+                        disabled={connecting}
+                        onClick={() => onConnect(host)}
+                        className="hover-subtle transition-ui flex w-full min-w-0 items-center gap-3 px-3.5 py-3 text-left disabled:opacity-50"
+                      >
+                        <HostOsIcon
+                          osId={host.os_id}
+                          seed={host.id || host.name}
+                          size={36}
+                          rounded={9}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className="block truncate text-sm font-medium"
+                            style={{ color: "var(--text)" }}
+                          >
+                            {host.name}
+                          </span>
+                          <span
+                            className="block truncate text-xs"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            {formatHostEndpoint(host.username, host.hostname, hideAddress)}
+                          </span>
+                        </span>
+                        <span
+                          className="shrink-0 text-xs tabular-nums"
+                          style={{ color: connecting ? "var(--accent)" : "var(--text-muted)" }}
+                        >
+                          {connecting
+                            ? "Connecting…"
+                            : host.last_connected_at
+                              ? formatRelativeTime(host.last_connected_at)
+                              : "Never connected"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </div>
       </div>
     </div>

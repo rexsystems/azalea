@@ -20,6 +20,19 @@ export function formatHostEndpoint(
   return `${username}@${shortenHostForCard(hostname)}`;
 }
 
+/** "just now", "5 min ago", "3 h ago", "2 d ago", else a short date. Input is unix seconds. */
+export function formatRelativeTime(unixSeconds: number, nowMs = Date.now()): string {
+  const diff = Math.max(0, Math.floor(nowMs / 1000 - unixSeconds));
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`;
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} d ago`;
+  return new Date(unixSeconds * 1000).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function shortenHostForCard(hostname: string): string {
   const host = hostname.trim();
   const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);

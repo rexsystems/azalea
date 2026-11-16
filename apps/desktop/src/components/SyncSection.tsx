@@ -635,7 +635,7 @@ export function SyncSection({
         )}
         {renderBody()}
         {error && (
-          <p className="break-words text-xs" style={{ color: "var(--danger, #f87171)" }}>
+          <p className="break-words text-xs" style={{ color: "var(--danger)" }}>
             {error.replace(/^Error:\s*/, "")}
           </p>
         )}

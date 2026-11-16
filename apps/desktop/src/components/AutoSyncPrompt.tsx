@@ -70,7 +70,7 @@ export function AutoSyncPrompt({
         />
 
         {error && (
-          <p className="mt-3 break-words text-xs" style={{ color: "#f87171" }}>
+          <p className="mt-3 break-words text-xs" style={{ color: "var(--danger)" }}>
             {error.replace(/^Error:\s*/, "")}
           </p>
         )}

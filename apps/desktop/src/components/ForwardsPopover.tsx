@@ -19,7 +19,7 @@ function statusLabel(status: PortForwardStatus | undefined): {
     return { text: "Off", color: "var(--text-muted)" };
   }
   if (status.state === "failed") {
-    return { text: "Failed", color: "#f87171" };
+    return { text: "Failed", color: "var(--danger)" };
   }
   if (status.state === "connected") {
     const n = status.connections;
@@ -177,7 +177,7 @@ export function ForwardsPopover({
         className="flex items-center justify-between border-b px-3 py-2"
         style={{ borderColor: "var(--border-subtle)" }}
       >
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
           Port forwarding
         </span>
         <div className="flex items-center gap-0.5">
@@ -193,7 +193,7 @@ export function ForwardsPopover({
             onClick={onClose}
             className="hover-subtle rounded p-1.5"
             style={{ color: "var(--text-muted)" }}
-            title="Close"
+            title="Close" aria-label="Close"
           >
             <X size={13} />
           </button>
@@ -273,7 +273,10 @@ export function ForwardsPopover({
                       ? "rgba(248,113,113,0.45)"
                       : "var(--border-subtle)",
                 }}
+                role="switch"
+                aria-checked={running}
                 title={running ? "Stop" : "Start"}
+                aria-label={`${running ? "Stop" : "Start"} ${forward.label}`}
               >
                 <span
                   className="absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all"
@@ -296,7 +299,7 @@ export function ForwardsPopover({
                   127.0.0.1:{forward.local_port} → {forward.remote_host}:{forward.remote_port}
                 </span>
                 {status?.error && (
-                  <span className="truncate text-[10px]" style={{ color: "#f87171" }} title={status.error}>
+                  <span className="truncate text-[10px]" style={{ color: "var(--danger)" }} title={status.error}>
                     {status.error}
                   </span>
                 )}
@@ -307,7 +310,7 @@ export function ForwardsPopover({
                   void api.deletePortForward(forward.id).then(refresh);
                 }}
                 className="shrink-0 rounded p-1 opacity-0 group-hover:opacity-100"
-                style={{ color: "#f87171" }}
+                style={{ color: "var(--danger)" }}
                 title="Delete"
               >
                 <Trash2 size={12} />

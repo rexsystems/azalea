@@ -53,7 +53,7 @@ function buttonStyle(variant: ButtonVariant): React.CSSProperties {
     case "danger":
       return {
         background: "transparent",
-        color: "#f87171",
+        color: "var(--danger)",
         border: "1px solid rgba(248,113,113,0.2)",
       };
   }

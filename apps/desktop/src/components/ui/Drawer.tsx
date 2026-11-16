@@ -27,11 +27,13 @@ export function Drawer({ open, title, subtitle, onClose, children, footer }: Dra
 
   return (
     <aside
+      role="dialog"
+      aria-label={title}
       className="drawer-panel animate-drawer-in absolute right-0 top-0 z-20 flex h-full w-[min(100%,28rem)] flex-col border-l"
       style={{
         background: "var(--bg-panel)",
         borderColor: "var(--border-subtle)",
-        boxShadow: "-8px 0 24px rgba(0, 0, 0, 0.25)",
+        boxShadow: "var(--shadow-xl)",
       }}
     >
       <div
@@ -49,9 +51,11 @@ export function Drawer({ open, title, subtitle, onClose, children, footer }: Dra
           )}
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="transition-ui rounded-md p-1.5"
+          className="hover-subtle transition-ui rounded-md p-1.5"
           style={{ color: "var(--text-muted)" }}
+          aria-label="Close"
         >
           <X size={18} />
         </button>

@@ -8,10 +8,12 @@ import { applyIconPack, getStoredIconPack } from "./lib/iconPack";
 import { installCrashReporting } from "./lib/telemetry";
 import { applyCustomCss } from "./lib/customCss";
 import { applyTheme, getStoredTheme } from "./lib/theme";
+import { applyLayout, getStoredLayout } from "./lib/layout";
 import "./styles/globals.css";
 
 const initialTheme = getStoredTheme();
 applyTheme(initialTheme);
+applyLayout(getStoredLayout());
 applyCustomCss();
 applyIconPack(getStoredIconPack());
 installCrashReporting();

@@ -279,8 +279,8 @@ export function KeysPage({
       style={{ background: "var(--bg-base)" }}
     >
       <div className="settings-shell keys-shell flex min-h-0 flex-1 flex-col overflow-y-auto !pb-6">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
+        <div className="mx-auto w-full max-w-4xl">
+          <div className="mb-6">
             <h2
               className="text-2xl font-semibold tracking-tight sm:text-3xl"
               style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
@@ -289,289 +289,236 @@ export function KeysPage({
             </h2>
             <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
               {keys.length === 0
-                ? "Generate, import, or install SSH keys"
-                : `${keys.length} key${keys.length === 1 ? "" : "s"}`}
+                ? "No SSH keys on this device yet."
+                : `${keys.length} SSH key${keys.length === 1 ? "" : "s"} on this device`}
             </p>
           </div>
-        </div>
 
-        <div
-          className="min-w-0 rounded-2xl border"
-          style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
-        >
-          <div className="space-y-8 p-5 pb-6 sm:p-6 sm:pb-8">
-            <section>
-              <div
-                className="mb-5 flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-start sm:justify-between"
-                style={{ borderColor: "var(--border-subtle)" }}
+          <section aria-label="Your keys">
+            {keys.length === 0 ? (
+              <p
+                className="rounded-xl border border-dashed px-4 py-8 text-center text-sm"
+                style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
               >
-                <div className="min-w-0">
-                  <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>
-                    New key
-                  </h3>
-                  <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                    Create Ed25519, RSA, or ECDSA keys, or import OpenSSH, PEM, SEC1, or PuTTY (.ppk).
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-end">
-                <Input
-                  label="Name"
-                  placeholder="My Laptop - or leave empty to use filename"
-                  value={newKeyName}
-                  onChange={(e) => setNewKeyName(e.target.value)}
-                />
-                <Select
-                  label="Algorithm"
-                  value={algorithm}
-                  options={ALGORITHM_OPTIONS}
-                  onChange={setAlgorithm}
-                />
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button disabled={busy} onClick={() => void handleGenerate()}>
-                  <Fingerprint size={16} />
-                  Generate
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={busy}
-                  onClick={() => void handleImport()}
-                >
-                  <FileKey size={16} />
-                  Import file
-                </Button>
-                {onImportFromSsh && (
-                  <Button variant="secondary" disabled={busy} onClick={onImportFromSsh}>
-                    <Folder size={16} />
-                    Import from…
-                  </Button>
-                )}
-              </div>
-
-              {(notice || error) && (
-                <p
-                  className="mt-4 text-sm"
-                  style={{ color: error ? "#f87171" : "var(--text-muted)" }}
-                >
-                  {error ?? notice}
-                </p>
-              )}
-
-              {pendingImport && (
-                <div
-                  className="mt-5 space-y-3 rounded-xl border p-4"
-                  style={{ background: "var(--bg-card)", borderColor: "var(--border-subtle)" }}
-                >
-                  <p className="text-sm" style={{ color: "var(--text)" }}>
-                    <span className="font-medium">{pendingImport.name}</span> is protected by a
-                    passphrase.
-                  </p>
-                  <Input
-                    type="password"
-                    placeholder="Passphrase"
-                    value={passphrase}
-                    onChange={(e) => setPassphrase(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && passphrase) {
-                        void finishImport(pendingImport.name, pendingImport.pem, passphrase);
-                      }
-                    }}
-                    autoFocus
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      disabled={busy || !passphrase}
-                      onClick={() =>
-                        void finishImport(pendingImport.name, pendingImport.pem, passphrase)
-                      }
-                    >
-                      Unlock & import
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() => {
-                        setPendingImport(null);
-                        setPassphrase("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </section>
-
-            <section>
-              <div
-                className="mb-5 flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-start sm:justify-between"
-                style={{ borderColor: "var(--border-subtle)" }}
+                Generate a key below, or import OpenSSH, PEM, SEC1, or PuTTY (.ppk).
+              </p>
+            ) : (
+              <ul
+                className="overflow-hidden rounded-xl border"
+                style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
               >
-                <div className="min-w-0">
-                  <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>
-                    Your keys
-                  </h3>
-                  <p className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-muted)" }}>
-                    Copy the public key, export a `.pub` file, or install it on a host.
-                  </p>
-                </div>
-              </div>
-
-              {keys.length === 0 ? (
-                <div
-                  className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-14 text-center"
-                  style={{ borderColor: "var(--border-subtle)" }}
-                >
-                  <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
-                    No keys yet
-                  </p>
-                  <p className="mt-1 max-w-sm text-sm" style={{ color: "var(--text-muted)" }}>
-                    Generate a key above, or import OpenSSH, PEM, SEC1, or PuTTY (.ppk).
-                  </p>
-                </div>
-              ) : (
-                <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
-                  {keys.map((key) => {
-                    const copied = copiedId === key.id;
-                    return (
-                      <article
-                        key={key.id}
-                        className="flex min-w-0 flex-col overflow-visible rounded-xl border p-4"
-                        style={{
-                          background: "var(--bg-card)",
-                          borderColor: "var(--border-subtle)",
-                        }}
+                {keys.map((key, index) => {
+                  const copied = copiedId === key.id;
+                  return (
+                    <li
+                      key={key.id}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3.5 py-3"
+                      style={index > 0 ? { borderTop: "1px solid var(--border-subtle)" } : undefined}
+                    >
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                        style={{ background: "var(--bg-card)", color: "var(--text-secondary)" }}
+                        aria-hidden
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div
-                              className="truncate text-sm font-semibold"
-                              style={{ color: "var(--text)" }}
-                            >
-                              {key.name}
-                            </div>
-                            <div
-                              className="mt-1 flex flex-wrap items-center gap-2 text-[11px]"
-                              style={{ color: "var(--text-muted)" }}
-                            >
-                              <span
-                                className="rounded-md px-1.5 py-0.5 font-medium"
-                                style={{
-                                  background: "var(--accent-muted)",
-                                  color: "var(--accent)",
-                                }}
-                              >
-                                {formatKeyType(key.key_type)}
-                              </span>
-                              <span
-                                className="font-mono"
-                                title={key.fingerprint}
-                              >
-                                {shortFingerprint(key.fingerprint)}
-                              </span>
-                            </div>
-                          </div>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            className="!px-2 !py-2 shrink-0"
-                            disabled={busy}
-                            onClick={() => void onDelete(key.id)}
-                            title="Delete key"
-                          >
-                            <Trash2 size={15} />
-                          </Button>
-                        </div>
-
-                        <p
-                          className="mt-3 line-clamp-2 overflow-hidden break-all font-mono text-[10px] leading-relaxed"
-                          style={{ color: "var(--text-secondary)" }}
+                        <KeyRound size={16} />
+                      </span>
+                      <div className="min-w-0 flex-1 basis-48">
+                        <div
+                          className="truncate text-sm font-medium"
+                          style={{ color: "var(--text)" }}
                           title={key.public_key}
                         >
-                          {key.public_key}
-                        </p>
-
+                          {key.name}
+                        </div>
                         <div
-                          className="key-card-actions mt-auto grid grid-cols-3 overflow-visible rounded-lg border"
-                          style={{ borderColor: "var(--border-subtle)", marginTop: "1rem" }}
+                          className="truncate font-mono text-xs"
+                          style={{ color: "var(--text-muted)" }}
+                          title={key.fingerprint}
+                        >
+                          {formatKeyType(key.key_type)} · {shortFingerprint(key.fingerprint)}
+                        </div>
+                      </div>
+
+                      <div className="key-card-actions flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void copyPublicKey(key)}
+                        >
+                          {copied ? <Check size={14} /> : <Copy size={14} />}
+                          <span>{copied ? "Copied" : "Copy"}</span>
+                        </button>
+                        <div
+                          className="key-export-menu"
+                          ref={exportMenuId === key.id ? exportMenuRef : undefined}
                         >
                           <button
                             type="button"
                             disabled={busy}
-                            onClick={() => void copyPublicKey(key)}
+                            aria-haspopup="menu"
+                            aria-expanded={exportMenuId === key.id}
+                            onClick={(event) => toggleExportMenu(key.id, event.currentTarget)}
                           >
-                            {copied ? <Check size={14} /> : <Copy size={14} />}
-                            <span>{copied ? "Copied" : "Copy"}</span>
+                            <FileKey2 size={14} />
+                            <span>Export</span>
+                            <ChevronDown size={12} />
                           </button>
-                          <div
-                            className="key-export-menu"
-                            ref={exportMenuId === key.id ? exportMenuRef : undefined}
-                          >
-                            <button
-                              type="button"
-                              disabled={busy}
-                              aria-haspopup="menu"
-                              aria-expanded={exportMenuId === key.id}
-                              onClick={(event) => toggleExportMenu(key.id, event.currentTarget)}
+                          {exportMenuId === key.id ? (
+                            <div
+                              className={`key-export-dropdown ${exportMenuDir === "up" ? "up" : "down"}`}
+                              role="menu"
                             >
-                              <FileKey2 size={14} />
-                              <span>Export</span>
-                              <ChevronDown size={12} />
-                            </button>
-                            {exportMenuId === key.id ? (
-                              <div
-                                className={`key-export-dropdown ${exportMenuDir === "up" ? "up" : "down"}`}
-                                role="menu"
-                              >                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  disabled={busy}
-                                  onClick={() => {
-                                    setExportMenuId(null);
-                                    void exportPublicKey(key);
-                                  }}
-                                >
-                                  <FileKey2 size={14} />
-                                  <span>Public key (.pub)</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="danger"
-                                  disabled={busy}
-                                  onClick={() => {
-                                    setExportMenuId(null);
-                                    setExportPrivateTarget(key);
-                                  }}
-                                >
-                                  <KeyRound size={14} />
-                                  <span>Private key</span>
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                          <button
-                            type="button"
-                            disabled={busy || hosts.length === 0}
-                            onClick={() => {
-                              setInstallResult(null);
-                              setInstallKeyId(key.id);
-                            }}
-                          >
-                            <HardDriveUpload size={14} />
-                            <span>Install</span>
-                          </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                disabled={busy}
+                                onClick={() => {
+                                  setExportMenuId(null);
+                                  void exportPublicKey(key);
+                                }}
+                              >
+                                <FileKey2 size={14} />
+                                <span>Public key (.pub)</span>
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="danger"
+                                disabled={busy}
+                                onClick={() => {
+                                  setExportMenuId(null);
+                                  setExportPrivateTarget(key);
+                                }}
+                              >
+                                <KeyRound size={14} />
+                                <span>Private key</span>
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
-                      </article>
-                    );
-                  })}
-                </div>
+                        <button
+                          type="button"
+                          disabled={busy || hosts.length === 0}
+                          onClick={() => {
+                            setInstallResult(null);
+                            setInstallKeyId(key.id);
+                          }}
+                        >
+                          <HardDriveUpload size={14} />
+                          <span>Install</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="key-action-danger"
+                          disabled={busy}
+                          onClick={() => void onDelete(key.id)}
+                          title="Delete key"
+                          aria-label={`Delete ${key.name}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="mt-10" aria-label="Add a key">
+            <h3 className="mb-1 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+              Add a key
+            </h3>
+            <p className="mb-4 text-sm" style={{ color: "var(--text-muted)" }}>
+              Generate Ed25519, RSA, or ECDSA, or import OpenSSH, PEM, SEC1, or PuTTY (.ppk).
+            </p>
+
+            <div className="grid gap-4 sm:grid-cols-2 sm:items-end">
+              <Input
+                label="Name"
+                placeholder="My Laptop, or leave empty to use the filename"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+              />
+              <Select
+                label="Algorithm"
+                value={algorithm}
+                options={ALGORITHM_OPTIONS}
+                onChange={setAlgorithm}
+              />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button disabled={busy} onClick={() => void handleGenerate()}>
+                <Fingerprint size={16} />
+                Generate
+              </Button>
+              <Button variant="secondary" disabled={busy} onClick={() => void handleImport()}>
+                <FileKey size={16} />
+                Import file
+              </Button>
+              {onImportFromSsh && (
+                <Button variant="secondary" disabled={busy} onClick={onImportFromSsh}>
+                  <Folder size={16} />
+                  Import from…
+                </Button>
               )}
-            </section>
-          </div>
+            </div>
+
+            {(notice || error) && (
+              <p
+                role={error ? "alert" : "status"}
+                className="mt-4 text-sm"
+                style={{ color: error ? "var(--danger)" : "var(--text-secondary)" }}
+              >
+                {error ?? notice}
+              </p>
+            )}
+
+            {pendingImport && (
+              <div
+                className="mt-5 space-y-3 rounded-xl border p-4"
+                style={{ background: "var(--bg-panel)", borderColor: "var(--border-subtle)" }}
+              >
+                <p className="text-sm" style={{ color: "var(--text)" }}>
+                  <span className="font-medium">{pendingImport.name}</span> is protected by a
+                  passphrase.
+                </p>
+                <Input
+                  type="password"
+                  placeholder="Passphrase"
+                  value={passphrase}
+                  onChange={(e) => setPassphrase(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && passphrase) {
+                      void finishImport(pendingImport.name, pendingImport.pem, passphrase);
+                    }
+                  }}
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <Button
+                    disabled={busy || !passphrase}
+                    onClick={() =>
+                      void finishImport(pendingImport.name, pendingImport.pem, passphrase)
+                    }
+                  >
+                    Unlock & import
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => {
+                      setPendingImport(null);
+                      setPassphrase("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </section>
         </div>
       </div>
 

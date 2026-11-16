@@ -5,13 +5,8 @@ import {
   EthernetPort,
   Folder,
   KeyRound,
-  Lock,
-  Network,
   Save,
-  Server,
-  Tag,
   Trash2,
-  User,
   WindowClose,
 } from "./icons";
 import type { HostFormValues } from "../lib/utils";
@@ -170,11 +165,13 @@ export function AddServerDrawer({
       }
     >
       <div className="space-y-5">
+        <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+          Connection
+        </h3>
         <Input
           label="Display name"
           hint="Shown in your host list"
           placeholder="My server"
-          icon={<Tag size={15} />}
           value={values.name}
           onChange={(e) => {
             setNameTouched(true);
@@ -186,7 +183,6 @@ export function AddServerDrawer({
           <Input
             label="Address"
             placeholder="192.168.1.10 or server.example.com"
-            icon={<Server size={15} />}
             value={values.hostname}
             onChange={(e) =>
               setValues((prev) => ({ ...prev, hostname: e.target.value }))
@@ -211,7 +207,6 @@ export function AddServerDrawer({
 
         <Input
           label="Username"
-          icon={<User size={15} />}
           value={values.username}
           onChange={(e) =>
             setValues((prev) => ({ ...prev, username: e.target.value }))
@@ -240,12 +235,17 @@ export function AddServerDrawer({
           />
         )}
 
+        <h3
+          className="border-t pt-5 text-sm font-medium"
+          style={{ color: "var(--text-secondary)", borderColor: "var(--border-subtle)" }}
+        >
+          Authentication
+        </h3>
         <Input
           label="Password"
           type="password"
           placeholder={isEdit ? "Leave blank to keep current" : "Optional"}
           hint={isEdit ? undefined : "Optional; you can use an SSH key instead"}
-          icon={<Lock size={15} />}
           value={values.password}
           onChange={(e) =>
             setValues((prev) => ({ ...prev, password: e.target.value }))
@@ -254,23 +254,21 @@ export function AddServerDrawer({
 
         {keys.length === 0 ? (
           <div
-            className="rounded-xl border px-4 py-3 text-sm"
+            className="rounded-lg border px-3.5 py-3 text-sm"
             style={{
               borderColor: "var(--border-subtle)",
               color: "var(--text-muted)",
               background: "var(--bg-card)",
             }}
           >
-            <span className="mb-1 flex items-center gap-2 font-medium" style={{ color: "var(--text-secondary)" }}>
-              <KeyRound size={15} />
-              SSH Key
+            <span className="mb-1 block font-medium" style={{ color: "var(--text-secondary)" }}>
+              SSH key
             </span>
             No SSH keys yet. Save this host and pick a key when connecting.
           </div>
         ) : (
           <Select
-            label="SSH Key"
-            icon={<KeyRound size={15} />}
+            label="SSH key"
             value={values.key_id ?? ""}
             placeholder="Optional - choose when connecting"
             onChange={(keyId) =>
@@ -312,7 +310,6 @@ export function AddServerDrawer({
             label="MAC address"
             hint="For Wake-on-LAN when the server is offline"
             placeholder="AA:BB:CC:DD:EE:FF"
-            icon={<Network size={15} />}
             value={values.mac_address}
             onChange={(e) =>
               setValues((prev) => ({ ...prev, mac_address: e.target.value }))
@@ -321,14 +318,21 @@ export function AddServerDrawer({
         )}
 
         {groups.length === 0 && (
-          <p className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
-            <Folder size={12} />
-            Tip: create a group from the home screen to organize servers
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Groups keep a long host list tidy. Create one from the Hosts page.
           </p>
         )}
 
         {error && (
-          <p className="rounded-xl bg-red-950/40 px-4 py-3 text-sm text-red-300">
+          <p
+            role="alert"
+            className="rounded-lg border px-3.5 py-2.5 text-sm"
+            style={{
+              color: "var(--danger)",
+              borderColor: "color-mix(in srgb, var(--danger) 40%, transparent)",
+              background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+            }}
+          >
             {error}
           </p>
         )}

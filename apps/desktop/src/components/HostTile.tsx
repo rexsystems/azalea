@@ -1,7 +1,7 @@
 import type { Host, HostGroup } from "@azalea/shared";
-import { Pencil, Server, Tick } from "./icons";
+import { Pencil, Tick } from "./icons";
 import { useHideHostAddresses } from "../hooks/useHideHostAddresses";
-import { formatHostEndpoint } from "../lib/utils";
+import { formatHostEndpoint, formatRelativeTime } from "../lib/utils";
 import { HostOsIcon } from "./HostOsIcon";
 
 interface HostTileProps {
@@ -32,11 +32,7 @@ export function HostTile({
   const showCheckbox = selected || selectionActive;
 
   return (
-    <div
-      className="group relative"
-      data-host-tile
-      onContextMenu={(e) => onContextMenu?.(e, host)}
-    >
+    <div className="group relative" data-host-tile onContextMenu={(e) => onContextMenu?.(e, host)}>
       <button
         type="button"
         disabled={connecting}
@@ -48,11 +44,7 @@ export function HostTile({
           }
           onConnect(host);
         }}
-        className={`hover-subtle transition-ui flex w-full items-center text-left disabled:opacity-50 ${
-          compact
-            ? "gap-3 rounded-xl border px-3.5 py-3.5"
-            : "gap-4 rounded-2xl border px-4 py-4"
-        }`}
+        className="hover-subtle transition-ui flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left disabled:opacity-50"
         style={{
           background: "var(--bg-card)",
           borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
@@ -79,26 +71,19 @@ export function HostTile({
             {selected ? <Tick size={12} strokeWidth={2.5} /> : null}
           </span>
         )}
-        <HostOsIcon
-          osId={host.os_id}
-          seed={host.id || host.name}
-          size={compact ? 42 : 52}
-          rounded={compact ? 11 : 14}
-        />
+        <HostOsIcon osId={host.os_id} seed={host.id || host.name} size={40} rounded={10} />
         <div className="min-w-0 flex-1">
-          <div
-            className={`truncate font-medium ${compact ? "text-sm" : "text-base"}`}
-            style={{ color: "var(--text)" }}
-          >
+          <div className="truncate text-sm font-medium" style={{ color: "var(--text)" }}>
             {host.name}
           </div>
-          <div className="truncate text-sm" style={{ color: "var(--text-muted)" }}>
+          <div className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
             {formatHostEndpoint(host.username, host.hostname, hideAddress)}
+            {host.last_connected_at ? ` · ${formatRelativeTime(host.last_connected_at)}` : ""}
           </div>
         </div>
         {connecting && (
           <span className="text-xs" style={{ color: "var(--accent)" }}>
-            ...
+            Connecting…
           </span>
         )}
       </button>
@@ -136,6 +121,8 @@ interface GroupSectionProps {
   onGroupContextMenu: (e: React.MouseEvent, group: HostGroup | null) => void;
   onHostContextMenu: (e: React.MouseEvent, host: Host) => void;
   compact?: boolean;
+  /** One hairline-separated list instead of a grid of cards. */
+  list?: boolean;
 }
 
 export function GroupSection({
@@ -149,30 +136,22 @@ export function GroupSection({
   onGroupContextMenu,
   onHostContextMenu,
   compact = false,
+  list = false,
 }: GroupSectionProps) {
   const title = group?.name ?? "Ungrouped";
   const selectionActive = Boolean(selectedHostIds && selectedHostIds.size > 0);
 
   return (
-    <section className="mb-6">
+    <section className="mb-7">
       <button
         type="button"
         onContextMenu={(e) => onGroupContextMenu(e, group)}
-        className="mb-2 flex items-center gap-2 px-1 py-0.5"
+        className="mb-2 flex items-baseline gap-2 px-1 py-0.5"
       >
-        <span
-          className="text-xs font-medium uppercase tracking-wide"
-          style={{ color: "var(--text-muted)" }}
-        >
+        <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
           {title}
         </span>
-        <span
-          className="rounded px-1.5 py-0.5 text-[10px]"
-          style={{
-            background: "var(--bg-card)",
-            color: "var(--text-muted)",
-          }}
-        >
+        <span className="text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
           {hosts.length}
         </span>
       </button>
@@ -187,12 +166,35 @@ export function GroupSection({
         >
           Empty group. Add a server.
         </div>
+      ) : list ? (
+        <ul
+          className="overflow-hidden rounded-xl border"
+          style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+        >
+          {hosts.map((host, index) => (
+            <li
+              key={host.id}
+              style={index > 0 ? { borderTop: "1px solid var(--border-subtle)" } : undefined}
+            >
+              <HostListRow
+                host={host}
+                connecting={connectingHostId === host.id}
+                selected={selectedHostIds?.has(host.id)}
+                selectionActive={selectionActive}
+                onConnect={onConnect}
+                onEdit={onEditHost}
+                onSelectToggle={onSelectToggle}
+                onContextMenu={onHostContextMenu}
+              />
+            </li>
+          ))}
+        </ul>
       ) : (
         <div
           className={
             compact
               ? "flex flex-col gap-2"
-              : "grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-3"
+              : "grid auto-rows-fr grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-2.5"
           }
         >
           {hosts.map((host) => (
@@ -217,31 +219,161 @@ export function GroupSection({
 
 export function EmptyHostsState({ onAddServer }: { onAddServer: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center py-20">
-      <div
-        className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl"
-        style={{ background: "var(--bg-card)", color: "var(--text-muted)" }}
-      >
-        <Server size={24} />
-      </div>
-      <p className="text-sm font-medium" style={{ color: "var(--text)" }}>
+    <div className="flex flex-col items-start gap-1 py-12">
+      <p className="text-base font-medium" style={{ color: "var(--text)" }}>
         No hosts yet
       </p>
-      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-        Add a server with New Host.
+      <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+        Add an SSH host to connect, or type ssh user@hostname in the search box.
       </p>
       <button
+        type="button"
         onClick={onAddServer}
-        className="transition-ui mt-4 rounded-lg px-4 py-2 text-sm font-medium"
-        style={{ background: "var(--accent)", color: "var(--accent-fg, #fff)" }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "var(--accent-hover)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "var(--accent)";
-        }}
+        className="home-action-primary transition-ui mt-3 rounded-xl px-4 py-2 text-sm font-medium"
       >
-        New Host
+        New host
+      </button>
+    </div>
+  );
+}
+
+interface HostRowProps {
+  host: Host;
+  /** The row whose details are open on the right. */
+  focused: boolean;
+  /** Part of a multi-selection. */
+  selected: boolean;
+  selectionActive: boolean;
+  connecting: boolean;
+  onFocus: (host: Host) => void;
+  onConnect: (host: Host) => void;
+  onSelectToggle: (host: Host) => void;
+  onContextMenu: (e: React.MouseEvent, host: Host) => void;
+}
+
+export function HostRow({
+  host,
+  focused,
+  selected,
+  selectionActive,
+  connecting,
+  onFocus,
+  onConnect,
+  onSelectToggle,
+  onContextMenu,
+}: HostRowProps) {
+  const hideAddress = useHideHostAddresses();
+  return (
+    <button
+      type="button"
+      data-host-row={host.id}
+      data-host-tile
+      aria-current={focused ? "true" : undefined}
+      onClick={(e) => {
+        if (e.ctrlKey || e.metaKey || selectionActive) {
+          onSelectToggle(host);
+          return;
+        }
+        onFocus(host);
+      }}
+      onDoubleClick={() => onConnect(host)}
+      onContextMenu={(e) => onContextMenu(e, host)}
+      className={`transition-ui flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left ${
+        focused ? "" : "hover-subtle"
+      }`}
+      style={{
+        background: focused ? "var(--nav-active)" : "transparent",
+        boxShadow: selected ? "inset 0 0 0 1px var(--accent)" : undefined,
+      }}
+    >
+      <HostOsIcon osId={host.os_id} seed={host.id || host.name} size={32} rounded={8} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium" style={{ color: "var(--text)" }}>
+          {host.name}
+        </span>
+        <span className="block truncate font-mono text-xs" style={{ color: "var(--text-muted)" }}>
+          {formatHostEndpoint(host.username, host.hostname, hideAddress)}
+        </span>
+      </span>
+      {connecting && (
+        <span className="shrink-0 text-xs" style={{ color: "var(--accent)" }}>
+          Connecting…
+        </span>
+      )}
+    </button>
+  );
+}
+
+interface HostListRowProps {
+  host: Host;
+  connecting?: boolean;
+  selected?: boolean;
+  selectionActive?: boolean;
+  onConnect: (host: Host) => void;
+  onEdit: (host: Host) => void;
+  onSelectToggle?: (host: Host) => void;
+  onContextMenu?: (e: React.MouseEvent, host: Host) => void;
+}
+
+function HostListRow({
+  host,
+  connecting,
+  selected = false,
+  selectionActive = false,
+  onConnect,
+  onEdit,
+  onSelectToggle,
+  onContextMenu,
+}: HostListRowProps) {
+  const hideAddress = useHideHostAddresses();
+  return (
+    <div
+      className="group relative flex items-center"
+      data-host-tile
+      onContextMenu={(e) => onContextMenu?.(e, host)}
+      style={{ boxShadow: selected ? "inset 0 0 0 1px var(--accent)" : undefined }}
+    >
+      <button
+        type="button"
+        disabled={connecting}
+        onClick={(e) => {
+          if (e.ctrlKey || e.metaKey || selectionActive) {
+            e.preventDefault();
+            onSelectToggle?.(host);
+            return;
+          }
+          onConnect(host);
+        }}
+        className="hover-subtle transition-ui flex min-w-0 flex-1 items-center gap-3 px-3.5 py-2.5 text-left disabled:opacity-50"
+      >
+        <HostOsIcon osId={host.os_id} seed={host.id || host.name} size={32} rounded={8} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium" style={{ color: "var(--text)" }}>
+            {host.name}
+          </span>
+          <span className="block truncate font-mono text-xs" style={{ color: "var(--text-muted)" }}>
+            {formatHostEndpoint(host.username, host.hostname, hideAddress)}
+          </span>
+        </span>
+        <span
+          className="shrink-0 pr-8 text-xs tabular-nums"
+          style={{ color: connecting ? "var(--accent)" : "var(--text-muted)" }}
+        >
+          {connecting
+            ? "Connecting…"
+            : host.last_connected_at
+              ? formatRelativeTime(host.last_connected_at)
+              : "Never connected"}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={() => onEdit(host)}
+        className="transition-ui absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
+        style={{ color: "var(--text-secondary)" }}
+        aria-label={`Edit ${host.name}`}
+      >
+        <Pencil size={14} />
       </button>
     </div>
   );

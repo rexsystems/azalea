@@ -12,31 +12,92 @@ interface Props {
   onDelete: (workspace: SavedWorkspace) => void;
 }
 
-export function WorkspacesSection({ workspaces, canSave, busy, error, onSave, onOpen, onRename, onDelete }: Props) {
+export function WorkspacesSection({
+  workspaces,
+  canSave,
+  busy,
+  error,
+  onSave,
+  onOpen,
+  onRename,
+  onDelete,
+}: Props) {
   return (
-    <section className="mb-5 rounded-2xl border p-5 sm:p-6" style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }} aria-label="Saved workspaces" aria-busy={busy}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-semibold" style={{ color: "var(--text)" }}>Workspaces</h3>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Save open tabs and split views on this device.</p>
-        </div>
-        <Button variant="secondary" disabled={!canSave || busy} onClick={onSave}>Save current tabs</Button>
+    <section className="mb-6" aria-label="Saved workspaces" aria-busy={busy}>
+      <div className="mb-2 flex items-center justify-between gap-3 px-1">
+        <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+          Workspaces
+        </h3>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!canSave || busy}
+          onClick={onSave}
+          title="Save open tabs and split views on this device"
+        >
+          Save current tabs
+        </Button>
       </div>
-      {error && <p role="alert" className="mt-3 text-sm" style={{ color: "var(--text)" }}>{error}</p>}
-      {busy && <p role="status" className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>Opening workspace…</p>}
+      {error && (
+        <p role="alert" className="mb-2 px-1 text-sm" style={{ color: "var(--danger)" }}>
+          {error}
+        </p>
+      )}
+      {busy && (
+        <p role="status" className="mb-2 px-1 text-sm" style={{ color: "var(--text-muted)" }}>
+          Opening workspace…
+        </p>
+      )}
       {workspaces.length === 0 ? (
-        <p className="mt-4 text-sm" style={{ color: "var(--text-muted)" }}>No saved workspaces. Open some sessions, then save your tabs here.</p>
+        <p className="px-1 text-sm" style={{ color: "var(--text-muted)" }}>
+          No saved workspaces. Open some sessions, then save your tabs here.
+        </p>
       ) : (
-        <ul className="mt-4 space-y-2">
-          {workspaces.map((workspace) => (
-            <li key={workspace.id} className="flex flex-wrap items-center gap-2 rounded-xl border p-3" style={{ borderColor: "var(--border-subtle)" }}>
+        <ul
+          className="overflow-hidden rounded-xl border"
+          style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+        >
+          {workspaces.map((workspace, index) => (
+            <li
+              key={workspace.id}
+              className="flex flex-wrap items-center gap-2 px-3.5 py-2.5"
+              style={index > 0 ? { borderTop: "1px solid var(--border-subtle)" } : undefined}
+            >
               <div className="min-w-0 flex-1 basis-40">
-                <p className="break-words text-sm font-medium" style={{ color: "var(--text)" }}>{workspace.name}</p>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>{workspace.tabs.length} {workspace.tabs.length === 1 ? "tab" : "tabs"}</p>
+                <p className="break-words text-sm font-medium" style={{ color: "var(--text)" }}>
+                  {workspace.name}
+                </p>
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {workspace.tabs.length} {workspace.tabs.length === 1 ? "tab" : "tabs"}
+                </p>
               </div>
-              <Button variant="secondary" disabled={busy} onClick={() => onOpen(workspace)} aria-label={`Open ${workspace.name}`}>Open</Button>
-              <Button variant="ghost" disabled={busy} onClick={() => onRename(workspace)} aria-label={`Rename ${workspace.name}`}>Rename</Button>
-              <Button variant="ghost" disabled={busy} onClick={() => onDelete(workspace)} aria-label={`Delete ${workspace.name}`}>Delete</Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={busy}
+                onClick={() => onOpen(workspace)}
+                aria-label={`Open ${workspace.name}`}
+              >
+                Open
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => onRename(workspace)}
+                aria-label={`Rename ${workspace.name}`}
+              >
+                Rename
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => onDelete(workspace)}
+                aria-label={`Delete ${workspace.name}`}
+              >
+                Delete
+              </Button>
             </li>
           ))}
         </ul>

@@ -21,6 +21,15 @@
   --text-base: 1.0625rem;
   --text-lg: 1.1875rem;
   --text-xl: 1.3125rem;
+  /* One radius scale for the whole app. rem is 18px here, so 2xl is ~12px. */
+  --radius-md: 0.3125rem;
+  --radius-lg: 0.4375rem;
+  --radius-xl: 0.5625rem;
+  --radius-2xl: 0.6875rem;
+  /* Shadows only lift overlays (menus, popovers, dialogs). Keep them quiet. */
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 6px 24px rgba(0, 0, 0, 0.24);
+  --shadow-2xl: 0 8px 28px rgba(0, 0, 0, 0.28);
 }
 
 /* ── Theme: Noir (default) ── */
@@ -34,7 +43,7 @@
   --border-subtle: #1a1a1a;
   --text: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.72);
-  --text-muted: rgba(255, 255, 255, 0.42);
+  --text-muted: rgba(255, 255, 255, 0.49);
   --accent: #ffffff;
   --accent-hover: #e5e5e5;
   --accent-muted: rgba(255, 255, 255, 0.08);
@@ -56,7 +65,7 @@
   --border-subtle: #2a2a2e;
   --text: #f5f5f7;
   --text-secondary: #c7c7cc;
-  --text-muted: #8e8e93;
+  --text-muted: #97979c;
   --accent: #0a84ff;
   --accent-hover: #409cff;
   --accent-muted: rgba(10, 132, 255, 0.14);
@@ -78,7 +87,7 @@
   --border-subtle: #2a2e38;
   --text: #f0f2f5;
   --text-secondary: #b4bcc8;
-  --text-muted: #8b939f;
+  --text-muted: #959da8;
   --accent: #5b9bf5;
   --accent-hover: #7ab0ff;
   --accent-muted: rgba(91, 155, 245, 0.12);
@@ -100,7 +109,7 @@
   --border-subtle: #2a2038;
   --text: #f5f3ff;
   --text-secondary: #c4b5fd;
-  --text-muted: #8b7fad;
+  --text-muted: #9287b2;
   --accent: #9333ea;
   --accent-hover: #a855f7;
   --accent-muted: rgba(147, 51, 234, 0.12);
@@ -122,7 +131,7 @@
   --border-subtle: #2e2e33;
   --text: #fafafa;
   --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --text-muted: #9c9ca2;
   --accent: #a1a1aa;
   --accent-hover: #d4d4d8;
   --accent-muted: rgba(161, 161, 170, 0.1);
@@ -144,7 +153,7 @@
   --border-subtle: #1f2937;
   --text: #e2e8f0;
   --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-muted: #8e9aaa;
   --accent: #0891b2;
   --accent-hover: #06b6d4;
   --accent-muted: rgba(8, 145, 178, 0.12);
@@ -166,7 +175,7 @@
   --border-subtle: #2a1e18;
   --text: #faf3eb;
   --text-secondary: #d4b8a0;
-  --text-muted: #9a7b66;
+  --text-muted: #a68b78;
   --accent: #e8913a;
   --accent-hover: #f0a85a;
   --accent-muted: rgba(232, 145, 58, 0.14);
@@ -188,7 +197,7 @@
   --border-subtle: #1e2a24;
   --text: #ecfdf3;
   --text-secondary: #a7f3c0;
-  --text-muted: #6b9b7c;
+  --text-muted: #72a083;
   --accent: #22c55e;
   --accent-hover: #4ade80;
   --accent-muted: rgba(34, 197, 94, 0.14);
@@ -210,7 +219,7 @@
   --border-subtle: #2e1a22;
   --text: #fff1f5;
   --text-secondary: #fda4af;
-  --text-muted: #9f6b76;
+  --text-muted: #ae838c;
   --accent: #fb7185;
   --accent-hover: #fda4af;
   --accent-muted: rgba(251, 113, 133, 0.14);
@@ -232,7 +241,7 @@
   --border-subtle: #d6d6d6;
   --text: #000000;
   --text-secondary: #2a2a2a;
-  --text-muted: #6a6a6a;
+  --text-muted: #696969;
   --accent: #000000;
   --accent-hover: #333333;
   --accent-muted: rgba(0, 0, 0, 0.06);
@@ -254,7 +263,7 @@
   --border-subtle: #c5d6ee;
   --text: #0b1f3a;
   --text-secondary: #35527a;
-  --text-muted: #6b86a8;
+  --text-muted: #516680;
   --accent: #1d4ed8;
   --accent-hover: #1e40af;
   --accent-muted: rgba(29, 78, 216, 0.12);
@@ -276,7 +285,7 @@
   --border-subtle: #e8d8cc;
   --text: #2a1f18;
   --text-secondary: #6a5346;
-  --text-muted: #9a8172;
+  --text-muted: #746156;
   --accent: #0f766e;
   --accent-hover: #0d9488;
   --accent-muted: rgba(15, 118, 110, 0.12);
@@ -581,25 +590,20 @@ textarea,
 .key-card-actions button {
   display: inline-flex;
   min-width: 0;
-  width: 100%;
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  padding: 0.55rem 0.4rem;
+  padding: 0.4rem 0.6rem;
   border: none;
-  border-right: 1px solid var(--border-subtle);
+  border-radius: 0.4375rem;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   line-height: 1.2;
   transition:
     background-color 120ms ease,
     color 120ms ease;
-}
-
-.key-card-actions > button:last-child {
-  border-right: none;
 }
 
 .key-card-actions button:hover:not(:disabled) {
@@ -618,28 +622,31 @@ textarea,
   white-space: nowrap;
 }
 
+.key-card-actions button.key-action-danger {
+  color: var(--text-muted);
+}
+
+.key-card-actions button.key-action-danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--danger, #f87171);
+}
+
 .key-export-menu {
   position: relative;
   min-width: 0;
-  border-right: 1px solid var(--border-subtle);
-}
-
-.key-export-menu > button {
-  border-right: none;
 }
 
 .key-export-dropdown {
   position: absolute;
-  left: 50%;
+  right: 0;
   z-index: 20;
   width: max-content;
   min-width: 11.5rem;
-  transform: translateX(-50%);
   overflow: hidden;
   border: 1px solid var(--border-subtle);
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
   background: var(--bg-panel);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-xl);
   padding: 0.25rem;
 }
 
@@ -657,15 +664,8 @@ textarea,
   width: 100%;
   justify-content: flex-start;
   gap: 0.5rem;
-  border-right: none;
-  border-radius: 0.5rem;
-  padding: 0.55rem 0.7rem;
+  padding: 0.5rem 0.65rem;
   color: var(--text-secondary);
-}
-
-.key-export-dropdown button:hover:not(:disabled) {
-  background: var(--bg-card-hover);
-  color: var(--text);
 }
 
 .key-export-dropdown button.danger {
@@ -730,24 +730,7 @@ textarea,
   transition: opacity 360ms ease;
 }
 
-.connect-wash {
-  position: absolute;
-  /* Larger than the screen so the fade completes before the clip edge */
-  inset: -35%;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 420ms ease;
-}
-
-.connect-screen.entered .connect-wash {
-  opacity: 1;
-}
-
-.connect-screen.exiting .connect-wash {
-  opacity: 0;
-}
-
-.connect-stage {
+.connect-screen.entered .connect-screen.exiting .connect-stage {
   opacity: 0;
   transition: opacity 320ms ease;
 }

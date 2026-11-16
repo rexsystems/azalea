@@ -350,7 +350,7 @@ export function AiSettingsSection() {
             {modelsError && (
               <p
                 className="break-words text-xs leading-snug"
-                style={{ color: "#f87171" }}
+                style={{ color: "var(--danger)" }}
                 title={modelsError}
               >
                 {/invalid_api_key|401/i.test(modelsError)
@@ -489,7 +489,7 @@ export function AiSettingsSection() {
             </p>
           )}
           {error && (
-            <p className="text-xs" style={{ color: "#f87171" }}>
+            <p className="text-xs" style={{ color: "var(--danger)" }}>
               {error}
             </p>
           )}

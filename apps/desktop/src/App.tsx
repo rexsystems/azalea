@@ -31,6 +31,7 @@ import { useConnectScreen } from "./hooks/useConnectScreen";
 import { useSyncStatus } from "./hooks/useSyncStatus";
 import { useTerminalSettings } from "./hooks/useTerminalSettings";
 import { useTheme } from "./hooks/useTheme";
+import { useLayout } from "./hooks/useLayout";
 import {
   getTelemetryAsked,
   maybeTelemetryPing,
@@ -62,6 +63,7 @@ import { HostsPage } from "./components/HostsPage";
 import { BatchCommandDialog } from "./components/BatchCommandDialog";
 import { KeysPage } from "./components/KeysPage";
 import { SnippetsPopover } from "./components/SnippetsPopover";
+import { SnippetsPage } from "./components/SnippetsPage";
 import { TabBar } from "./components/TabBar";
 import { TerminalView } from "./components/Terminal";
 import { ConfirmDialog } from "./components/ui/ConfirmDialog";
@@ -151,6 +153,7 @@ function App() {
     refresh: refreshGroups,
   } = useGroups();
   const { theme, changeTheme } = useTheme();
+  const { layout, changeLayout } = useLayout();
   const { connectScreen, changeConnectScreen } = useConnectScreen();
   const { status: syncStatus, setStatus: setSyncStatus, refresh: refreshSyncStatus } =
     useSyncStatus();
@@ -261,6 +264,7 @@ function App() {
   const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
   const autoSyncCheckedRef = useRef(false);
   const isMobile = useIsMobile();
+  const columnsLayout = layout === "columns" && !isMobile;
 
   const hasTabs = tabs.some((t) => !t.poppedOut);
 
@@ -1766,6 +1770,10 @@ function App() {
         handleNavigate("keys");
         return;
       }
+      if (id === "nav-snippets") {
+        handleNavigate("snippets");
+        return;
+      }
       if (id === "nav-settings") {
         handleNavigate("settings");
         return;
@@ -2262,42 +2270,7 @@ function App() {
     setConnectOverlayTabId(null);
   }, []);
 
-  const renderNavPage = () => {
-    switch (navPage) {
-      case "home":
-        return (
-          <HomePage
-            hosts={hosts}
-            keys={keys}
-            openSessions={tabs.filter((t) => !t.poppedOut).length}
-            connectingHostId={connectingHostId}
-            onConnect={(host) => void connectToHost(host)}
-            onAddServer={() => openAddDrawer()}
-            onOpenLocalTerminal={() => void openLocalTerminal()}
-            onOpenHosts={() => handleNavigate("hosts")}
-            onOpenKeys={() => handleNavigate("keys")}
-            onOpenSettings={() => handleNavigate("settings")}
-            isMobile={isMobile}
-            workspacesSection={<WorkspacesSection
-              workspaces={workspaces}
-              canSave={Boolean(activeAccount) && workspaceState.accountId === activeAccount?.id && tabs.some((tab) => !tab.poppedOut)}
-              busy={workspaceBusy}
-              error={workspaceError}
-              onSave={saveWorkspace}
-              onOpen={(workspace) => void openWorkspace(workspace)}
-              onRename={(workspace) => setPendingPrompt({
-                title: "Rename workspace", defaultValue: workspace.name, confirmLabel: "Save name",
-                onConfirm: (name) => persistWorkspaces(workspaces.map((item) => item.id === workspace.id ? { ...item, name } : item)),
-              })}
-              onDelete={(workspace) => setPendingConfirm({
-                title: "Delete workspace?", message: `Delete "${workspace.name}"? Open sessions will stay open.`, confirmLabel: "Delete", danger: true,
-                onConfirm: () => persistWorkspaces(workspaces.filter((item) => item.id !== workspace.id)),
-              })}
-            />}
-          />
-        );
-      case "hosts":
-        return (
+  const renderHostsPage = () => (
           <HostsPage
             hosts={hosts}
             groups={groups}
@@ -2319,8 +2292,56 @@ function App() {
             onQuickConnect={handleQuickConnect}
             onOpenLocalTerminal={() => void openLocalTerminal()}
             isMobile={isMobile}
+            columns={columnsLayout}
+            list={layout === "command" && !isMobile}
+            workspacesSection={columnsLayout ? workspacesNode : undefined}
+          />
+  );
+
+  const workspacesNode = (
+<WorkspacesSection
+              workspaces={workspaces}
+              canSave={Boolean(activeAccount) && workspaceState.accountId === activeAccount?.id && tabs.some((tab) => !tab.poppedOut)}
+              busy={workspaceBusy}
+              error={workspaceError}
+              onSave={saveWorkspace}
+              onOpen={(workspace) => void openWorkspace(workspace)}
+              onRename={(workspace) => setPendingPrompt({
+                title: "Rename workspace", defaultValue: workspace.name, confirmLabel: "Save name",
+                onConfirm: (name) => persistWorkspaces(workspaces.map((item) => item.id === workspace.id ? { ...item, name } : item)),
+              })}
+              onDelete={(workspace) => setPendingConfirm({
+                title: "Delete workspace?", message: `Delete "${workspace.name}"? Open sessions will stay open.`, confirmLabel: "Delete", danger: true,
+                onConfirm: () => persistWorkspaces(workspaces.filter((item) => item.id !== workspace.id)),
+              })}
+            />
+  );
+
+  const renderNavPage = () => {
+    if (columnsLayout && navPage === "home") return renderHostsPage();
+    switch (navPage) {
+      case "home":
+        return (
+          <HomePage
+            hosts={hosts}
+            openSessions={tabs.filter((t) => !t.poppedOut).length}
+            connectingHostId={connectingHostId}
+            onConnect={(host) => void connectToHost(host)}
+            onAddServer={() => openAddDrawer()}
+            onQuickConnect={(query) => {
+              const parsed = parseQuickConnect(query);
+              if (parsed.hostname) openAddDrawer(null, parsed);
+            }}
+            onOpenLocalTerminal={() => void openLocalTerminal()}
+            onOpenHosts={() => handleNavigate("hosts")}
+            isMobile={isMobile}
+            workspacesSection={workspacesNode}
           />
         );
+      case "hosts":
+        return renderHostsPage();
+      case "snippets":
+        return <SnippetsPage />;
       case "keys":
         return (
           <KeysPage
@@ -2360,6 +2381,8 @@ function App() {
         <SettingsPage
           theme={theme}
           onThemeChange={changeTheme}
+          layout={layout}
+          onLayoutChange={changeLayout}
           connectScreen={connectScreen}
           onConnectScreenChange={changeConnectScreen}
           terminalSettings={terminalSettings}
@@ -2680,6 +2703,7 @@ function App() {
         showTabs={hasTabs && (viewingTerminal || !isMobile)}
         isMobile={isMobile}
         immersive={isMobile && viewingTerminal}
+        layout={layout}
         tabBar={
           <TabBar
             tabs={displayTabs}

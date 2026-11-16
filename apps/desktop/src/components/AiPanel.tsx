@@ -1218,7 +1218,7 @@ export function AiPanel({
               background:
                 panelView === "history" ? "var(--bg-card)" : "transparent",
             }}
-            title="Old chats"
+            title="Old chats" aria-label="Old chats"
             onClick={() => {
               refreshThreads();
               setPanelView((v) => (v === "history" ? "chat" : "history"));
@@ -1236,7 +1236,7 @@ export function AiPanel({
               background:
                 panelView === "memory" ? "var(--bg-card)" : "transparent",
             }}
-            title="Memory"
+            title="Memory" aria-label="Memory"
             onClick={() => {
               refreshMemory();
               setPanelView((v) => (v === "memory" ? "chat" : "memory"));
@@ -1249,7 +1249,7 @@ export function AiPanel({
             type="button"
             className="hover-subtle rounded-lg p-1.5"
             style={{ color: "var(--text-muted)" }}
-            title="New chat"
+            title="New chat" aria-label="New chat"
             onClick={startNewChat}
           >
             <Plus size={15} />
@@ -1258,7 +1258,7 @@ export function AiPanel({
             type="button"
             className="hover-subtle rounded-lg p-1.5"
             style={{ color: "var(--text-muted)" }}
-            title="Close"
+            title="Close" aria-label="Close"
             onClick={onClose}
           >
             <X size={15} />
@@ -1344,7 +1344,7 @@ export function AiPanel({
                       type="button"
                       className="hover-subtle shrink-0 rounded-lg p-1.5 opacity-60 hover:opacity-100"
                       style={{ color: "var(--text-muted)" }}
-                      title="Export chat"
+                      title="Export chat" aria-label="Export chat"
                       onClick={() => void exportThread(t)}
                     >
                       <Download size={14} />
@@ -1353,7 +1353,7 @@ export function AiPanel({
                       type="button"
                       className="hover-subtle shrink-0 rounded-lg p-1.5 opacity-60 hover:opacity-100"
                       style={{ color: "var(--text-muted)" }}
-                      title="Delete chat"
+                      title="Delete chat" aria-label="Delete chat"
                       onClick={() => removeThread(t.id)}
                     >
                       <Trash2 size={14} />
@@ -1455,7 +1455,7 @@ export function AiPanel({
                     type="button"
                     className="hover-subtle shrink-0 rounded-lg p-1.5"
                     style={{ color: "var(--text-muted)" }}
-                    title="Forget"
+                    title="Forget" aria-label="Forget"
                     onClick={() => {
                       deleteAiMemory(note.id);
                       refreshMemory();
@@ -1640,7 +1640,7 @@ export function AiPanel({
           {error && (
             <p
               className="select-text break-words text-[12px] leading-snug"
-              style={{ color: "#f87171" }}
+              style={{ color: "var(--danger)" }}
               title={error}
             >
               {shortAiError(error)}
@@ -1719,7 +1719,7 @@ export function AiPanel({
                   type="button"
                   className="hover-subtle rounded-lg p-1.5"
                   style={{ color: "var(--text-muted)" }}
-                  title="Chat settings"
+                  title="Chat settings" aria-label="Chat settings"
                   onClick={() => setSettingsOpen((v) => !v)}
                 >
                   <Settings size={15} />
@@ -1848,7 +1848,7 @@ export function AiPanel({
                       {modelsError && (
                         <p
                           className="break-words text-[11px] leading-snug"
-                          style={{ color: "#f87171" }}
+                          style={{ color: "var(--danger)" }}
                           title={modelsError}
                         >
                           {shortAiError(modelsError)}
@@ -1879,7 +1879,7 @@ export function AiPanel({
                       background: "var(--bg-card)",
                       color: "var(--text)",
                     }}
-                    title="Stop"
+                    title="Stop" aria-label="Stop"
                     onClick={stop}
                   >
                     <Square size={12} />
@@ -1897,7 +1897,7 @@ export function AiPanel({
                         : "var(--text-muted)",
                     }}
                     disabled={!input.trim()}
-                    title="Send"
+                    title="Send" aria-label="Send"
                     onClick={() => void send()}
                   >
                     <ArrowUp size={14} />

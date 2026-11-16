@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { hostConnectAccent, HostOsIcon } from "./HostOsIcon";
+import { HostOsIcon } from "./HostOsIcon";
 import {
   Check,
   KeyRound,
@@ -135,7 +135,6 @@ export function ConnectionScreen({
   onExitComplete,
 }: ConnectionScreenProps) {
   const seed = markSeed || `${username}@${hostname}:${port}` || hostName;
-  const accent = hostConnectAccent(osId, seed);
   const portSuffix = port === 22 ? "" : `:${port}`;
   const steps = useMemo(() => buildSteps(logs, status), [logs, status]);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -220,9 +219,9 @@ export function ConnectionScreen({
 
   const headlineTone =
     status === "error"
-      ? "#f87171"
+      ? "var(--danger)"
       : status === "connected" && allVisualDone
-        ? "#86efac"
+        ? "var(--text)"
         : "var(--text-secondary)";
 
   return (
@@ -231,21 +230,6 @@ export function ConnectionScreen({
         entered ? "entered" : ""
       } ${exiting ? "exiting" : ""}`}
     >
-      <div
-        className="connect-wash"
-        style={{
-          background: `
-            radial-gradient(
-              ellipse 52% 42% at 50% 32%,
-              color-mix(in srgb, ${accent} 34%, transparent) 0%,
-              color-mix(in srgb, ${accent} 14%, transparent) 38%,
-              transparent 72%
-            )
-          `,
-        }}
-        aria-hidden
-      />
-
       <div className="connect-stage relative z-10 flex w-full max-w-xl flex-col items-center text-center">
         <div className="connect-avatar mb-6 sm:mb-7">
           <HostOsIcon osId={osId} seed={seed} size={88} rounded={22} />
@@ -326,7 +310,7 @@ export function ConnectionScreen({
         >
           <div className="mb-3 flex items-center gap-2.5">
             <span
-              className="text-[11px] font-medium uppercase tracking-[0.14em]"
+              className="text-xs font-medium"
               style={{ color: "var(--text-muted)" }}
             >
               Session
@@ -344,7 +328,7 @@ export function ConnectionScreen({
                 {error}
               </span>
             ) : status === "connected" && allVisualDone ? (
-              <span style={{ color: "#86efac" }}>Shell ready</span>
+              <span style={{ color: "var(--text)" }}>Shell ready</span>
             ) : latestLog ? (
               visibleLogs.map((line, i) => (
                 <div

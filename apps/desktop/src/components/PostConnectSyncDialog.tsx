@@ -148,7 +148,7 @@ export function PostConnectSyncDialog({
               }}
             />
             {error && (
-              <p className="mb-3 break-words text-xs" style={{ color: "#f87171" }}>
+              <p className="mb-3 break-words text-xs" style={{ color: "var(--danger)" }}>
                 {error.replace(/^Error:\s*/, "")}
               </p>
             )}
@@ -183,7 +183,7 @@ export function PostConnectSyncDialog({
             )}
 
             {error && (
-              <p className="mb-3 break-words text-xs" style={{ color: "#f87171" }}>
+              <p className="mb-3 break-words text-xs" style={{ color: "var(--danger)" }}>
                 {error.replace(/^Error:\s*/, "")}
               </p>
             )}

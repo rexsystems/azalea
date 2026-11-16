@@ -4,6 +4,7 @@ import { Download } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import type { ThemeId } from "../lib/theme";
 import { themes } from "../lib/theme";
+import { layouts, type LayoutId } from "../lib/layout";
 import { iconPacks, type IconPackId } from "../lib/iconPack";
 import { useIconPack } from "./IconPackProvider";
 import { hugeiconsPack } from "./icons/hugeiconsPack";
@@ -54,9 +55,65 @@ type SettingsTab =
   | "privacy"
   | "about";
 
+function LayoutPreview({ id }: { id: LayoutId }) {
+  const line = { background: "var(--border)" };
+  const panel = { background: "var(--bg-panel)", borderColor: "var(--border-subtle)" };
+  return (
+    <div
+      className="relative h-16 w-full overflow-hidden border-b"
+      style={{ background: "var(--bg-base)", borderColor: "var(--border-subtle)" }}
+      aria-hidden
+    >
+      {id === "command" && (
+        <>
+          <div
+            className="absolute inset-x-0 top-0 flex h-3 items-center gap-1 border-b px-1.5"
+            style={panel}
+          >
+            <span className="h-1 w-3 rounded-sm" style={line} />
+            <span className="h-1 w-3 rounded-sm" style={line} />
+            <span className="ml-1 h-1 w-5 rounded-sm" style={{ background: "var(--accent)" }} />
+          </div>
+          <div className="absolute inset-x-8 top-6 h-2 rounded-sm border" style={panel} />
+          <div className="absolute inset-x-8 top-10 h-1 rounded-sm" style={line} />
+          <div className="absolute inset-x-8 top-12 h-1 rounded-sm" style={line} />
+        </>
+      )}
+      {id === "columns" && (
+        <>
+          <div className="absolute inset-y-0 left-0 w-2.5 border-r" style={panel} />
+          <div className="absolute inset-y-0 left-2.5 w-9 border-r" style={panel}>
+            <span className="absolute inset-x-1 top-2 h-1 rounded-sm" style={line} />
+            <span
+              className="absolute inset-x-1 top-4 h-1 rounded-sm"
+              style={{ background: "var(--accent)" }}
+            />
+            <span className="absolute inset-x-1 top-6 h-1 rounded-sm" style={line} />
+          </div>
+          <span className="absolute left-16 top-2 h-1.5 w-10 rounded-sm" style={line} />
+          <span className="absolute left-16 top-5 h-1 w-14 rounded-sm" style={line} />
+        </>
+      )}
+      {id === "classic" && (
+        <>
+          <div className="absolute inset-y-0 left-0 w-9 border-r" style={panel}>
+            <span className="absolute inset-x-1.5 top-2 h-1 rounded-sm" style={line} />
+            <span className="absolute inset-x-1.5 top-4 h-1 rounded-sm" style={line} />
+          </div>
+          <div className="absolute left-11 top-2 h-4 w-8 rounded-sm border" style={panel} />
+          <div className="absolute left-20 top-2 h-4 w-8 rounded-sm border" style={panel} />
+          <div className="absolute left-11 top-8 h-5 w-17 rounded-sm border" style={panel} />
+        </>
+      )}
+    </div>
+  );
+}
+
 interface SettingsPageProps {
   theme: ThemeId;
   onThemeChange: (id: ThemeId) => void;
+  layout: LayoutId;
+  onLayoutChange: (id: LayoutId) => void;
   connectScreen: ConnectScreenMode;
   onConnectScreenChange: (mode: ConnectScreenMode) => void;
   terminalSettings: TerminalSettings;
@@ -104,13 +161,10 @@ function PanelHeader({
   action?: ReactNode;
 }) {
   return (
-    <div
-      className="mb-6 flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-start sm:justify-between"
-      style={{ borderColor: "var(--border-subtle)" }}
-    >
+    <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <h3
-          className="text-base font-semibold"
+          className="text-xl font-semibold tracking-tight"
           style={{ color: "var(--text)" }}
         >
           {title}
@@ -162,6 +216,8 @@ function SettingRow({
 export function SettingsPage({
   theme,
   onThemeChange,
+  layout,
+  onLayoutChange,
   connectScreen,
   onConnectScreenChange,
   terminalSettings,
@@ -291,7 +347,8 @@ export function SettingsPage({
         ref={contentScrollRef}
         className="settings-shell min-h-0 flex-1 overflow-y-auto overscroll-contain"
       >
-        <div className="mb-5">
+        <div className="mx-auto w-full max-w-5xl">
+        <div className="mb-6">
           <h2
             className="text-2xl font-semibold tracking-tight sm:text-3xl"
             style={{
@@ -301,13 +358,11 @@ export function SettingsPage({
           >
             Settings
           </h2>
-          <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
-            Appearance, terminal, sync, AI, and backups
-          </p>
         </div>
 
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:gap-10">
         <div
-          className="settings-tabs mb-5 flex gap-1 overflow-x-auto pb-1"
+          className="settings-tabs flex gap-1 overflow-x-auto pb-1 md:sticky md:top-0 md:w-44 md:shrink-0 md:flex-col md:overflow-visible md:pb-0"
           role="tablist"
           aria-label="Settings sections"
         >
@@ -320,13 +375,12 @@ export function SettingsPage({
                 role="tab"
                 aria-selected={active}
                 onClick={() => selectTab(item.id)}
-                className="transition-ui shrink-0 rounded-lg px-3 py-2 text-sm font-medium"
+                className={`transition-ui shrink-0 rounded-lg px-3 py-2 text-left text-sm font-medium ${
+                  active ? "" : "hover-subtle"
+                }`}
                 style={{
-                  background: active ? "var(--bg-panel)" : "transparent",
+                  background: active ? "var(--nav-active)" : "transparent",
                   color: active ? "var(--text)" : "var(--text-muted)",
-                  border: active
-                    ? "1px solid var(--border-subtle)"
-                    : "1px solid transparent",
                 }}
               >
                 {item.label}
@@ -335,14 +389,8 @@ export function SettingsPage({
           })}
         </div>
 
-        <div
-          className="rounded-2xl border"
-          style={{
-            borderColor: "var(--border-subtle)",
-            background: "var(--bg-panel)",
-          }}
-        >
-          <div className="p-5 sm:p-6">
+        <div className="min-w-0 flex-1">
+          <div>
             {tab === "appearance" && (
               <>
                 <PanelHeader
@@ -377,6 +425,49 @@ export function SettingsPage({
                     </div>
                   </SettingRow>
                 )}
+                {!isMobileRuntime() && (
+                  <SettingRow
+                    label="Layout"
+                    description="How navigation and hosts are arranged on desktop. Phones always use the bottom bar."
+                  >
+                    <div
+                      className="grid gap-3 sm:grid-cols-3"
+                      role="radiogroup"
+                      aria-label="Layout"
+                    >
+                      {layouts.map((l) => {
+                        const selected = layout === l.id;
+                        return (
+                          <button
+                            key={l.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            onClick={() => onLayoutChange(l.id)}
+                            className="hover-subtle transition-ui overflow-hidden rounded-xl border text-left"
+                            style={{
+                              background: selected ? "var(--accent-muted)" : "var(--bg-card)",
+                              borderColor: selected ? "var(--accent)" : "var(--border-subtle)",
+                            }}
+                          >
+                            <LayoutPreview id={l.id} />
+                            <div className="px-3 py-2.5">
+                              <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+                                {l.name}
+                              </div>
+                              <div
+                                className="mt-0.5 text-xs"
+                                style={{ color: "var(--text-muted)" }}
+                              >
+                                {l.description}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </SettingRow>
+                )}
                 <SettingRow
                   label="Theme"
                   description="Color scheme for the whole UI."
@@ -402,7 +493,7 @@ export function SettingsPage({
                           <div
                             className="relative h-16 w-full sm:h-[4.25rem]"
                             style={{
-                              background: `linear-gradient(145deg, ${t.preview} 0%, color-mix(in srgb, ${t.preview} 55%, #000) 100%)`,
+                              background: t.preview,
                             }}
                           >
                             {t.experimental && (
@@ -854,6 +945,8 @@ export function SettingsPage({
               </>
             )}
           </div>
+        </div>
+        </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, WindowClose } from "./icons";
 import { Logo } from "./Logo";
@@ -6,15 +6,7 @@ import { Logo } from "./Logo";
 function MaximizeIcon({ size = 12 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" fill="none" aria-hidden>
-      <rect
-        x="1.5"
-        y="1.5"
-        width="9"
-        height="9"
-        rx="1"
-        stroke="currentColor"
-        strokeWidth="1.4"
-      />
+      <rect x="1.5" y="1.5" width="9" height="9" rx="1" stroke="currentColor" strokeWidth="1.4" />
     </svg>
   );
 }
@@ -41,7 +33,15 @@ function RestoreIcon({ size = 12 }: { size?: number }) {
   );
 }
 
-export function TitleBar({ title }: { title?: string }) {
+interface TitleBarProps {
+  title?: string;
+  /** Replaces the plain title. Used by the Command layout for navigation and session tabs. */
+  children?: ReactNode;
+  /** Sits left of the window buttons. */
+  trailing?: ReactNode;
+}
+
+export function TitleBar({ title, children, trailing }: TitleBarProps) {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -67,7 +67,7 @@ export function TitleBar({ title }: { title?: string }) {
   return (
     <div
       data-tauri-drag-region
-      className="flex h-10 shrink-0 items-center justify-between border-b"
+      className="flex h-10 shrink-0 items-center border-b"
       style={{
         background: "var(--bg-panel)",
         borderColor: "var(--border-subtle)",
@@ -75,12 +75,20 @@ export function TitleBar({ title }: { title?: string }) {
     >
       <div
         data-tauri-drag-region
-        className="flex items-center gap-2.5 px-3.5 text-sm font-medium"
+        className="flex h-full shrink-0 items-center gap-2.5 pl-3.5 pr-3 text-sm font-medium"
         style={{ color: "var(--text-muted)" }}
       >
         <Logo size={18} style={{ color: "var(--accent)", pointerEvents: "none" }} />
-        {title ?? "Azalea"}
+        {children ? null : (title ?? "Azalea")}
       </div>
+
+      {children ? (
+        <div className="flex h-full min-w-0 flex-1 items-center gap-1">{children}</div>
+      ) : (
+        <div data-tauri-drag-region className="h-full flex-1" />
+      )}
+
+      {trailing && <div className="flex h-full shrink-0 items-center gap-1 px-1.5">{trailing}</div>}
 
       <div className="flex h-full items-stretch">
         <button

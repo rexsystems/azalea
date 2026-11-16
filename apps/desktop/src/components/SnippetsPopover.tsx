@@ -53,7 +53,7 @@ export function SnippetsPopover({ onRun, onClose }: SnippetsPopoverProps) {
         className="flex items-center justify-between border-b px-3 py-2"
         style={{ borderColor: "var(--border-subtle)" }}
       >
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+        <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
           Snippets
         </span>
         <div className="flex items-center gap-0.5">
@@ -69,7 +69,7 @@ export function SnippetsPopover({ onRun, onClose }: SnippetsPopoverProps) {
             onClick={onClose}
             className="hover-subtle rounded p-1.5"
             style={{ color: "var(--text-muted)" }}
-            title="Close"
+            title="Close" aria-label="Close"
           >
             <X size={13} />
           </button>
@@ -143,7 +143,7 @@ export function SnippetsPopover({ onRun, onClose }: SnippetsPopoverProps) {
                 void api.deleteSnippet(snippet.id).then(refresh);
               }}
               className="shrink-0 rounded p-1 opacity-0 group-hover:opacity-100"
-              style={{ color: "#f87171" }}
+              style={{ color: "var(--danger)" }}
               title="Delete"
             >
               <Trash2 size={12} />

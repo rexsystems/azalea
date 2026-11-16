@@ -41,7 +41,7 @@ export function ConnectionErrorDialog({
         }}
       >
         <div className="border-b px-5 py-4" style={{ borderColor: "var(--border-subtle)" }}>
-          <h3 className="text-base font-semibold" style={{ color: "#f87171" }}>
+          <h3 className="text-base font-semibold" style={{ color: "var(--danger)" }}>
             {title}
           </h3>
           <p className="mt-1 text-sm font-medium" style={{ color: "var(--text)" }}>
@@ -60,7 +60,7 @@ export function ConnectionErrorDialog({
 
         {logs.length > 0 && (
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide" style={{ color: "var(--text-muted)" }}>
+            <p className="mb-2 text-xs font-medium" style={{ color: "var(--text-muted)" }}>
               Log
             </p>
             <pre

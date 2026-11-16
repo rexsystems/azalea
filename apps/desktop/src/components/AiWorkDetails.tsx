@@ -71,7 +71,7 @@ export function AiWorkDetails({
                 className="flex items-center justify-between gap-2 text-[12px]"
                 style={{
                   color:
-                    event.status === "error" ? "#f87171" : "var(--text-muted)",
+                    event.status === "error" ? "var(--danger)" : "var(--text-muted)",
                 }}
               >
                 <span className="min-w-0 break-words">{event.label}</span>

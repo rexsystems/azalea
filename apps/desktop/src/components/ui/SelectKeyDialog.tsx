@@ -42,7 +42,7 @@ export function SelectKeyDialog({
         </p>
 
         {keys.length === 0 ? (
-          <p className="mt-4 text-sm text-amber-200">
+          <p className="mt-4 text-sm" style={{ color: "var(--text-secondary)" }}>
             No SSH keys in Keychain. Add a key, then connect again.
           </p>
         ) : (

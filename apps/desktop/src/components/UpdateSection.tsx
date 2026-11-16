@@ -131,7 +131,7 @@ export function UpdateSection({ embedded = false }: UpdateSectionProps) {
         </p>
       )}
       {error && (
-        <p className="mt-3 text-xs" style={{ color: "#f87171" }}>
+        <p className="mt-3 text-xs" style={{ color: "var(--danger)" }}>
           {error}
         </p>
       )}

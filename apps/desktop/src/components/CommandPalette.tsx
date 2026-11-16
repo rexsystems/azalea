@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Host, SshKey } from "@azalea/shared";
 import type { SavedWorkspace } from "../lib/workspaces";
 import {
+  FileCode,
   Folder,
   Home,
   KeyRound,
@@ -17,6 +18,7 @@ export type CommandPaletteActionId =
   | "nav-home"
   | "nav-hosts"
   | "nav-keys"
+  | "nav-snippets"
   | "nav-settings"
   | "action-new-host"
   | "action-new-group"
@@ -121,6 +123,14 @@ export function CommandPalette({
         group: "Navigate",
         icon: KeyRound,
         keywords: "keys ssh identity",
+      },
+      {
+        id: "nav-snippets",
+        label: "Snippets",
+        description: "Saved commands",
+        group: "Navigate",
+        icon: FileCode,
+        keywords: "commands saved shell",
       },
       {
         id: "nav-settings",
@@ -333,7 +343,7 @@ export function CommandPalette({
             groups.map((group) => (
               <div key={group.name} className="mb-2">
                 <div
-                  className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide"
+                  className="px-2.5 py-1.5 text-[10px] font-semibold"
                   style={{ color: "var(--text-muted)" }}
                 >
                   {group.name}

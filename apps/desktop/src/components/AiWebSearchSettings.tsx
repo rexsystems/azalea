@@ -224,7 +224,7 @@ export function AiWebSearchSettings({
         </p>
       )}
       {error && (
-        <p className="text-xs" style={{ color: "#f87171" }}>
+        <p className="text-xs" style={{ color: "var(--danger)" }}>
           {error}
         </p>
       )}

@@ -18,6 +18,8 @@ interface TabBarProps {
   actions?: ReactNode;
   isMobile?: boolean;
   onBack?: () => void;
+  /** Render inside the Command layout's top bar: no bar of its own. */
+  inline?: boolean;
 }
 
 export function TabBar({
@@ -28,23 +30,13 @@ export function TabBar({
   actions,
   isMobile = false,
   onBack,
+  inline = false,
 }: TabBarProps) {
   const active = tabs.find((t) => t.id === activeTabId) ?? null;
-  const splitPair =
-    active?.splitWithId != null
-      ? new Set([active.id, active.splitWithId])
-      : null;
+  const splitPair = active?.splitWithId != null ? new Set([active.id, active.splitWithId]) : null;
 
-  return (
-    <div
-      className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b px-2.5 py-2"
-      style={{
-        background: "var(--bg-panel)",
-        borderColor: "var(--border-subtle)",
-        minHeight: isMobile ? "3.25rem" : "3rem",
-        paddingTop: isMobile ? "max(0.5rem, env(safe-area-inset-top))" : undefined,
-      }}
-    >
+  const tabItems = (
+    <>
       {isMobile && onBack && (
         <button
           type="button"
@@ -63,17 +55,15 @@ export function TabBar({
         const inSplit = Boolean(splitPair?.has(tab.id));
         const prev = tabs[index - 1];
         const next = tabs[index + 1];
-        const splitWithPrev =
-          inSplit && prev != null && splitPair?.has(prev.id) === true;
-        const splitWithNext =
-          inSplit && next != null && splitPair?.has(next.id) === true;
+        const splitWithPrev = inSplit && prev != null && splitPair?.has(prev.id) === true;
+        const splitWithNext = inSplit && next != null && splitPair?.has(next.id) === true;
         const dotColor =
           tab.status === "connected"
             ? "#4ade80"
             : tab.status === "connecting" || tab.status === "reconnecting"
               ? "#fbbf24"
               : tab.status === "error"
-                ? "#f87171"
+                ? "var(--danger)"
                 : "var(--text-muted)";
 
         const tabStyle: CSSProperties = {
@@ -98,7 +88,7 @@ export function TabBar({
             <button
               type="button"
               onClick={() => onSelectTab(tab.id)}
-              className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-3 pr-1.5"
+              className={`flex min-w-0 flex-1 items-center gap-2 pl-3 pr-1.5 ${inline ? "py-1" : "py-2"}`}
             >
               {local ? (
                 <SquareTerminal
@@ -135,6 +125,30 @@ export function TabBar({
           </div>
         );
       })}
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className="flex h-full min-w-0 flex-1 items-center gap-1">
+        <div className="flex h-full min-w-0 items-center gap-1 overflow-x-auto">{tabItems}</div>
+        <div data-tauri-drag-region className="h-full min-w-4 flex-1" />
+        {actions && <div className="flex shrink-0 items-center gap-0.5">{actions}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b px-2.5 py-2"
+      style={{
+        background: "var(--bg-panel)",
+        borderColor: "var(--border-subtle)",
+        minHeight: isMobile ? "3.25rem" : "3rem",
+        paddingTop: isMobile ? "max(0.5rem, env(safe-area-inset-top))" : undefined,
+      }}
+    >
+      {tabItems}
 
       {actions && <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2">{actions}</div>}
     </div>

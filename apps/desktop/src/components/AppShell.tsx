@@ -1,13 +1,13 @@
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import { Home, KeyRound, Server, Settings, type AppIcon } from "./icons";
+import { cloneElement, isValidElement, useEffect, useState, type ReactNode } from "react";
+import { FileCode, Home, KeyRound, Server, Settings, type AppIcon } from "./icons";
 import { getVersion } from "@tauri-apps/api/app";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { TitleBar } from "./TitleBar";
 import { Logo } from "./Logo";
 import { AccountSwitcher } from "./AccountSwitcher";
+import type { LayoutId } from "../lib/layout";
 
-export type NavPage = "home" | "hosts" | "keys" | "settings";
+export type NavPage = "home" | "hosts" | "keys" | "snippets" | "settings";
 
 interface AppShellProps {
   children: ReactNode;
@@ -34,9 +34,7 @@ interface AppShellProps {
     base_url: string;
     web_url: string;
   }) => void | Promise<void>;
-  onConnectPersonalCloud?: (
-    provider: "gdrive" | "onedrive" | "dropbox",
-  ) => void | Promise<void>;
+  onConnectPersonalCloud?: (provider: "gdrive" | "onedrive" | "dropbox") => void | Promise<void>;
   onRemoveAccount: (id: string) => void | Promise<void>;
   onCopyAccountData?: (fromId: string) => void | Promise<void>;
   onOpenAccount?: () => void;
@@ -50,6 +48,8 @@ interface AppShellProps {
   isMobile?: boolean;
   /** When true on mobile, hide bottom nav for a full-bleed terminal. */
   immersive?: boolean;
+  /** Desktop layout style. Mobile always uses the bottom navigation. */
+  layout?: LayoutId;
 }
 
 const primaryNav: { id: NavPage; label: string; icon: AppIcon }[] = [
@@ -59,6 +59,7 @@ const primaryNav: { id: NavPage; label: string; icon: AppIcon }[] = [
 const secondaryNav: { id: NavPage; label: string; icon: AppIcon }[] = [
   { id: "hosts", label: "Hosts", icon: Server },
   { id: "keys", label: "Keychain", icon: KeyRound },
+  { id: "snippets", label: "Snippets", icon: FileCode },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -114,6 +115,89 @@ function NavButton({
   );
 }
 
+function CommandNavLink({
+  id,
+  label,
+  icon: Icon,
+  active,
+  onNavigate,
+}: {
+  id: NavPage;
+  label: string;
+  icon: AppIcon;
+  active: boolean;
+  onNavigate: (page: NavPage) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(id)}
+      aria-current={active ? "page" : undefined}
+      className={`transition-ui flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm ${
+        active ? "" : "hover-subtle"
+      }`}
+      style={{
+        background: active ? "var(--nav-active)" : "transparent",
+        color: active ? "var(--text)" : "var(--text-muted)",
+      }}
+    >
+      <Icon size={15} strokeWidth={active ? 2 : 1.5} />
+      {label}
+    </button>
+  );
+}
+
+function RailButton({
+  id,
+  label,
+  icon: Icon,
+  active,
+  onNavigate,
+}: {
+  id: NavPage;
+  label: string;
+  icon: AppIcon;
+  active: boolean;
+  onNavigate: (page: NavPage) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onNavigate(id)}
+      title={label}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
+      className={`transition-ui flex h-10 w-10 items-center justify-center rounded-lg ${
+        active ? "" : "hover-subtle"
+      }`}
+      style={{
+        background: active ? "var(--nav-active)" : "transparent",
+        color: active ? "var(--text)" : "var(--text-muted)",
+      }}
+    >
+      <Icon size={19} strokeWidth={active ? 2 : 1.5} />
+    </button>
+  );
+}
+
+function StatusBar({ message, version }: { message?: string; version: string }) {
+  return (
+    <div
+      className="flex h-7 shrink-0 items-center justify-between gap-4 border-t px-3.5 text-xs"
+      style={{
+        borderColor: "var(--border-subtle)",
+        color: "var(--text-muted)",
+        background: "var(--bg-panel)",
+      }}
+    >
+      <span className="truncate" role="status">
+        {message}
+      </span>
+      <span className="shrink-0 tabular-nums">v{version}</span>
+    </div>
+  );
+}
+
 export function AppShell({
   children,
   activePage,
@@ -137,11 +221,14 @@ export function AppShell({
   sidePanel,
   isMobile = false,
   immersive = false,
+  layout = "classic",
 }: AppShellProps) {
   const [appVersion, setAppVersion] = useState("…");
 
   useEffect(() => {
-    void getVersion().then(setAppVersion).catch(() => setAppVersion("-"));
+    void getVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion("-"));
   }, []);
 
   const openAccount = () => {
@@ -149,7 +236,7 @@ export function AppShell({
     else onNavigate("settings");
   };
 
-  const switcher = (
+  const renderSwitcher = (compact: boolean) => (
     <AccountSwitcher
       accounts={accounts}
       active={activeAccount}
@@ -164,9 +251,10 @@ export function AppShell({
       onManage={openAccount}
       onSignIn={onSignInForSync}
       onPasswordLogin={onPasswordLogin}
-      compact={isMobile}
+      compact={compact}
     />
   );
+  const switcher = renderSwitcher(isMobile);
 
   if (isMobile) {
     return (
@@ -217,7 +305,7 @@ export function AppShell({
               paddingTop: "0.35rem",
             }}
           >
-            <div className="grid grid-cols-4 gap-1 px-2 pt-1.5">
+            <div className="grid grid-cols-5 gap-1 px-2 pt-1.5">
               {allNav.map((item) => (
                 <NavButton
                   key={item.id}
@@ -230,6 +318,101 @@ export function AppShell({
             </div>
           </nav>
         )}
+      </div>
+    );
+  }
+
+  const inlineTabBar =
+    showTabs && isValidElement(tabBar)
+      ? cloneElement(tabBar as React.ReactElement<{ inline?: boolean }>, { inline: true })
+      : null;
+
+  const mainArea = (
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      {sidePanel}
+    </div>
+  );
+
+  if (layout === "command") {
+    return (
+      <div
+        className="app-shell-root flex h-full select-none flex-col overflow-hidden"
+        style={{ background: "var(--bg-base)" }}
+      >
+        <TitleBar trailing={renderSwitcher(true)}>
+          <nav className="flex shrink-0 items-center gap-0.5" aria-label="Main">
+            {allNav.map((item) => (
+              <CommandNavLink
+                key={item.id}
+                {...item}
+                active={activePage === item.id}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </nav>
+          {inlineTabBar ? (
+            <>
+              <span
+                className="mx-2 h-4 w-px shrink-0"
+                style={{ background: "var(--border)" }}
+                aria-hidden
+              />
+              {inlineTabBar}
+            </>
+          ) : (
+            <div data-tauri-drag-region className="h-full min-w-4 flex-1" />
+          )}
+        </TitleBar>
+        {mainArea}
+        <StatusBar message={statusMessage} version={appVersion} />
+      </div>
+    );
+  }
+
+  if (layout === "columns") {
+    const railActive: NavPage = activePage === "home" ? "hosts" : activePage;
+    return (
+      <div
+        className="app-shell-root flex h-full select-none flex-col overflow-hidden"
+        style={{ background: "var(--bg-base)" }}
+      >
+        <TitleBar trailing={renderSwitcher(true)} />
+        <div className="flex min-h-0 flex-1">
+          <nav
+            className="flex w-14 shrink-0 flex-col items-center gap-1 border-r py-2"
+            style={{ background: "var(--bg-panel)", borderColor: "var(--border-subtle)" }}
+            aria-label="Main"
+          >
+            {secondaryNav
+              .filter((item) => item.id !== "settings")
+              .map((item) => (
+                <RailButton
+                  key={item.id}
+                  {...item}
+                  active={railActive === item.id}
+                  onNavigate={onNavigate}
+                />
+              ))}
+            <div className="mt-auto">
+              {secondaryNav
+                .filter((item) => item.id === "settings")
+                .map((item) => (
+                  <RailButton
+                    key={item.id}
+                    {...item}
+                    active={railActive === item.id}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+            </div>
+          </nav>
+          <div className="flex min-w-0 flex-1 flex-col">
+            {showTabs && tabBar}
+            {mainArea}
+            <StatusBar message={statusMessage} version={appVersion} />
+          </div>
+        </div>
       </div>
     );
   }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Host, HostGroup } from "@azalea/shared";
 import {
   Check,
@@ -15,7 +15,8 @@ import {
   Zap,
 } from "./icons";
 import { groupHostsByGroup } from "../lib/utils";
-import { EmptyHostsState, GroupSection } from "./HostTile";
+import { EmptyHostsState, GroupSection, HostRow } from "./HostTile";
+import { HostDetail } from "./HostDetail";
 import { useContextMenu } from "./ui/ContextMenu";
 import { SelectGroupDialog } from "./ui/SelectGroupDialog";
 import { SkeletonCard } from "./ui/Skeleton";
@@ -41,6 +42,12 @@ interface HostsPageProps {
   onQuickConnect: () => void;
   onOpenLocalTerminal: () => void;
   isMobile?: boolean;
+  /** Master-detail layout: host list on the left, selected host on the right. */
+  columns?: boolean;
+  /** Command layout: hosts as one list, centered column. */
+  list?: boolean;
+  /** Shown under the host details in the Columns layout. */
+  workspacesSection?: ReactNode;
 }
 
 export function HostsPage({
@@ -64,6 +71,9 @@ export function HostsPage({
   onQuickConnect,
   onOpenLocalTerminal,
   isMobile = false,
+  columns = false,
+  list = false,
+  workspacesSection,
 }: HostsPageProps) {
   const { openMenu, menuElement } = useContextMenu();
   const [groupPickHost, setGroupPickHost] = useState<Host | null>(null);
@@ -80,10 +90,7 @@ export function HostsPage({
     );
   }, [hosts, searchQuery]);
 
-  const grouped = useMemo(
-    () => groupHostsByGroup(filteredHosts, groups),
-    [filteredHosts, groups],
-  );
+  const grouped = useMemo(() => groupHostsByGroup(filteredHosts, groups), [filteredHosts, groups]);
 
   useEffect(() => {
     setSelectedIds((prev) => {
@@ -99,9 +106,7 @@ export function HostsPage({
       const target = e.target as HTMLElement | null;
       const typing =
         target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable);
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
 
       if (target?.closest('[role="dialog"]')) return;
 
@@ -135,6 +140,32 @@ export function HostsPage({
     () => hosts.filter((h) => selectedIds.has(h.id)),
     [hosts, selectedIds],
   );
+
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const focusedHost = useMemo(() => {
+    const byId = filteredHosts.find((h) => h.id === focusedId);
+    if (byId) return byId;
+    return (
+      [...filteredHosts].sort(
+        (a, b) => (b.last_connected_at ?? 0) - (a.last_connected_at ?? 0),
+      )[0] ?? null
+    );
+  }, [filteredHosts, focusedId]);
+  const flatIds = useMemo(
+    () => grouped.flatMap((entry) => entry.hosts.map((h) => h.id)),
+    [grouped],
+  );
+
+  const moveFocus = (delta: number) => {
+    if (flatIds.length === 0) return;
+    const current = focusedHost ? flatIds.indexOf(focusedHost.id) : -1;
+    const next = flatIds[Math.min(flatIds.length - 1, Math.max(0, current + delta))];
+    setFocusedId(next);
+    requestAnimationFrame(() =>
+      listRef.current?.querySelector<HTMLElement>(`[data-host-row="${next}"]`)?.focus(),
+    );
+  };
 
   const hostMenu = (host: Host) => {
     const isSelected = selectedIds.has(host.id);
@@ -286,172 +317,368 @@ export function HostsPage({
         onCancel={() => setGroupPickHost(null)}
       />
 
-      <div className="settings-shell flex min-h-0 flex-1 flex-col !pb-0">
-        <div className="mb-5 flex shrink-0 flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <h2
-              className="text-2xl font-semibold tracking-tight sm:text-3xl"
-              style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
-            >
-              Hosts
-            </h2>
-            <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
-              {hosts.length === 0
-                ? "Hosts, groups, and local sessions"
-                : `${hosts.length} host${hosts.length === 1 ? "" : "s"}${
-                    groups.length > 0
-                      ? ` · ${groups.length} group${groups.length === 1 ? "" : "s"}`
-                      : ""
-                  }`}
-            </p>
-          </div>
-          {!isMobile && (
-            <button
-              type="button"
-              onClick={onAddGroup}
-              className="hover-subtle inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium"
-              style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-            >
-              <Folder size={15} />
-              New group
-            </button>
-          )}
-        </div>
+      {columns ? (
+        <div className="flex min-h-0 flex-1">
+          <aside
+            className="flex w-[22rem] shrink-0 flex-col border-r"
+            style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
+            aria-label="Hosts"
+          >
+            <div className="shrink-0 space-y-2 p-3">
+              <div className="relative">
+                <Search
+                  size={16}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+                  style={{ color: "var(--text-muted)" }}
+                />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      moveFocus(focusedHost ? 0 : 1);
+                    }
+                    if (e.key !== "Enter") return;
+                    if (filteredHosts.length === 1) onConnect(filteredHosts[0]);
+                    else if (filteredHosts.length === 0) onQuickConnect();
+                  }}
+                  placeholder="Find a host or ssh user@hostname…"
+                  aria-label="Find a host or connect to a new one"
+                  className="transition-ui w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--accent)]"
+                  style={{
+                    background: "var(--bg-input)",
+                    borderColor: "var(--border-subtle)",
+                    color: "var(--text)",
+                  }}
+                />
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onAddServer()}
+                  className="home-action-primary transition-ui inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium"
+                >
+                  <Plus size={15} />
+                  New host
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenLocalTerminal}
+                  className="hover-subtle transition-ui inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                  title="Open a local terminal"
+                >
+                  <SquareTerminal size={15} />
+                  Terminal
+                </button>
+                <button
+                  type="button"
+                  onClick={onAddGroup}
+                  className="hover-subtle transition-ui inline-flex items-center rounded-lg border px-2 py-1.5"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                  title="New group"
+                  aria-label="New group"
+                >
+                  <Folder size={15} />
+                </button>
+              </div>
+            </div>
 
-        <div
-          className="mb-4 flex shrink-0 flex-col gap-3 rounded-2xl border p-3 sm:flex-row sm:items-center sm:p-3.5"
-          style={{ borderColor: "var(--border-subtle)", background: "var(--bg-panel)" }}
-        >
-          <div className="relative min-w-0 flex-1">
-            <Search
-              size={17}
-              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2"
-              style={{ color: "var(--text-muted)" }}
-            />
-            <input
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
+            <div
+              ref={listRef}
+              className="min-h-0 flex-1 overflow-y-auto px-2 pb-3"
               onKeyDown={(e) => {
-                if (e.key === "Enter") onQuickConnect();
+                if (!(e.target as HTMLElement).closest("[data-host-row]")) return;
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  moveFocus(1);
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  moveFocus(-1);
+                } else if (e.key === "Enter" && focusedHost) {
+                  e.preventDefault();
+                  onConnect(focusedHost);
+                }
               }}
-              placeholder={isMobile ? "Search hosts…" : "Find a host or ssh user@hostname…"}
-              className="transition-ui w-full rounded-xl border py-2.5 pl-10 pr-3.5 text-sm outline-none"
-              style={{
-                background: "var(--bg-input)",
-                borderColor: "var(--border-subtle)",
-                color: "var(--text)",
-              }}
-            />
-          </div>
+            >
+              {loading ? (
+                <div className="space-y-1.5 px-1 pt-1">
+                  {Array.from({ length: 6 }, (_, i) => (
+                    <SkeletonCard key={i} className="!p-3" />
+                  ))}
+                </div>
+              ) : grouped.length === 0 ? (
+                <p className="px-3 py-8 text-sm" style={{ color: "var(--text-muted)" }}>
+                  {hosts.length === 0
+                    ? "No hosts yet."
+                    : "No matches. Press Enter to add it as a new host."}
+                </p>
+              ) : (
+                grouped.map(({ group, hosts: sectionHosts }) => (
+                  <section key={group?.id ?? "ungrouped"} className="mb-3">
+                    <button
+                      type="button"
+                      onContextMenu={(e) =>
+                        openMenu(
+                          e,
+                          groupMenu(group ? (groups.find((g) => g.id === group.id) ?? null) : null),
+                        )
+                      }
+                      className="flex w-full items-baseline gap-2 px-2.5 pb-1 pt-2 text-left"
+                    >
+                      <span className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                        {group?.name ?? "Ungrouped"}
+                      </span>
+                      <span className="text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
+                        {sectionHosts.length}
+                      </span>
+                    </button>
+                    {sectionHosts.map((host) => (
+                      <HostRow
+                        key={host.id}
+                        host={host}
+                        focused={focusedHost?.id === host.id}
+                        selected={selectedIds.has(host.id)}
+                        selectionActive={selectedIds.size > 0}
+                        connecting={connectingHostId === host.id}
+                        onFocus={(h) => setFocusedId(h.id)}
+                        onConnect={onConnect}
+                        onSelectToggle={toggleSelect}
+                        onContextMenu={(e, h) => openMenu(e, hostMenu(h))}
+                      />
+                    ))}
+                  </section>
+                ))
+              )}
+            </div>
 
-          <div className={`flex shrink-0 gap-2 ${isMobile ? "w-full" : ""}`}>
+            {selectedIds.size > 0 && (
+              <div
+                className="flex shrink-0 items-center justify-between gap-2 border-t px-3 py-2 text-sm"
+                style={{ borderColor: "var(--border-subtle)" }}
+              >
+                <span style={{ color: "var(--text-muted)" }}>{selectedIds.size} selected</span>
+                <span className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onRunCommand(selectedHosts)}
+                    className="hover-subtle rounded-md px-2 py-1 font-medium"
+                    style={{ color: "var(--text)" }}
+                  >
+                    Run command
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteHosts(selectedHosts)}
+                    className="hover-subtle rounded-md px-2 py-1 font-medium"
+                    style={{ color: "var(--danger)" }}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="hover-subtle rounded-md px-2 py-1"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    Clear
+                  </button>
+                </span>
+              </div>
+            )}
+          </aside>
+
+          <section className="min-w-0 flex-1 overflow-y-auto px-8 py-7">
+            <div className="mx-auto max-w-2xl">
+              {focusedHost ? (
+                <HostDetail
+                  host={focusedHost}
+                  group={groups.find((g) => g.id === focusedHost.group_id) ?? null}
+                  connecting={connectingHostId === focusedHost.id}
+                  onConnect={onConnect}
+                  onEdit={onEditHost}
+                  onRunCommand={onRunCommand}
+                  onWake={onWakeHost}
+                  onMore={(e, h) => openMenu(e, hostMenu(h))}
+                />
+              ) : (
+                !loading && <EmptyHostsState onAddServer={() => onAddServer()} />
+              )}
+              {workspacesSection && <div className="mt-10">{workspacesSection}</div>}
+            </div>
+          </section>
+        </div>
+      ) : (
+        <div className="settings-shell flex min-h-0 flex-1 flex-col !pb-0">
+          <div
+            className={`flex min-h-0 flex-1 flex-col ${list ? "mx-auto w-full max-w-4xl" : ""}`}
+          >
+          <div className="mb-5 flex shrink-0 flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <h2
+                className="text-2xl font-semibold tracking-tight sm:text-3xl"
+                style={{ color: "var(--text)", fontFamily: "var(--font-display, inherit)" }}
+              >
+                Hosts
+              </h2>
+              <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
+                {hosts.length === 0
+                  ? "Hosts, groups, and local sessions"
+                  : `${hosts.length} host${hosts.length === 1 ? "" : "s"}${
+                      groups.length > 0
+                        ? ` · ${groups.length} group${groups.length === 1 ? "" : "s"}`
+                        : ""
+                    }`}
+              </p>
+            </div>
             {!isMobile && (
               <button
                 type="button"
-                onClick={onOpenLocalTerminal}
-                className="hover-subtle transition-ui inline-flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium"
+                onClick={onAddGroup}
+                className="hover-subtle inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium"
                 style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
-                title="Open a local terminal"
               >
-                <SquareTerminal size={16} />
-                Terminal
+                <Folder size={15} />
+                New group
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => onAddServer()}
-              className={`home-action-primary transition-ui inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
-                isMobile ? "flex-1" : "shrink-0"
-              }`}
-            >
-              <Plus size={16} />
-              New host
-            </button>
           </div>
-        </div>
 
-        {selectedIds.size > 0 && (
-          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 px-0.5">
-            <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-              {selectedIds.size} selected
-              {filteredHosts.length > selectedIds.size && (
+          <div className="mb-5 flex shrink-0 flex-col gap-2.5 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search
+                size={17}
+                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2"
+                style={{ color: "var(--text-muted)" }}
+              />
+              <input
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onQuickConnect();
+                }}
+                placeholder={isMobile ? "Search hosts…" : "Find a host or ssh user@hostname…"}
+                className="transition-ui w-full rounded-xl border py-2.5 pl-10 pr-3.5 text-sm outline-none focus:border-[var(--accent)]"
+                style={{
+                  background: "var(--bg-input)",
+                  borderColor: "var(--border-subtle)",
+                  color: "var(--text)",
+                }}
+              />
+            </div>
+
+            <div className={`flex shrink-0 gap-2 ${isMobile ? "w-full" : ""}`}>
+              {!isMobile && (
                 <button
                   type="button"
-                  onClick={selectAllFiltered}
-                  className="ml-2 underline-offset-2 hover:underline"
-                  style={{ color: "var(--text-secondary)" }}
+                  onClick={onOpenLocalTerminal}
+                  className="hover-subtle transition-ui inline-flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium"
+                  style={{ borderColor: "var(--border-subtle)", color: "var(--text-secondary)" }}
+                  title="Open a local terminal"
                 >
-                  Select all {filteredHosts.length}
+                  <SquareTerminal size={16} />
+                  Terminal
                 </button>
               )}
-            </span>
-            <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
-                onClick={() => onRunCommand(selectedHosts)}
-                className="hover-subtle inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
-                style={{ color: "var(--text)" }}
+                onClick={() => onAddServer()}
+                className={`home-action-primary transition-ui inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+                  isMobile ? "flex-1" : "shrink-0"
+                }`}
               >
-                <SquareTerminal size={15} />
-                Run command
-              </button>
-              <button
-                type="button"
-                onClick={clearSelection}
-                className="hover-subtle inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                <X size={13} />
-                Clear
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onDeleteHosts(selectedHosts);
-                }}
-                className="hover-subtle inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium"
-                style={{ color: "var(--danger)" }}
-              >
-                <Trash2 size={13} />
-                Delete
+                <Plus size={16} />
+                New host
               </button>
             </div>
           </div>
-        )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-          {loading ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {Array.from({ length: 6 }, (_, i) => (
-                <SkeletonCard key={i} />
-              ))}
-            </div>
-          ) : hosts.length === 0 && groups.length === 0 ? (
-            <EmptyHostsState onAddServer={() => onAddServer()} />
-          ) : grouped.length === 0 ? (
-            <p className="py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>
-              No matches
-            </p>
-          ) : (
-            grouped.map(({ group, hosts: sectionHosts }) => (
-              <div key={group?.id ?? "ungrouped"}>
-                <GroupSection
-                  group={group ? groups.find((g) => g.id === group.id) ?? null : null}
-                  hosts={sectionHosts}
-                  connectingHostId={connectingHostId}
-                  selectedHostIds={selectedIds}
-                  onConnect={onConnect}
-                  onEditHost={onEditHost}
-                  onSelectToggle={toggleSelect}
-                  onGroupContextMenu={(e, g) => openMenu(e, groupMenu(g))}
-                  onHostContextMenu={(e, host) => openMenu(e, hostMenu(host))}
-                  compact={isMobile}
-                />
+          {selectedIds.size > 0 && (
+            <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 px-0.5">
+              <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+                {selectedIds.size} selected
+                {filteredHosts.length > selectedIds.size && (
+                  <button
+                    type="button"
+                    onClick={selectAllFiltered}
+                    className="ml-2 underline-offset-2 hover:underline"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    Select all {filteredHosts.length}
+                  </button>
+                )}
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onRunCommand(selectedHosts)}
+                  className="hover-subtle inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+                  style={{ color: "var(--text)" }}
+                >
+                  <SquareTerminal size={15} />
+                  Run command
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="hover-subtle inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  <X size={13} />
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeleteHosts(selectedHosts);
+                  }}
+                  className="hover-subtle inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium"
+                  style={{ color: "var(--danger)" }}
+                >
+                  <Trash2 size={13} />
+                  Delete
+                </button>
               </div>
-            ))
+            </div>
           )}
+
+          <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+            {loading ? (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            ) : hosts.length === 0 && groups.length === 0 ? (
+              <EmptyHostsState onAddServer={() => onAddServer()} />
+            ) : grouped.length === 0 ? (
+              <p className="py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+                No matches
+              </p>
+            ) : (
+              grouped.map(({ group, hosts: sectionHosts }) => (
+                <div key={group?.id ?? "ungrouped"}>
+                  <GroupSection
+                    group={group ? (groups.find((g) => g.id === group.id) ?? null) : null}
+                    hosts={sectionHosts}
+                    connectingHostId={connectingHostId}
+                    selectedHostIds={selectedIds}
+                    onConnect={onConnect}
+                    onEditHost={onEditHost}
+                    onSelectToggle={toggleSelect}
+                    onGroupContextMenu={(e, g) => openMenu(e, groupMenu(g))}
+                    onHostContextMenu={(e, host) => openMenu(e, hostMenu(host))}
+                    compact={isMobile}
+                    list={list}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -97,13 +97,15 @@ export function SelectHostDialog({
                 Connecting and installing key…
               </div>
             ) : empty ? (
-              <p className="mt-4 text-sm text-amber-200">Nothing available.</p>
+              <p className="mt-4 text-sm" style={{ color: "var(--text-secondary)" }}>
+                Nothing available.
+              </p>
             ) : (
               <div className="mt-4 max-h-72 space-y-3 overflow-y-auto">
                 {hasSessions && (
                   <div className="space-y-2">
                     <div
-                      className="px-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                      className="px-0.5 text-[10px] font-semibold"
                       style={{ color: "var(--text-muted)" }}
                     >
                       Open terminals
@@ -140,7 +142,7 @@ export function SelectHostDialog({
                   <div className="space-y-2">
                     {hasSessions && (
                       <div
-                        className="px-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                        className="px-0.5 text-[10px] font-semibold"
                         style={{ color: "var(--text-muted)" }}
                       >
                         New from host

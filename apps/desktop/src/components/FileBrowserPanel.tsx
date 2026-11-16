@@ -648,7 +648,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
         style={{ borderColor: "var(--border-subtle)" }}
       >
         <div className="min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
+          <div className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
             Files
           </div>
           <div className="truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
@@ -699,7 +699,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
             onClick={onClose}
             className="hover-subtle rounded p-1.5"
             style={{ color: "var(--text-muted)" }}
-            title="Close"
+            title="Close" aria-label="Close"
           >
             <X size={13} />
           </button>
@@ -781,7 +781,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
 
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">
         {error && (
-          <div className="px-2 py-1 text-xs" style={{ color: "#f87171" }}>
+          <div className="px-2 py-1 text-xs" style={{ color: "var(--danger)" }}>
             {error}
           </div>
         )}
@@ -895,7 +895,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
                   type="button"
                   onClick={cancelUpload}
                   className="hover-subtle shrink-0 rounded px-1.5 py-0.5 font-medium"
-                  style={{ color: "var(--danger, #f87171)" }}
+                  style={{ color: "var(--danger)" }}
                 >
                   Cancel
                 </button>
