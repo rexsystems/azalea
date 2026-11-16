@@ -2341,7 +2341,16 @@ function App() {
       case "hosts":
         return renderHostsPage();
       case "snippets":
-        return <SnippetsPage />;
+        return (
+          <SnippetsPage
+            runTarget={activeTab ? { title: activeTab.title } : null}
+            onRun={(command) => {
+              if (!activeTab) return;
+              sendCommandToTerminal(activeTab.id, command);
+              handleSelectTab(activeTab.id);
+            }}
+          />
+        );
       case "keys":
         return (
           <KeysPage

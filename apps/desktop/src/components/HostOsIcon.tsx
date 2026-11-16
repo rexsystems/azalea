@@ -62,7 +62,7 @@ const OS_ALIAS: Record<string, string> = {
   pve: "proxmox",
 };
 
-/** Deep brand-tinted tile behind each logo. */
+/** Deep brand-tinted tile behind each logo on dark themes. Light themes use a pale tint of the accent instead (see .os-icon-tile). */
 const OS_BG: Record<string, string> = {
   ubuntu: "#3d1408",
   debian: "#3a0012",
@@ -175,18 +175,21 @@ export function HostOsIcon({ osId, seed: _seed, size = 48, rounded = 10 }: HostO
 
   const pad = Math.max(6, Math.round(size * 0.16));
   const bg = OS_BG[resolved.key] ?? "#1a1a1e";
+  const accent = OS_ACCENT[resolved.key] ?? "#8e8e93";
 
   return (
     <div
-      className="flex shrink-0 items-center justify-center overflow-hidden"
-      style={{
-        width: size,
-        height: size,
-        borderRadius: rounded,
-        background: bg,
-        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${bg} 60%, white 12%)`,
-        padding: pad,
-      }}
+      className="os-icon-tile flex shrink-0 items-center justify-center overflow-hidden"
+      style={
+        {
+          width: size,
+          height: size,
+          borderRadius: rounded,
+          padding: pad,
+          "--os-bg": bg,
+          "--os-accent": accent,
+        } as React.CSSProperties
+      }
       title={resolved.key}
       aria-label={`${resolved.key} host`}
     >

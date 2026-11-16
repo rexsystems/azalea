@@ -2,15 +2,18 @@ import { useCallback, useEffect, useState } from "react";
 import type { Snippet } from "@azalea/shared";
 import * as api from "../lib/api";
 import { copyText } from "../lib/clipboard";
-import { Check, Copy, Pencil, Plus, Trash2 } from "./icons";
+import { Check, Copy, Pencil, Play, Plus, Trash2 } from "./icons";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 
-/**
- * Manage saved commands. Running one happens from the Snippets button in an open
- * terminal tab, since it needs a live session to send the command to.
- */
-export function SnippetsPage() {
+interface SnippetsPageProps {
+  /** The terminal tab a snippet would run in, or null when none is open. */
+  runTarget?: { title: string } | null;
+  onRun?: (command: string) => void;
+}
+
+/** Manage saved commands. Running one needs an open terminal tab to send it to. */
+export function SnippetsPage({ runTarget = null, onRun }: SnippetsPageProps) {
   const [snippets, setSnippets] = useState<Snippet[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
@@ -126,7 +129,9 @@ export function SnippetsPage() {
                 Snippets
               </h2>
               <p className="mt-1.5 text-sm" style={{ color: "var(--text-muted)" }}>
-                Saved commands. Run one from the Snippets button inside an open terminal.
+                {runTarget
+                  ? `Saved commands. Run sends the command to ${runTarget.title}.`
+                  : "Saved commands. Open a terminal tab to run one."}
               </p>
             </div>
             {editingId === null && (
@@ -184,6 +189,16 @@ export function SnippetsPage() {
                           </div>
                         </div>
                         <div className="key-card-actions flex items-center gap-0.5">
+                          {runTarget && onRun && (
+                            <button
+                              type="button"
+                              onClick={() => onRun(snippet.command)}
+                              title={`Run in ${runTarget.title}`}
+                            >
+                              <Play size={14} />
+                              <span>Run</span>
+                            </button>
+                          )}
                           <button type="button" onClick={() => void copy(snippet)}>
                             {copiedId === snippet.id ? <Check size={14} /> : <Copy size={14} />}
                             <span>{copiedId === snippet.id ? "Copied" : "Copy"}</span>
