@@ -558,7 +558,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
 
       {resizing && (
         <div
-          className="pointer-events-none absolute left-3 top-1/2 z-50 -translate-y-1/2 rounded-full border px-2.5 py-1 font-mono text-[11px] font-semibold tabular-nums shadow-lg"
+          className="pointer-events-none absolute left-3 top-1/2 z-50 -translate-y-1/2 rounded-full border px-2.5 py-1 font-mono text-xs font-semibold tabular-nums shadow-lg"
           style={{
             background: "var(--bg-card)",
             borderColor: "var(--accent)",
@@ -624,11 +624,11 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
                   setEditor(null);
                 })();
               }}
-              className="hover-subtle rounded p-1.5"
+              className="hover-subtle rounded-md p-1.5"
               style={{ color: "var(--text-muted)" }}
               title="Close"
             >
-              <X size={13} />
+              <X size={15} />
             </button>
           </div>
           <textarea
@@ -648,10 +648,10 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
         style={{ borderColor: "var(--border-subtle)" }}
       >
         <div className="min-w-0">
-          <div className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+          <div className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
             Files
           </div>
-          <div className="truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
+          <div className="truncate text-xs" style={{ color: "var(--text-muted)" }}>
             SFTP
           </div>
         </div>
@@ -659,49 +659,49 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
           <button
             type="button"
             onClick={() => void uploadFile()}
-            className="hover-subtle rounded p-1.5"
+            className="hover-subtle rounded-md p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Upload file here"
           >
-            <Upload size={13} />
+            <Upload size={15} />
           </button>
           <button
             type="button"
             onClick={() => void load(homePath ?? undefined)}
-            className="hover-subtle rounded p-1.5"
+            className="hover-subtle rounded-md p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Home"
           >
-            <Home size={13} />
+            <Home size={15} />
           </button>
           <button
             type="button"
             onClick={() => void load(path ?? undefined)}
-            className="hover-subtle rounded p-1.5"
+            className="hover-subtle rounded-md p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Refresh"
           >
-            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
           </button>
           {path && (
             <button
               type="button"
               onClick={() => onCdTerminal(path)}
-              className="hover-subtle rounded p-1.5"
+              className="hover-subtle rounded-md p-1.5"
               style={{ color: "var(--text-muted)" }}
               title="cd terminal here"
             >
-              <TerminalSquare size={13} />
+              <TerminalSquare size={15} />
             </button>
           )}
           <button
             type="button"
             onClick={onClose}
-            className="hover-subtle rounded p-1.5"
+            className="hover-subtle rounded-md p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Close" aria-label="Close"
           >
-            <X size={13} />
+            <X size={15} />
           </button>
         </div>
       </div>
@@ -718,7 +718,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
           style={{ color: "var(--text-muted)" }}
           title="Up"
         >
-          <ArrowUp size={13} />
+          <ArrowUp size={15} />
         </button>
         <input
           value={pathEditing ? pathDraft : (path ?? "...")}
@@ -743,7 +743,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
             }
           }}
           spellCheck={false}
-          className="min-w-0 flex-1 rounded-md border px-2 py-1 font-mono text-[11px] outline-none"
+          className="min-w-0 flex-1 rounded-md border px-2 py-1 font-mono text-xs outline-none"
           style={{
             color: "var(--text)",
             background: "var(--bg-base)",
@@ -758,7 +758,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
         className="flex shrink-0 items-center gap-1.5 border-b px-2 py-1.5"
         style={{ borderColor: "var(--border-subtle)" }}
       >
-        <Search size={13} style={{ color: "var(--text-muted)" }} />
+        <Search size={15} style={{ color: "var(--text-muted)" }} />
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
@@ -774,7 +774,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
             style={{ color: "var(--text-muted)" }}
             title="Clear filter"
           >
-            <X size={12} />
+            <X size={14} />
           </button>
         )}
       </div>
@@ -837,13 +837,13 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
                     {entry.name}
                   </span>
                   {mtime && (
-                    <span className="block truncate text-[10px]" style={{ color: "var(--text-muted)" }}>
+                    <span className="block truncate text-xs" style={{ color: "var(--text-muted)" }}>
                       {mtime}
                     </span>
                   )}
                 </span>
                 {!entry.is_dir && (
-                  <span className="shrink-0 text-[10px] tabular-nums" style={{ color: "var(--text-muted)" }}>
+                  <span className="shrink-0 text-xs tabular-nums" style={{ color: "var(--text-muted)" }}>
                     {formatSize(entry.size)}
                   </span>
                 )}
@@ -853,21 +853,21 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
                   <button
                     type="button"
                     onClick={() => void downloadFile(entry)}
-                    className="hover-subtle shrink-0 rounded p-1 opacity-0 group-hover:opacity-100"
+                    className="hover-subtle shrink-0 rounded p-1 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                     style={{ color: "var(--text-muted)" }}
                     title="Download"
                   >
-                    <Download size={12} />
+                    <Download size={14} />
                   </button>
                   {isLikelyTextFile(entry.name) && (
                     <button
                       type="button"
                       onClick={() => void openEditor(entry)}
-                      className="hover-subtle shrink-0 rounded p-1 opacity-0 group-hover:opacity-100"
+                      className="hover-subtle shrink-0 rounded p-1 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                       style={{ color: "var(--text-muted)" }}
                       title="Edit remote file"
                     >
-                      <Pencil size={12} />
+                      <Pencil size={14} />
                     </button>
                   )}
                 </>
@@ -878,7 +878,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
       </div>
 
       <div
-        className="flex shrink-0 flex-col gap-1.5 border-t px-3 py-1.5 text-[10px]"
+        className="flex shrink-0 flex-col gap-1.5 border-t px-3 py-1.5 text-xs"
         style={{ borderColor: "var(--border-subtle)", color: "var(--text-muted)" }}
       >
         {upload ? (
@@ -925,7 +925,7 @@ export function FileBrowserPanel({ sessionId, onClose, onCdTerminal }: FileBrows
               {fileCount === 1 ? "" : "s"}
             </span>
             <span className="truncate tabular-nums">
-              {resizing ? `${width}px` : (transfer ?? notice ?? "Drag left edge to resize")}
+              {resizing ? `${width}px` : (transfer ?? notice ?? "")}
             </span>
           </div>
         )}

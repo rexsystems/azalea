@@ -53,25 +53,25 @@ export function SnippetsPopover({ onRun, onClose }: SnippetsPopoverProps) {
         className="flex items-center justify-between border-b px-3 py-2"
         style={{ borderColor: "var(--border-subtle)" }}
       >
-        <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+        <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
           Snippets
         </span>
         <div className="flex items-center gap-0.5">
           <button
             onClick={() => setAdding((v) => !v)}
-            className="hover-subtle rounded p-1.5"
+            className="hover-subtle rounded-md p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="New snippet"
           >
-            <Plus size={13} />
+            <Plus size={15} />
           </button>
           <button
             onClick={onClose}
-            className="hover-subtle rounded p-1.5"
+            className="hover-subtle rounded-md p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Close" aria-label="Close"
           >
-            <X size={13} />
+            <X size={15} />
           </button>
         </div>
       </div>
@@ -133,20 +133,20 @@ export function SnippetsPopover({ onRun, onClose }: SnippetsPopoverProps) {
               <span className="truncate text-xs font-medium" style={{ color: "var(--text)" }}>
                 {snippet.name}
               </span>
-              <span className="truncate font-mono text-[10px]" style={{ color: "var(--text-muted)" }}>
+              <span className="truncate font-mono text-xs" style={{ color: "var(--text-muted)" }}>
                 {snippet.command}
               </span>
             </button>
-            <Play size={12} className="shrink-0 opacity-0 group-hover:opacity-100" style={{ color: "var(--accent)" }} />
+            <Play size={14} className="shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100" style={{ color: "var(--accent)" }} />
             <button
               onClick={() => {
                 void api.deleteSnippet(snippet.id).then(refresh);
               }}
-              className="shrink-0 rounded p-1 opacity-0 group-hover:opacity-100"
+              className="shrink-0 rounded p-1 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
               style={{ color: "var(--danger)" }}
               title="Delete"
             >
-              <Trash2 size={12} />
+              <Trash2 size={14} />
             </button>
           </div>
         ))}

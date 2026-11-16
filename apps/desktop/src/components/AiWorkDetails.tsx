@@ -76,7 +76,7 @@ export function AiWorkDetails({
               >
                 <span className="min-w-0 break-words">{event.label}</span>
                 {event.kind !== "thinking" && (
-                  <span className="shrink-0 text-[10px]">
+                  <span className="shrink-0 text-xs">
                     {event.status === "running"
                       ? event.status
                       : event.status === "error" ||
@@ -95,7 +95,7 @@ export function AiWorkDetails({
                 )}
               {event.detail && (
                 <pre
-                  className="select-text max-h-48 overflow-auto rounded-xl border px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap"
+                  className="select-text max-h-48 overflow-auto rounded-xl border px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap"
                   style={{
                     borderColor: "var(--border-subtle)",
                     background: "var(--bg-card)",
@@ -112,7 +112,7 @@ export function AiWorkDetails({
                   target="_blank"
                   rel="noopener noreferrer"
                   title={source.url}
-                  className="block truncate text-[11px] underline decoration-transparent underline-offset-2 hover:decoration-current"
+                  className="block truncate text-xs underline decoration-transparent underline-offset-2 hover:decoration-current"
                   style={{ color: "var(--accent)" }}
                 >
                   {source.title}

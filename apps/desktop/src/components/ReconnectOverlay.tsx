@@ -90,13 +90,13 @@ export function ReconnectOverlay({
             {copy.detail}
           </p>
           {info.lastError && (
-            <p className="pt-1 font-mono text-[11px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+            <p className="pt-1 font-mono text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
               {info.lastError}
             </p>
           )}
         </div>
 
-        <div className="flex flex-col items-center gap-1 text-[11px]" style={{ color: "var(--text-muted)" }}>
+        <div className="flex flex-col items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
           <span>
             Attempt {Math.max(1, info.attempt)}
             {showCountdown ? ` · next try in ${remainingSec}s` : ""}

@@ -205,7 +205,7 @@ export function AiMarkdown({
                 }}
               >
                 <div
-                  className="flex min-h-8 items-center justify-between gap-2 border-b px-3 py-1 text-[10px] font-medium"
+                  className="flex min-h-8 items-center justify-between gap-2 border-b px-3 py-1 text-xs font-medium"
                   style={{
                     borderColor: "var(--border-subtle)",
                     color: "var(--text-secondary)",

@@ -177,25 +177,25 @@ export function ForwardsPopover({
         className="flex items-center justify-between border-b px-3 py-2"
         style={{ borderColor: "var(--border-subtle)" }}
       >
-        <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+        <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
           Port forwarding
         </span>
         <div className="flex items-center gap-0.5">
           <button
             onClick={() => setAdding((v) => !v)}
-            className="hover-subtle rounded p-1.5"
+            className="hover-subtle rounded-md p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="New forward"
           >
-            <Plus size={13} />
+            <Plus size={15} />
           </button>
           <button
             onClick={onClose}
-            className="hover-subtle rounded p-1.5"
+            className="hover-subtle rounded-md p-1.5"
             style={{ color: "var(--text-muted)" }}
             title="Close" aria-label="Close"
           >
-            <X size={13} />
+            <X size={15} />
           </button>
         </div>
       </div>
@@ -289,17 +289,17 @@ export function ForwardsPopover({
                     {forward.label}
                   </span>
                   <span
-                    className="shrink-0 text-[10px] font-medium"
+                    className="shrink-0 text-xs font-medium"
                     style={{ color: badge.color }}
                   >
                     {badge.text}
                   </span>
                 </div>
-                <span className="truncate font-mono text-[10px]" style={{ color: "var(--text-muted)" }}>
+                <span className="truncate font-mono text-xs" style={{ color: "var(--text-muted)" }}>
                   127.0.0.1:{forward.local_port} → {forward.remote_host}:{forward.remote_port}
                 </span>
                 {status?.error && (
-                  <span className="truncate text-[10px]" style={{ color: "var(--danger)" }} title={status.error}>
+                  <span className="truncate text-xs" style={{ color: "var(--danger)" }} title={status.error}>
                     {status.error}
                   </span>
                 )}
@@ -309,11 +309,11 @@ export function ForwardsPopover({
                   void api.stopForward(sessionId, forward.id).catch(() => undefined);
                   void api.deletePortForward(forward.id).then(refresh);
                 }}
-                className="shrink-0 rounded p-1 opacity-0 group-hover:opacity-100"
+                className="shrink-0 rounded p-1 opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
                 style={{ color: "var(--danger)" }}
                 title="Delete"
               >
-                <Trash2 size={12} />
+                <Trash2 size={14} />
               </button>
             </div>
           );

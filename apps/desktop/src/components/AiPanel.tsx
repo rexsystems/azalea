@@ -1197,7 +1197,7 @@ export function AiPanel({
                   : "Chat"}
             </div>
             <div
-              className="truncate text-[11px]"
+              className="truncate text-xs"
               style={{ color: "var(--text-secondary)" }}
             >
               {panelView === "history"
@@ -1286,7 +1286,7 @@ export function AiPanel({
             {threads.length > 0 && (
               <button
                 type="button"
-                className="mt-2 text-[11px] font-medium"
+                className="mt-2 text-xs font-medium"
                 style={{ color: "var(--text-secondary)" }}
                 onClick={() => void exportThread(null, true)}
               >
@@ -1327,7 +1327,7 @@ export function AiPanel({
                         {t.title || "Chat"}
                       </div>
                       <div
-                        className="mt-0.5 truncate text-[11px]"
+                        className="mt-0.5 truncate text-xs"
                         style={{ color: "var(--text-muted)" }}
                       >
                         {formatRelativeTime(t.updatedAt)}
@@ -1375,7 +1375,7 @@ export function AiPanel({
               style={{ color: "var(--text-secondary)" }}
             >
               Local notes the AI can reuse across chats. Also saved when the
-              model writes a <code className="text-[11px]">```memory</code>{" "}
+              model writes a <code className="text-xs">```memory</code>{" "}
               block.
             </p>
             <div className="flex gap-2">
@@ -1444,7 +1444,7 @@ export function AiPanel({
                       {note.text}
                     </div>
                     <div
-                      className="mt-1 text-[10px]"
+                      className="mt-1 text-xs"
                       style={{ color: "var(--text-muted)" }}
                     >
                       {note.source === "ai" ? "AI" : "You"} ·{" "}
@@ -1514,7 +1514,7 @@ export function AiPanel({
                   aria-busy={current && busy}
                 >
                   <div
-                    className="text-[11px] font-semibold"
+                    className="text-xs font-semibold"
                     style={{ color: "var(--text-secondary)" }}
                   >
                     Azalea
@@ -1574,7 +1574,7 @@ export function AiPanel({
             return (
               <div key={item.id} className="space-y-2.5">
                 <div
-                  className="text-[11px] font-semibold"
+                  className="text-xs font-semibold"
                   style={{ color: "var(--text-secondary)" }}
                 >
                   {item.role === "user"
@@ -1779,7 +1779,7 @@ export function AiPanel({
                           />
                           {prefs.access === "full" && (
                             <p
-                              className="text-[11px] leading-snug"
+                              className="text-xs leading-snug"
                               style={{ color: "#fca5a5" }}
                             >
                               Runs commands and file writes without asking.
@@ -1847,7 +1847,7 @@ export function AiPanel({
                       )}
                       {modelsError && (
                         <p
-                          className="break-words text-[11px] leading-snug"
+                          className="break-words text-xs leading-snug"
                           style={{ color: "var(--danger)" }}
                           title={modelsError}
                         >
@@ -1857,7 +1857,7 @@ export function AiPanel({
                       {threads.some((t) => t.id === threadId) && (
                         <button
                           type="button"
-                          className="text-[11px]"
+                          className="text-xs"
                           style={{ color: "var(--text-muted)" }}
                           onClick={() => {
                             removeThread(threadId);
