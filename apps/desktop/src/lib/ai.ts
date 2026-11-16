@@ -105,9 +105,14 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     needsRegion: false,
     regionKind: "none",
     allowCustomUrl: false,
-    defaultModel: "gpt-5-mini",
+    defaultModel: "gpt-6.1-terra",
     supportsModelList: true,
-    models: [],
+    models: [
+      { id: "gpt-6-astra", label: "GPT-6 Astra" },
+      { id: "gpt-6.1-sol", label: "GPT-6.1 Sol" },
+      { id: "gpt-6.1-terra", label: "GPT-6.1 Terra" },
+      { id: "gpt-6-luna", label: "GPT-6 Luna" },
+    ],
   },
   {
     id: "anthropic",
@@ -118,9 +123,14 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     needsRegion: false,
     regionKind: "none",
     allowCustomUrl: false,
-    defaultModel: "claude-sonnet-4-6",
+    defaultModel: "claude-sonnet-5-5",
     supportsModelList: true,
-    models: [],
+    models: [
+      { id: "claude-fable-5-2", label: "Claude Fable 5.2" },
+      { id: "claude-opus-5-5", label: "Claude Opus 5.5" },
+      { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+      { id: "claude-haiku-5-5", label: "Claude Haiku 5.5" },
+    ],
   },
   {
     id: "deepseek",
@@ -131,9 +141,12 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     needsRegion: false,
     regionKind: "none",
     allowCustomUrl: false,
-    defaultModel: "deepseek-chat",
+    defaultModel: "deepseek-flash",
     supportsModelList: true,
-    models: [],
+    models: [
+      { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+      { id: "deepseek-flash", label: "DeepSeek V4.1 Flash" },
+    ],
   },
   {
     id: "groq",
@@ -146,7 +159,12 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     allowCustomUrl: false,
     defaultModel: "llama-3.3-70b-versatile",
     supportsModelList: true,
-    models: [],
+    models: [
+      { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
+      { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B" },
+      { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
+      { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B" },
+    ],
   },
   {
     id: "openrouter",
@@ -157,9 +175,20 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     needsRegion: false,
     regionKind: "none",
     allowCustomUrl: false,
-    defaultModel: "anthropic/claude-sonnet-4.5",
+    defaultModel: "anthropic/claude-sonnet-5.5",
     supportsModelList: true,
-    models: [],
+    models: [
+      { id: "anthropic/claude-fable-5.2", label: "Claude Fable 5.2" },
+      { id: "anthropic/claude-opus-5.5", label: "Claude Opus 5.5" },
+      { id: "anthropic/claude-sonnet-5.5", label: "Claude Sonnet 5.5" },
+      { id: "anthropic/claude-haiku-5.5", label: "Claude Haiku 5.5" },
+      { id: "openai/gpt-6-astra", label: "GPT-6 Astra" },
+      { id: "openai/gpt-6.1-sol", label: "GPT-6.1 Sol" },
+      { id: "openai/gpt-6.1-terra", label: "GPT-6.1 Terra" },
+      { id: "openai/gpt-6-luna", label: "GPT-6 Luna" },
+      { id: "deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+      { id: "deepseek/deepseek-v4.1-flash", label: "DeepSeek V4.1 Flash" },
+    ],
   },
   {
     id: "ollama",
@@ -203,7 +232,12 @@ export const AI_PROVIDERS: AiProviderDef[] = [
     allowCustomUrl: false,
     defaultModel: "openai.gpt-oss-120b",
     supportsModelList: true,
-    models: [],
+    models: [
+      { id: "anthropic.claude-opus-5-5", label: "Claude Opus 5.5" },
+      { id: "anthropic.claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+      { id: "anthropic.claude-haiku-5-5", label: "Claude Haiku 5.5" },
+      { id: "openai.gpt-oss-120b", label: "GPT-OSS 120B" },
+    ],
   },
   {
     id: "custom_openai",
@@ -294,7 +328,7 @@ export interface AiPrefs {
 
 const DEFAULT_PREFS: AiPrefs = {
   providerId: "openai",
-  model: "gpt-5-mini",
+  model: "gpt-6.1-terra",
   customBaseUrl: "",
   region: "us-east-1",
   mode: "ask",
