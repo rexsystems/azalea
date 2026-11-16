@@ -80,7 +80,9 @@ export function TabBar({
         return (
           <div
             key={tab.id}
-            className={`transition-ui group flex shrink-0 items-center rounded-lg text-sm ${
+            className={`transition-ui group flex items-center rounded-lg text-sm ${
+              inline ? "min-w-[6.5rem] shrink" : "shrink-0"
+            } ${
               isActive ? "hover-subtle-active" : "hover-subtle"
             }`}
             style={tabStyle}
@@ -103,7 +105,7 @@ export function TabBar({
                 />
               )}
               <span
-                className={`truncate font-medium ${isMobile ? "max-w-[120px]" : "max-w-[220px]"}`}
+                className={`truncate font-medium ${isMobile ? "max-w-[120px]" : inline ? "max-w-[180px]" : "max-w-[220px]"}`}
               >
                 {tab.title}
               </span>

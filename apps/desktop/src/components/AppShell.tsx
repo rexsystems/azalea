@@ -121,28 +121,34 @@ function CommandNavLink({
   icon: Icon,
   active,
   onNavigate,
+  compact = false,
 }: {
   id: NavPage;
   label: string;
   icon: AppIcon;
   active: boolean;
   onNavigate: (page: NavPage) => void;
+  /** Icon only, except for the open page. Frees room for session tabs. */
+  compact?: boolean;
 }) {
+  const iconOnly = compact && !active;
   return (
     <button
       type="button"
       onClick={() => onNavigate(id)}
       aria-current={active ? "page" : undefined}
-      className={`transition-ui flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm ${
-        active ? "" : "hover-subtle"
-      }`}
+      aria-label={iconOnly ? label : undefined}
+      title={iconOnly ? label : undefined}
+      className={`transition-ui flex h-7 shrink-0 items-center gap-1.5 rounded-md text-sm ${
+        iconOnly ? "px-2" : "px-2.5"
+      } ${active ? "" : "hover-subtle"}`}
       style={{
         background: active ? "var(--nav-active)" : "transparent",
         color: active ? "var(--text)" : "var(--text-muted)",
       }}
     >
       <Icon size={15} strokeWidth={active ? 2 : 1.5} />
-      {label}
+      {!iconOnly && label}
     </button>
   );
 }
@@ -348,6 +354,7 @@ export function AppShell({
                 {...item}
                 active={activePage === item.id}
                 onNavigate={onNavigate}
+                compact={Boolean(inlineTabBar)}
               />
             ))}
           </nav>
