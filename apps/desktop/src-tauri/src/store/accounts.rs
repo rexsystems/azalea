@@ -103,6 +103,50 @@ pub fn account_db_path(app: &AppHandle, account_id: &str) -> anyhow::Result<Path
         .join("azalea.db"))
 }
 
+/// Rebuilds a registry from `accounts/<id>/azalea.db` folders. Their sync
+/// settings are gone, so they come back as local profiles.
+fn recover_existing_profiles(accounts_dir: &std::path::Path) -> Option<AccountsFile> {
+    let mut found: Vec<(String, std::time::SystemTime)> = fs::read_dir(accounts_dir)
+        .ok()?
+        .flatten()
+        .filter_map(|entry| {
+            let id = entry.file_name().to_string_lossy().to_string();
+            let db = entry.path().join("azalea.db");
+            if !valid_account_id(&id) || !db.is_file() {
+                return None;
+            }
+            let modified = db.metadata().and_then(|m| m.modified()).ok()?;
+            Some((id, modified))
+        })
+        .collect();
+    if found.is_empty() {
+        return None;
+    }
+    found.sort_by(|a, b| b.1.cmp(&a.1));
+
+    let accounts = found
+        .iter()
+        .enumerate()
+        .map(|(index, (id, _))| AccountRecord {
+            id: id.clone(),
+            kind: AccountKind::Offline,
+            label: if index == 0 {
+                "Local".to_string()
+            } else {
+                format!("Local {}", index + 1)
+            },
+            base_url: None,
+            email: None,
+            web_url: None,
+        })
+        .collect();
+    Some(AccountsFile {
+        active_id: found[0].0.clone(),
+        accounts,
+        onboarded: true,
+    })
+}
+
 impl AccountRegistry {
     pub fn load_or_init(app: &AppHandle) -> anyhow::Result<Self> {
         let path = registry_path(app)?;
@@ -110,7 +154,22 @@ impl AccountRegistry {
 
         if path.exists() {
             let raw = fs::read_to_string(&path)?;
-            let mut data: AccountsFile = serde_json::from_str(&raw)?;
+            let mut data: AccountsFile = match serde_json::from_str(&raw) {
+                Ok(data) => data,
+                Err(err) => {
+                    // A half-written registry must not hide the profiles next to it.
+                    let aside = path.with_extension(format!(
+                        "json.corrupt-{}",
+                        chrono::Utc::now().format("%Y%m%d%H%M%S")
+                    ));
+                    eprintln!(
+                        "accounts.json unreadable ({err}); moved to {}",
+                        aside.display()
+                    );
+                    fs::rename(&path, &aside)?;
+                    return Self::load_or_init(app);
+                }
+            };
             let mut changed = raw.contains("\"cloud\"");
             for account in &mut data.accounts {
                 if account.kind == AccountKind::Offline
@@ -124,6 +183,12 @@ impl AccountRegistry {
             if changed {
                 reg.save()?;
             }
+            return Ok(reg);
+        }
+
+        if let Some(data) = recover_existing_profiles(&app_data_dir(app)?.join("accounts")) {
+            let reg = Self { path, data };
+            reg.save()?;
             return Ok(reg);
         }
 
@@ -159,7 +224,9 @@ impl AccountRegistry {
             fs::create_dir_all(parent)?;
         }
         let raw = serde_json::to_string_pretty(&self.data)?;
-        fs::write(&self.path, raw)?;
+        let pending = self.path.with_extension("json.pending");
+        fs::write(&pending, raw)?;
+        fs::rename(&pending, &self.path)?;
         Ok(())
     }
 

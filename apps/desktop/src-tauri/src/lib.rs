@@ -92,6 +92,14 @@ pub fn run() {
         .setup(|app| {
             let registry = accounts::init_accounts(app.handle())?;
             let active = registry.lock().active().cloned();
+            match app.path().app_data_dir() {
+                Ok(dir) => match store::legacy_migration::migrate_legacy_data_dir(&dir) {
+                    Ok(store::legacy_migration::MigrationOutcome::NothingToDo) => {}
+                    Ok(outcome) => eprintln!("Legacy data migration: {outcome:?}"),
+                    Err(error) => eprintln!("Legacy data migration failed: {error}"),
+                },
+                Err(error) => eprintln!("No app data directory: {error}"),
+            }
             let active_id = active
                 .as_ref()
                 .map(|a| a.id.clone())
