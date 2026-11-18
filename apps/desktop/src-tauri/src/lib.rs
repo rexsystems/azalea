@@ -4,6 +4,8 @@ pub mod crash_report;
 mod desktop_prefs;
 mod keys;
 mod models;
+#[cfg(desktop)]
+mod openssh;
 mod sessions;
 mod store;
 mod sync;
@@ -90,8 +92,6 @@ pub fn run() {
         )
         .plugin(tauri_plugin_process::init())
         .setup(|app| {
-            let registry = accounts::init_accounts(app.handle())?;
-            let active = registry.lock().active().cloned();
             match app.path().app_data_dir() {
                 Ok(dir) => match store::legacy_migration::migrate_legacy_data_dir(&dir) {
                     Ok(store::legacy_migration::MigrationOutcome::NothingToDo) => {}
@@ -100,6 +100,8 @@ pub fn run() {
                 },
                 Err(error) => eprintln!("No app data directory: {error}"),
             }
+            let registry = accounts::init_accounts(app.handle())?;
+            let active = registry.lock().active().cloned();
             let active_id = active
                 .as_ref()
                 .map(|a| a.id.clone())
@@ -123,6 +125,9 @@ pub fn run() {
             {
                 let desktop = desktop_prefs::DesktopPrefs::new(app.handle())?;
                 app.manage(desktop);
+                if let Err(error) = openssh::init(app.handle()) {
+                    eprintln!("Could not start the ssh config export: {error}");
+                }
                 let voice = voice::VoiceAssistant::new(app.handle())?;
                 app.manage(voice.clone());
                 if let Err(error) = voice::setup_tray(app.handle(), &voice) {
@@ -164,6 +169,10 @@ pub fn run() {
             voice::voice_test_reply,
             #[cfg(desktop)]
             voice::voice_download_tts,
+            #[cfg(desktop)]
+            openssh::openssh_export_status,
+            #[cfg(desktop)]
+            openssh::openssh_export_set,
             #[cfg(desktop)]
             desktop_prefs::desktop_prefs_get,
             #[cfg(desktop)]

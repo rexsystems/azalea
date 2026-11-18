@@ -30,6 +30,7 @@ import { SettingToggle } from "./ui/SettingToggle";
 import { Slider } from "./ui/Slider";
 import { SyncSection } from "./SyncSection";
 import { ImportSection } from "./ImportSection";
+import { SshConfigExportSection } from "./SshConfigExportSection";
 import { UpdateSection } from "./UpdateSection";
 import { AiSettingsSection } from "./AiSettingsSection";
 import { VoiceSettingsSection } from "./VoiceSettingsSection";
@@ -791,7 +792,7 @@ export function SettingsPage({
               >
                 <PanelHeader
                   title="Import"
-                  description="Import from ~/.ssh, or restore an Azalea backup or config file."
+                  description="Import from ~/.ssh, restore an Azalea backup or config file, or share your hosts with VS Code."
                 />
                 <ImportSection
                   busy={backupBusy}
@@ -799,6 +800,11 @@ export function SettingsPage({
                   onImportBackupReplace={onImportBackupReplace}
                   onDataChanged={onImportDataRefresh ?? (async () => undefined)}
                 />
+                {!isMobileRuntime() && (
+                  <div className="mt-6">
+                    <SshConfigExportSection />
+                  </div>
+                )}
               </div>
             )}
 
