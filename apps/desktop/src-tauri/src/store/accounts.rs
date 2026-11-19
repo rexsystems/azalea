@@ -122,7 +122,7 @@ fn recover_existing_profiles(accounts_dir: &std::path::Path) -> Option<AccountsF
     if found.is_empty() {
         return None;
     }
-    found.sort_by(|a, b| b.1.cmp(&a.1));
+    found.sort_by_key(|a| std::cmp::Reverse(a.1));
 
     let accounts = found
         .iter()

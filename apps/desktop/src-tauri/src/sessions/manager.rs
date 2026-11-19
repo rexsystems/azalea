@@ -47,10 +47,7 @@ fn looks_like_user_home(home: &str, username: &str) -> bool {
         }
     }
     // Windows: C:/Users/<name>
-    if lower.starts_with("c:/users/") && lower.len() > "c:/users/".len() {
-        return true;
-    }
-    false
+    lower.starts_with("c:/users/") && lower.len() > "c:/users/".len()
 }
 
 /// Strict set of SSH algorithms Azalea negotiates by default.
