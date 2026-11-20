@@ -3,6 +3,8 @@ pub mod crash_report;
 #[cfg(desktop)]
 mod desktop_prefs;
 mod keys;
+#[cfg(desktop)]
+mod mcp;
 mod models;
 #[cfg(desktop)]
 mod openssh;
@@ -128,6 +130,9 @@ pub fn run() {
                 if let Err(error) = openssh::init(app.handle()) {
                     eprintln!("Could not start the ssh config export: {error}");
                 }
+                if let Err(error) = mcp::init(app.handle()) {
+                    eprintln!("Could not start the MCP server: {error}");
+                }
                 let voice = voice::VoiceAssistant::new(app.handle())?;
                 app.manage(voice.clone());
                 if let Err(error) = voice::setup_tray(app.handle(), &voice) {
@@ -173,6 +178,14 @@ pub fn run() {
             openssh::openssh_export_status,
             #[cfg(desktop)]
             openssh::openssh_export_set,
+            #[cfg(desktop)]
+            mcp::mcp_status,
+            #[cfg(desktop)]
+            mcp::mcp_set_prefs,
+            #[cfg(desktop)]
+            mcp::mcp_regenerate_token,
+            #[cfg(desktop)]
+            mcp::mcp_connect_claude_code,
             #[cfg(desktop)]
             desktop_prefs::desktop_prefs_get,
             #[cfg(desktop)]

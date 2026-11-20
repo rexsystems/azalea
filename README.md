@@ -35,6 +35,7 @@ Browse the [full screenshot gallery](docs/screenshots/README.md) for desktop pag
 - **Auto-update** - signed updates on Windows, Linux (AppImage) and macOS. See [updater](docs/updater.md)
 - **Themes & settings** - Midnight / Noir, font size, connect screen
 - **Terminal AI** (opt-in) - Ask / Agent, command approval, live output, provider model catalogs and custom model IDs. See [AI setup and behavior](docs/ai.md).
+- **AI tools via MCP** (opt-in) - let Claude Code, Codex or Cursor list your hosts, create keys, run commands and read files, with a switch for each. See [MCP setup](docs/mcp.md).
 - **Voice assistant** (opt-in) - local “Hey Azalea” recognition, voice replies, Wake-on-LAN and background tray support. See [voice setup](docs/voice.md).
 
 ## Development
@@ -142,6 +143,7 @@ azalea/
 - [Updater](docs/updater.md)
 - [Web apps](docs/web.md)
 - [Terminal AI](docs/ai.md)
+- [AI tools (MCP)](docs/mcp.md)
 - [Voice assistant](docs/voice.md)
 - [Security model](docs/security.md)
 - [Security audit: findings and exceptions](docs/security-audit.md)

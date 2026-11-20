@@ -184,7 +184,7 @@ fn batch_ssh_config() -> client::Config {
     }
 }
 
-struct BatchHandler {
+pub(crate) struct BatchHandler {
     fingerprint: String,
 }
 
@@ -198,12 +198,12 @@ impl client::Handler for BatchHandler {
     }
 }
 
-async fn execute(
-    host: Host,
+/// Opens an authenticated SSH session to a host whose key is already trusted.
+/// Never prompts: an unknown or changed server key is an error.
+pub(crate) async fn connect_trusted(
+    host: &Host,
     fingerprint: Option<String>,
-    command: String,
-    events: IpcChannel<BatchEvent>,
-) -> anyhow::Result<u32> {
+) -> anyhow::Result<client::Handle<BatchHandler>> {
     let fingerprint = fingerprint.ok_or_else(|| {
         anyhow::anyhow!("Server key is not trusted yet. Connect normally first to verify it.")
     })?;
@@ -216,7 +216,17 @@ async fn execute(
                 "SSH connection failed: {err}. Connect normally first to verify the server key."
             )
         })?;
-    authenticate(&mut session, &host).await?;
+    authenticate(&mut session, host).await?;
+    Ok(session)
+}
+
+async fn execute(
+    host: Host,
+    fingerprint: Option<String>,
+    command: String,
+    events: IpcChannel<BatchEvent>,
+) -> anyhow::Result<u32> {
+    let session = connect_trusted(&host, fingerprint).await?;
     execute_command(&session, &host.id, &command, &events).await
 }
 

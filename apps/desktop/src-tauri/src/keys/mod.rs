@@ -9,5 +9,6 @@ pub use generate::{
 };
 pub use keyring::{
     ai_api_key_present, delete_ai_api_key, delete_host_password, delete_private_key,
-    get_ai_api_key, get_host_password, get_private_key, store_ai_api_key, store_host_password,
+    get_ai_api_key, get_host_password, get_mcp_token, get_private_key, store_ai_api_key,
+    store_host_password, store_mcp_token,
 };

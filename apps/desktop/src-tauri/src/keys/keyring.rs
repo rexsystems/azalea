@@ -313,3 +313,24 @@ pub fn delete_ai_api_key(provider_id: &str) -> anyhow::Result<()> {
 pub fn ai_api_key_present(provider_id: &str) -> anyhow::Result<bool> {
     Ok(get_ai_api_key(provider_id)?.is_some())
 }
+
+fn mcp_token_path() -> anyhow::Result<PathBuf> {
+    Ok(passwords_dir()?.join("mcp-token.enc"))
+}
+
+fn legacy_mcp_token_path() -> anyhow::Result<PathBuf> {
+    Ok(passwords_dir()?.join("mcp-token"))
+}
+
+pub fn store_mcp_token(token: &str) -> anyhow::Result<()> {
+    store_secret(
+        "mcp-token",
+        &mcp_token_path()?,
+        &legacy_mcp_token_path()?,
+        token,
+    )
+}
+
+pub fn get_mcp_token() -> anyhow::Result<Option<String>> {
+    load_secret("mcp-token", &mcp_token_path()?, &legacy_mcp_token_path()?)
+}

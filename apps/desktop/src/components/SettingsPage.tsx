@@ -34,6 +34,7 @@ import { SshConfigExportSection } from "./SshConfigExportSection";
 import { UpdateSection } from "./UpdateSection";
 import { AiSettingsSection } from "./AiSettingsSection";
 import { VoiceSettingsSection } from "./VoiceSettingsSection";
+import { McpSettingsSection } from "./McpSettingsSection";
 import { BatchSettingsSection } from "./BatchSettingsSection";
 import type { AccountKind, AccountRecord, SyncStatus } from "../lib/api";
 import { isTelemetryEnabled, setTelemetryEnabled } from "../lib/telemetry";
@@ -850,6 +851,14 @@ export function SettingsPage({
                 >
                   <AiSettingsSection />
                 </SettingRow>
+                {!isMobileRuntime() && (
+                  <SettingRow
+                    label="AI tools (MCP)"
+                    description="Let an AI tool on this computer connect to your hosts and keys."
+                  >
+                    <McpSettingsSection />
+                  </SettingRow>
+                )}
               </div>
             )}
 
